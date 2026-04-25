@@ -1,0 +1,44 @@
+name: Build DiasOrganize APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Criar projeto Flutter base
+        run: flutter create .
+
+      - name: Instalar dependências
+        run: flutter pub get
+
+      - name: Analisar projeto
+        run: flutter analyze
+
+      - name: Construir APK (Debug)
+        run: flutter build apk --debug
+
+      - name: Fazer upload do APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DiasOrganize-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk

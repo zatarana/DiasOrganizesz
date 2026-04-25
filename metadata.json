@@ -1,0 +1,6 @@
+{
+  "name": "DiasOrganize Flutter App",
+  "description": "Generator for DiasOrganize, a comprehensive offline-first task management application built in Flutter with Riverpod, SQLite, and GitHub Actions CI/CD to build APKs automatically.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
