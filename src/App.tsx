@@ -60,6 +60,13 @@ export default function App() {
                 <span>Os requisitos do PRD foram revisados, integrados e validados no banco de dados SQLite.</span>
               </div>
             </li>
+            <li className="flex items-start group">
+              <span className="w-2 h-2 rounded-full border-2 border-indigo-200 group-hover:border-indigo-500 transition-colors mt-1.5 mr-4 flex-shrink-0" />
+              <div>
+                <strong className="text-slate-800 block mb-0.5">Regras de Negócio</strong>
+                <span>Verificação de atraso, atualização local de tarefas e auto-cancelamento de notificações implementados (passo 7 do PRD).</span>
+              </div>
+            </li>
           </ul>
         </div>
 

@@ -120,7 +120,10 @@ class TaskDashboard extends ConsumerWidget {
                             ),
                             onTap: () {
                               ref.read(tasksProvider.notifier).updateTask(
-                                t.copyWith(status: t.status == 'concluida' ? 'pendente' : 'concluida')
+                                t.copyWith(
+                                  status: t.status == 'concluida' ? 'pendente' : 'concluida',
+                                  updatedAt: DateTime.now().toIso8601String()
+                                )
                               );
                             },
                           ),

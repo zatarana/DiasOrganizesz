@@ -78,7 +78,10 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                             value: t.status == 'concluida',
                             onChanged: (val) {
                               ref.read(tasksProvider.notifier).updateTask(
-                                t.copyWith(status: val == true ? 'concluida' : 'pendente')
+                                t.copyWith(
+                                  status: val == true ? 'concluida' : 'pendente',
+                                  updatedAt: DateTime.now().toIso8601String()
+                                )
                               );
                             },
                           ),
