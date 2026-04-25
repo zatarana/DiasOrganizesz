@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/riverpod_providers.dart';
 import '../models/task_model.dart';
+import '../services/notification_service.dart';
 import 'package:intl/intl.dart';
 
 class CreateTaskScreen extends ConsumerStatefulWidget {
@@ -16,8 +17,10 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
   String _date = DateFormat('yyyy-MM-dd').format(DateTime.now());
+  String? _time;
   String _priority = 'media';
   int? _categoryId;
+  bool _hasReminder = false;
 
   @override
   void initState() {
@@ -26,12 +29,14 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
       _titleController.text = widget.task!.title;
       _descController.text = widget.task!.description;
       _date = widget.task!.date;
+      _time = widget.task!.time;
       _priority = widget.task!.priority;
       _categoryId = widget.task!.categoryId;
+      _hasReminder = widget.task!.hasReminder;
     }
   }
 
-  void _save() {
+  Future<void> _save() async {
     if (_titleController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Título é obrigatório.')));
       return;
@@ -45,20 +50,45 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
       title: _titleController.text,
       description: _descController.text,
       date: _date,
+      time: _time,
       categoryId: catId!,
       priority: _priority,
       status: widget.task?.status ?? 'pendente',
-      hasReminder: false,
+      hasReminder: _hasReminder,
       createdAt: widget.task?.createdAt ?? DateTime.now().toIso8601String(),
       updatedAt: DateTime.now().toIso8601String(),
     );
 
     if (widget.task == null) {
-      ref.read(tasksProvider.notifier).addTask(t);
+      final insertedTask = await ref.read(tasksProvider.notifier).addTaskWithReturn(t);
+      _scheduleReminderIfNeeded(insertedTask);
     } else {
-      ref.read(tasksProvider.notifier).updateTask(t);
+      await ref.read(tasksProvider.notifier).updateTask(t);
+      _scheduleReminderIfNeeded(t);
     }
     Navigator.pop(context);
+  }
+
+  void _scheduleReminderIfNeeded(Task t) {
+    if (t.hasReminder && t.time != null) {
+      try {
+        final parts = t.time!.split(':');
+        final currentDt = DateTime.parse(t.date);
+        final reminderTime = DateTime(currentDt.year, currentDt.month, currentDt.day, int.parse(parts[0]), int.parse(parts[1]));
+        if (reminderTime.isAfter(DateTime.now())) {
+           NotificationService().scheduleNotification(
+             id: t.id ?? 0,
+             title: 'Lembrete: ${t.title}',
+             body: 'Sua tarefa está programada para agora!',
+             scheduledDate: reminderTime,
+           );
+        }
+      } catch (e) {
+        debugPrint('Erro ao agendar notificacao: $e');
+      }
+    } else {
+      NotificationService().cancelNotification(t.id ?? 0);
+    }
   }
 
   @override
@@ -72,6 +102,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
               icon: const Icon(Icons.delete),
               onPressed: () {
                 ref.read(tasksProvider.notifier).removeTask(widget.task!.id!);
+                NotificationService().cancelNotification(widget.task!.id!);
                 Navigator.pop(context);
               },
             )
@@ -92,23 +123,50 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
               decoration: const InputDecoration(labelText: 'Descrição', border: OutlineInputBorder()),
             ),
             const SizedBox(height: 16),
-            ListTile(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: Colors.grey.shade400)),
-              title: Text('Data: $_date'),
-              trailing: const Icon(Icons.calendar_today),
-              onTap: () async {
-                final d = await showDatePicker(
-                  context: context,
-                  initialDate: DateTime.parse(_date),
-                  firstDate: DateTime(2000),
-                  lastDate: DateTime(2100),
-                );
-                if (d != null) {
-                  setState(() {
-                    _date = DateFormat('yyyy-MM-dd').format(d);
-                  });
-                }
-              },
+            Row(
+              children: [
+                Expanded(
+                  child: ListTile(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: Colors.grey.shade400)),
+                    title: Text(_date),
+                    subtitle: const Text('Data'),
+                    trailing: const Icon(Icons.calendar_today),
+                    onTap: () async {
+                      final d = await showDatePicker(
+                        context: context,
+                        initialDate: DateTime.parse(_date),
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (d != null) {
+                        setState(() => _date = DateFormat('yyyy-MM-dd').format(d));
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ListTile(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: Colors.grey.shade400)),
+                    title: Text(_time ?? '--:--'),
+                    subtitle: const Text('Horário (Opcional)'),
+                    trailing: const Icon(Icons.access_time),
+                    onTap: () async {
+                      final t = await showTimePicker(context: context, initialTime: TimeOfDay.now());
+                      if (t != null) {
+                        setState(() => _time = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}');
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SwitchListTile(
+              title: const Text('Ativar Lembrete Local'),
+              subtitle: const Text('Requer data e horário definidos'),
+              value: _hasReminder,
+              onChanged: _time != null ? (val) => setState(() => _hasReminder = val) : null,
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(

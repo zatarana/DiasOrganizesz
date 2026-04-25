@@ -44,9 +44,14 @@ class TaskNotifier extends StateNotifier<List<Task>> {
     state = await db.getTasks();
   }
 
-  Future<void> addTask(Task task) async {
+  Future<Task> addTaskWithReturn(Task task) async {
     final newTask = await db.createTask(task);
     state = [...state, newTask];
+    return newTask;
+  }
+
+  Future<void> addTask(Task task) async {
+    await addTaskWithReturn(task);
   }
 
   Future<void> updateTask(Task task) async {
@@ -61,4 +66,13 @@ class TaskNotifier extends StateNotifier<List<Task>> {
     await db.deleteTask(id);
     state = state.where((t) => t.id != id).toList();
   }
+
+  Future<void> clearCompletedTasks() async {
+    final completed = state.where((t) => t.status == 'concluida').toList();
+    for (var t in completed) {
+      if (t.id != null) await db.deleteTask(t.id!);
+    }
+    state = state.where((t) => t.status != 'concluida').toList();
+  }
 }
+
