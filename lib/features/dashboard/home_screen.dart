@@ -6,6 +6,7 @@ import '../tasks/task_list_screen.dart';
 import '../calendar/calendar_screen.dart';
 import '../settings/settings_screen.dart';
 import '../statistics/stats_screen.dart';
+import 'app_drawer.dart';
 import 'package:intl/intl.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -62,23 +63,44 @@ class TaskDashboard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tasks = ref.watch(tasksProvider);
+    final transactions = ref.watch(transactionsProvider);
+    
     final pd = tasks.where((t) => t.status == 'pendente').length;
     final cd = tasks.where((t) => t.status == 'concluida').length;
     final ad = tasks.where((t) => t.status == 'atrasada').length;
     
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final todayTasks = tasks.where((t) => t.date == todayStr).toList();
+    
+    double saldo = 0;
+    for (var t in transactions) {
+      if (t.type == 'receita') saldo += t.amount;
+      else if (t.type == 'despesa') saldo -= t.amount;
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('DiasOrganize', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: false,
       ),
+      drawer: const AppDrawer(),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Resumo Financeiro
+            Card(
+              color: Colors.blue.shade50,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.blue.shade200)),
+              child: ListTile(
+                leading: const Icon(Icons.account_balance_wallet, color: Colors.blue, size: 36),
+                title: const Text('Saldo Atual', style: TextStyle(fontSize: 14)),
+                subtitle: Text('\$${saldo.toStringAsFixed(2)}', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: saldo >= 0 ? Colors.green.shade700 : Colors.red.shade700)),
+              ),
+            ),
+            const SizedBox(height: 24),
             const Text(
               'Resumo do dia',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),

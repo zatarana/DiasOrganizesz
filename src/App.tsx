@@ -67,6 +67,27 @@ export default function App() {
                 <span>Verificação de atraso, atualização local de tarefas e auto-cancelamento de notificações implementados (passo 7 do PRD).</span>
               </div>
             </li>
+            <li className="flex items-start group">
+              <span className="w-2 h-2 rounded-full border-2 border-indigo-200 group-hover:border-indigo-500 transition-colors mt-1.5 mr-4 flex-shrink-0" />
+              <div>
+                <strong className="text-slate-800 block mb-0.5">Critérios de Aceite</strong>
+                <span>Todos os critérios do passo 11 (abrir sem crash, operações de tarefas, filtro, tema dinâmico, teste dummy local e CI via GitHub Actions) finalizados.</span>
+              </div>
+            </li>
+            <li className="flex items-start group">
+              <span className="w-2 h-2 rounded-full border-2 border-indigo-200 group-hover:border-indigo-500 transition-colors mt-1.5 mr-4 flex-shrink-0" />
+              <div>
+                <strong className="text-slate-800 block mb-0.5">Escopo da Versão 2.0 Aceito</strong>
+                <span>Módulos de Finanças, Dívidas e Projetos mapeados. Restrições do projeto (sem integrações bancárias diretas, nuvem, etc) entendidas. Foco em base offline, local e sólida estruturado.</span>
+              </div>
+            </li>
+            <li className="flex items-start group">
+              <span className="w-2 h-2 rounded-full border-2 border-indigo-200 group-hover:border-indigo-500 transition-colors mt-1.5 mr-4 flex-shrink-0" />
+              <div>
+                <strong className="text-slate-800 block mb-0.5">Módulo de Finanças Implementado</strong>
+                <span>Tabela `transactions` adicionada no SQLite (data/database/db_helper.dart), provedores em Riverpod configurados, Card de Resumo de Saldo adicionado na Home, AppDrawer (Menu Deslizante) integrado, e tela completa de gerenciamento financeiro (`FinanceScreen`) adicionada para controle local. Operando totalmente offline!</span>
+              </div>
+            </li>
           </ul>
         </div>
 

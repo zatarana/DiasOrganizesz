@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'app/theme.dart';
 import 'features/dashboard/splash_screen.dart';
 import 'core/notifications/notification_service.dart';
+import 'domain/providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,16 +19,18 @@ void main() async {
   );
 }
 
-class DiasOrganizeApp extends StatelessWidget {
+class DiasOrganizeApp extends ConsumerWidget {
   const DiasOrganizeApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeModeProvider);
+
     return MaterialApp(
       title: 'DiasOrganize',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
+      themeMode: themeMode,
       home: const SplashScreen(),
       debugShowCheckedModeBanner: false,
     );

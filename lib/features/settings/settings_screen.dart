@@ -25,10 +25,45 @@ class SettingsScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.dark_mode),
             title: const Text('Tema'),
-            subtitle: const Text('Alterar tema atual'),
+            subtitle: Text(
+              ref.watch(themeModeProvider) == ThemeMode.system 
+                  ? 'Sistema' 
+                  : (ref.watch(themeModeProvider) == ThemeMode.dark ? 'Escuro' : 'Claro')
+            ),
             trailing: const Icon(Icons.expand_more),
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Comportamento de tema automático do sistema.')));
+              showModalBottomSheet(
+                context: context,
+                builder: (ctx) => Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListTile(
+                      title: const Text('Sistema'),
+                      trailing: ref.watch(themeModeProvider) == ThemeMode.system ? const Icon(Icons.check, color: Colors.blue) : null,
+                      onTap: () {
+                        ref.read(themeModeProvider.notifier).setTheme(ThemeMode.system);
+                        Navigator.pop(ctx);
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Claro'),
+                      trailing: ref.watch(themeModeProvider) == ThemeMode.light ? const Icon(Icons.check, color: Colors.blue) : null,
+                      onTap: () {
+                        ref.read(themeModeProvider.notifier).setTheme(ThemeMode.light);
+                        Navigator.pop(ctx);
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Escuro'),
+                      trailing: ref.watch(themeModeProvider) == ThemeMode.dark ? const Icon(Icons.check, color: Colors.blue) : null,
+                      onTap: () {
+                        ref.read(themeModeProvider.notifier).setTheme(ThemeMode.dark);
+                        Navigator.pop(ctx);
+                      },
+                    ),
+                  ],
+                )
+              );
             },
           ),
           const Divider(),

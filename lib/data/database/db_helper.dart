@@ -3,6 +3,7 @@ import 'package:path/path.dart';
 import '../models/task_model.dart';
 import '../models/category_model.dart';
 import '../models/setting_model.dart';
+import '../models/transaction_model.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -20,7 +21,29 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    return await openDatabase(path, version: 1, onCreate: _createDB);
+    return await openDatabase(
+      path, 
+      version: 2, 
+      onCreate: _createDB,
+      onUpgrade: _onUpgrade,
+    );
+  }
+
+  Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('''
+        CREATE TABLE transactions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL,
+          amount REAL NOT NULL,
+          type TEXT NOT NULL,
+          date TEXT NOT NULL,
+          categoryId INTEGER,
+          isPaid INTEGER NOT NULL,
+          createdAt TEXT NOT NULL
+        )
+      ''');
+    }
   }
 
   Future _createDB(Database db, int version) async {
@@ -56,6 +79,19 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         key TEXT NOT NULL,
         value TEXT NOT NULL
+      )
+    ''');
+    
+    await db.execute('''
+      CREATE TABLE transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        amount REAL NOT NULL,
+        type TEXT NOT NULL,
+        date TEXT NOT NULL,
+        categoryId INTEGER,
+        isPaid INTEGER NOT NULL,
+        createdAt TEXT NOT NULL
       )
     ''');
     
@@ -128,6 +164,34 @@ class DatabaseHelper {
     } else {
       await db.insert('settings', setting.toMap());
     }
+  }
+
+  // Transactions
+  Future<List<FinancialTransaction>> getTransactions() async {
+    final db = await instance.database;
+    final result = await db.query('transactions', orderBy: 'date DESC');
+    return result.map((json) => FinancialTransaction.fromMap(json)).toList();
+  }
+
+  Future<FinancialTransaction> createTransaction(FinancialTransaction transaction) async {
+    final db = await instance.database;
+    final id = await db.insert('transactions', transaction.toMap());
+    return transaction.copyWith(id: id);
+  }
+
+  Future<int> updateTransaction(FinancialTransaction transaction) async {
+    final db = await instance.database;
+    return db.update(
+      'transactions',
+      transaction.toMap(),
+      where: 'id = ?',
+      whereArgs: [transaction.id],
+    );
+  }
+
+  Future<int> deleteTransaction(int id) async {
+    final db = await instance.database;
+    return await db.delete('transactions', where: 'id = ?', whereArgs: [id]);
   }
 }
 

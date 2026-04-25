@@ -1,10 +1,41 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/task_model.dart';
 import '../data/models/category_model.dart';
+import '../data/models/setting_model.dart';
+import '../data/models/transaction_model.dart';
 import '../data/database/db_helper.dart';
 import '../core/notifications/notification_service.dart';
 
 final dbProvider = Provider<DatabaseHelper>((ref) => DatabaseHelper.instance);
+
+final themeModeProvider = StateNotifierProvider<ThemeModeNotifier, ThemeMode>((ref) {
+  return ThemeModeNotifier(ref.watch(dbProvider));
+});
+
+class ThemeModeNotifier extends StateNotifier<ThemeMode> {
+  final DatabaseHelper db;
+  ThemeModeNotifier(this.db) : super(ThemeMode.system) {
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    final setting = await db.getSetting('theme_mode');
+    if (setting != null) {
+      if (setting.value == 'light') state = ThemeMode.light;
+      else if (setting.value == 'dark') state = ThemeMode.dark;
+      else state = ThemeMode.system;
+    }
+  }
+
+  Future<void> setTheme(ThemeMode mode) async {
+    state = mode;
+    String val = 'system';
+    if (mode == ThemeMode.light) val = 'light';
+    else if (mode == ThemeMode.dark) val = 'dark';
+    await db.saveSetting(AppSetting(key: 'theme_mode', value: val));
+  }
+}
 
 final categoriesProvider = StateNotifierProvider<CategoryNotifier, List<TaskCategory>>((ref) {
   return CategoryNotifier(ref.watch(dbProvider));
@@ -110,6 +141,39 @@ class TaskNotifier extends StateNotifier<List<Task>> {
       }
     }
     state = state.where((t) => t.status != 'concluida').toList();
+  }
+}
+
+final transactionsProvider = StateNotifierProvider<TransactionNotifier, List<FinancialTransaction>>((ref) {
+  return TransactionNotifier(ref.watch(dbProvider));
+});
+
+class TransactionNotifier extends StateNotifier<List<FinancialTransaction>> {
+  final DatabaseHelper db;
+  TransactionNotifier(this.db) : super([]) {
+    loadTransactions();
+  }
+
+  Future<void> loadTransactions() async {
+    state = await db.getTransactions();
+  }
+
+  Future<void> addTransaction(FinancialTransaction transaction) async {
+    final newTransaction = await db.createTransaction(transaction);
+    state = [newTransaction, ...state]; // Add to top since it sorted desc usually, though DB sort is date based
+  }
+
+  Future<void> updateTransaction(FinancialTransaction transaction) async {
+    await db.updateTransaction(transaction);
+    state = [
+      for (final t in state)
+        if (t.id == transaction.id) transaction else t
+    ];
+  }
+
+  Future<void> removeTransaction(int id) async {
+    await db.deleteTransaction(id);
+    state = state.where((t) => t.id != id).toList();
   }
 }
 
