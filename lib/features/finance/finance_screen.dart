@@ -29,6 +29,65 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     setState(() => _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1, 1));
   }
 
+  void _generateFixedTransactions() {
+    final allTransactions = ref.read(transactionsProvider);
+    final previousMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1, 1);
+    
+    // Obter fixos e não cancelados do mês anterior
+    final previousFixed = allTransactions.where((t) {
+      final d = DateTime.tryParse(t.transactionDate);
+      return d != null && d.month == previousMonth.month && d.year == previousMonth.year && t.isFixed && t.status != 'canceled';
+    }).toList();
+
+    int added = 0;
+    for (var t in previousFixed) {
+      final oldDate = DateTime.tryParse(t.transactionDate) ?? DateTime.now();
+      // Criar nova data pro mês atual mantendo o dia se possível
+      int targetDay = oldDate.day;
+      final daysInMonth = DateUtils.getDaysInMonth(_selectedMonth.year, _selectedMonth.month);
+      if (targetDay > daysInMonth) targetDay = daysInMonth; 
+
+      final newDate = DateTime(_selectedMonth.year, _selectedMonth.month, targetDay);
+      
+      DateTime? newDueDate;
+      if (t.dueDate != null) {
+        final oldDue = DateTime.tryParse(t.dueDate!);
+        if (oldDue != null) {
+          int targetDueDay = oldDue.day;
+          final daysInMonthDue = DateUtils.getDaysInMonth(_selectedMonth.year, _selectedMonth.month);
+          if (targetDueDay > daysInMonthDue) targetDueDay = daysInMonthDue;
+          newDueDate = DateTime(_selectedMonth.year, _selectedMonth.month, targetDueDay);
+        }
+      }
+
+      final newT = FinancialTransaction(
+          title: t.title,
+          description: t.description,
+          amount: t.amount,
+          type: t.type,
+          transactionDate: newDate.toIso8601String(),
+          dueDate: newDueDate?.toIso8601String(),
+          paidDate: null,
+          categoryId: t.categoryId,
+          paymentMethod: t.paymentMethod,
+          status: 'pending', // nascem como pendentes
+          isFixed: true,
+          recurrenceType: 'monthly',
+          notes: t.notes,
+          createdAt: DateTime.now().toIso8601String(),
+          updatedAt: DateTime.now().toIso8601String(),
+      );
+      ref.read(transactionsProvider.notifier).addTransaction(newT);
+      added++;
+    }
+
+    if (added > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$added lançamentos fixos gerados para este mês!')));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nenhum lançamento fixo encontrado no mês anterior.')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     var allTransactions = ref.watch(transactionsProvider);
@@ -61,19 +120,31 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     double despesasPendentes = 0;
     int qtdeDespesasVencidas = 0;
 
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
     for (var t in allTransactions) { // calculando totais do mes
       final tDate = DateTime.tryParse(t.transactionDate);
       if (tDate != null && tDate.month == _selectedMonth.month && tDate.year == _selectedMonth.year) {
+        if (t.status == 'canceled') continue; // Movimentação cancelada não deve entrar em nenhum cálculo
+
         if (t.type == 'income') {
-          if (t.status == 'paid') receitasPagas += t.amount;
-          else receitasPendentes += t.amount;
+          if (t.status == 'paid') {
+            receitasPagas += t.amount;
+          } else {
+            receitasPendentes += t.amount;
+          }
         } else if (t.type == 'expense') {
-          if (t.status == 'paid') despesasPagas += t.amount;
-          else {
+          if (t.status == 'paid') {
+            despesasPagas += t.amount;
+          } else {
             despesasPendentes += t.amount;
-            final dueDate = t.dueDate != null ? DateTime.tryParse(t.dueDate!) : tDate;
-            if (t.status == 'overdue' || (dueDate != null && dueDate.isBefore(DateTime.now()) && dueDate.day < DateTime.now().day && t.status != 'paid')) {
-               qtdeDespesasVencidas++;
+            final dueDateToUse = t.dueDate != null ? DateTime.tryParse(t.dueDate!) : tDate;
+            if (dueDateToUse != null) {
+              final dueDateMidnight = DateTime(dueDateToUse.year, dueDateToUse.month, dueDateToUse.day);
+              if (t.status == 'pending' && dueDateMidnight.isBefore(today)) {
+                qtdeDespesasVencidas++;
+              }
             }
           }
         }
@@ -82,13 +153,18 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
 
     final totalReceitas = receitasPagas + receitasPendentes;
     final totalDespesas = despesasPagas + despesasPendentes;
-    final saldoMensal = totalReceitas - totalDespesas;
+    final saldoPrevisto = totalReceitas - totalDespesas;
     final saldoRealizado = receitasPagas - despesasPagas;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Finanças'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.auto_mode),
+            onPressed: _generateFixedTransactions,
+            tooltip: 'Gerar Recorrentes do Mês Anterior',
+          ),
           IconButton(
             icon: const Icon(Icons.category),
             onPressed: () {
@@ -115,7 +191,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  _buildSummaryCard(saldoMensal, saldoRealizado, totalReceitas, totalDespesas, qtdeDespesasVencidas),
+                  _buildSummaryCard(saldoPrevisto, saldoRealizado, totalReceitas, totalDespesas, qtdeDespesasVencidas),
                   const SizedBox(height: 16),
                   TextField(
                     controller: _searchController,
@@ -190,18 +266,22 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
               (context, index) {
                 final t = filtered[index];
                 final isPaid = t.status == 'paid';
+                final isCanceled = t.status == 'canceled';
                 final cat = allCategories.where((c) => c.id == t.categoryId).firstOrNull;
                 final color = cat != null ? Color(int.parse(cat.color)) : (t.type == 'income' ? Colors.green : Colors.red);
                 
                 return ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: color.withOpacity(0.2),
+                    backgroundColor: isCanceled ? Colors.grey.withOpacity(0.2) : color.withOpacity(0.2),
                     child: Icon(
                       t.type == 'income' ? Icons.arrow_upward : Icons.arrow_downward,
-                      color: color,
+                      color: isCanceled ? Colors.grey : color,
                     ),
                   ),
-                  title: Text(t.title, style: TextStyle(decoration: isPaid ? TextDecoration.none : null)),
+                  title: Text(t.title, style: TextStyle(
+                    decoration: isCanceled ? TextDecoration.lineThrough : null,
+                    color: isCanceled ? Colors.grey : Colors.black87,
+                  )),
                   subtitle: Text(
                     '${DateFormat('dd/MM/yyyy').format(DateTime.parse(t.transactionDate))}${cat != null ? ' • ${cat.name}' : ''}'
                   ),
@@ -215,14 +295,15 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                           Text(
                             'R\$ ${t.amount.toStringAsFixed(2)}',
                             style: TextStyle(
-                              color: t.type == 'income' ? Colors.green : Colors.red,
+                              color: isCanceled ? Colors.grey : (t.type == 'income' ? Colors.green : Colors.red),
                               fontWeight: FontWeight.bold,
+                              decoration: isCanceled ? TextDecoration.lineThrough : null,
                             ),
                           ),
                           Text(
-                            t.status == 'paid' ? 'Efetuado' : (t.status == 'overdue' ? 'Atrasado' : 'Pendente'), 
+                            isCanceled ? 'Cancelado' : (t.status == 'paid' ? 'Efetuado' : (t.status == 'overdue' ? 'Atrasado' : 'Pendente')), 
                             style: TextStyle(
-                              color: t.status == 'paid' ? Colors.green : (t.status == 'overdue' ? Colors.red : Colors.orange), 
+                              color: isCanceled ? Colors.grey : (t.status == 'paid' ? Colors.green : (t.status == 'overdue' ? Colors.red : Colors.orange)), 
                               fontSize: 12
                             )
                           ),
@@ -230,7 +311,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                       ),
                       Checkbox(
                         value: isPaid,
-                        onChanged: (val) {
+                        onChanged: isCanceled ? null : (val) {
                           if (val != null) {
                             final newStatus = val ? 'paid' : 'pending';
                             ref.read(transactionsProvider.notifier).updateTransaction(

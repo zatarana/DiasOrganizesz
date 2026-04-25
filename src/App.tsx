@@ -98,8 +98,8 @@ export default function App() {
             <li className="flex items-start group">
               <span className="w-2 h-2 rounded-full border-2 border-indigo-200 group-hover:border-indigo-500 transition-colors mt-1.5 mr-4 flex-shrink-0" />
               <div>
-                <strong className="text-slate-800 block mb-0.5">Tela de Criação/Edição Aprimorada</strong>
-                <span>Validações de preenchimento (SnackBar informando título pendente e erro de valor) adicionadas, mantendo o controle total requerido (pago reflete saldo realizado, pendente afeta previsto/vencimentos).</span>
+                <strong className="text-slate-800 block mb-0.5">Regras Financeiras 100% Ativas</strong>
+                <span>Calculos precisos do Painel: Receitas Totais, Despesas Totais, Saldo Previsto (ignora cancelamentos), Saldo Realizado (apenas transações pagas), regras de despencimento de datas. E o recurso de Replicação de Movimentações Fixas mensal integrados.</span>
               </div>
             </li>
           </ul>
