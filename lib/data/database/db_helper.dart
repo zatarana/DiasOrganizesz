@@ -13,7 +13,7 @@ class DatabaseHelper {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDB('diasorganize_v3.db');
+    _database = await _initDB('diasorganize_v4.db');
     return _database!;
   }
 
@@ -23,33 +23,46 @@ class DatabaseHelper {
 
     return await openDatabase(
       path, 
-      version: 3, 
+      version: 4, 
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
+    if (oldVersion < 4) {
       await db.execute('''
-        CREATE TABLE transactions (
+        CREATE TABLE IF NOT EXISTS transactions (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           title TEXT NOT NULL,
+          description TEXT,
           amount REAL NOT NULL,
           type TEXT NOT NULL,
-          date TEXT NOT NULL,
+          transactionDate TEXT NOT NULL,
           dueDate TEXT,
+          paidDate TEXT,
           categoryId INTEGER,
           paymentMethod TEXT,
-          isPaid INTEGER NOT NULL,
+          status TEXT NOT NULL,
           isFixed INTEGER NOT NULL DEFAULT 0,
-          createdAt TEXT NOT NULL
+          recurrenceType TEXT NOT NULL DEFAULT 'none',
+          notes TEXT,
+          createdAt TEXT NOT NULL,
+          updatedAt TEXT NOT NULL
         )
       ''');
-    } else if (oldVersion < 3) {
-       await db.execute('ALTER TABLE transactions ADD COLUMN dueDate TEXT');
-       await db.execute('ALTER TABLE transactions ADD COLUMN paymentMethod TEXT');
-       await db.execute('ALTER TABLE transactions ADD COLUMN isFixed INTEGER NOT NULL DEFAULT 0');
+      // If we're upgrading from v3, we add columns to the existing table
+      if (oldVersion == 3) {
+        await db.execute('ALTER TABLE transactions ADD COLUMN description TEXT');
+        await db.execute('ALTER TABLE transactions RENAME COLUMN date TO transactionDate');
+        await db.execute('ALTER TABLE transactions ADD COLUMN paidDate TEXT');
+        await db.execute('ALTER TABLE transactions ADD COLUMN status TEXT');
+        await db.execute('ALTER TABLE transactions ADD COLUMN recurrenceType TEXT DEFAULT "none"');
+        await db.execute('ALTER TABLE transactions ADD COLUMN notes TEXT');
+        await db.execute('ALTER TABLE transactions ADD COLUMN updatedAt TEXT');
+      } else if (oldVersion == 2) {
+        // ...
+      }
     }
   }
 
@@ -93,15 +106,20 @@ class DatabaseHelper {
       CREATE TABLE transactions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT NOT NULL,
+        description TEXT,
         amount REAL NOT NULL,
         type TEXT NOT NULL,
-        date TEXT NOT NULL,
+        transactionDate TEXT NOT NULL,
         dueDate TEXT,
+        paidDate TEXT,
         categoryId INTEGER,
         paymentMethod TEXT,
-        isPaid INTEGER NOT NULL,
+        status TEXT NOT NULL,
         isFixed INTEGER NOT NULL DEFAULT 0,
-        createdAt TEXT NOT NULL
+        recurrenceType TEXT NOT NULL,
+        notes TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
       )
     ''');
     
@@ -179,7 +197,7 @@ class DatabaseHelper {
   // Transactions
   Future<List<FinancialTransaction>> getTransactions() async {
     final db = await instance.database;
-    final result = await db.query('transactions', orderBy: 'date DESC');
+    final result = await db.query('transactions', orderBy: 'transactionDate DESC');
     return result.map((json) => FinancialTransaction.fromMap(json)).toList();
   }
 

@@ -74,8 +74,8 @@ class TaskDashboard extends ConsumerWidget {
     
     double saldo = 0;
     for (var t in transactions) {
-      if (t.type == 'receita') saldo += t.amount;
-      else if (t.type == 'despesa') saldo -= t.amount;
+      if (t.type == 'income') saldo += t.amount;
+      else if (t.type == 'expense') saldo -= t.amount;
     }
 
     return Scaffold(

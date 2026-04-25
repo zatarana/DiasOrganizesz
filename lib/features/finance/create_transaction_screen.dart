@@ -15,29 +15,50 @@ class CreateTransactionScreen extends ConsumerStatefulWidget {
 
 class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScreen> {
   final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
   final _amountController = TextEditingController();
-  final _paymentMethodController = TextEditingController();
-  String _type = 'despesa';
-  DateTime _date = DateTime.now();
+  final _notesController = TextEditingController();
+  String _type = 'expense';
+  DateTime _transactionDate = DateTime.now();
   DateTime? _dueDate;
-  bool _isPaid = false;
+  DateTime? _paidDate;
+  String _status = 'pending';
   bool _isFixed = false;
+  String _recurrenceType = 'none';
   int? _categoryId;
+
+  // Available Payment Methods
+  final List<String> _paymentMethods = [
+    'dinheiro', 'pix', 'cartão de débito', 'cartão de crédito', 'boleto', 'transferência', 'outro'
+  ];
+  String? _selectedPaymentMethod;
 
   @override
   void initState() {
     super.initState();
     if (widget.transaction != null) {
       _titleController.text = widget.transaction!.title;
-      _amountController.text = widget.transaction!.amount.toString();
-      _paymentMethodController.text = widget.transaction!.paymentMethod ?? '';
+      _descriptionController.text = widget.transaction!.description ?? '';
+      _notesController.text = widget.transaction!.notes ?? '';
+      _amountController.text = widget.transaction!.amount.toStringAsFixed(2);
+      
+      if (_paymentMethods.contains(widget.transaction!.paymentMethod?.toLowerCase())) {
+        _selectedPaymentMethod = widget.transaction!.paymentMethod?.toLowerCase();
+      } else if (widget.transaction!.paymentMethod != null && widget.transaction!.paymentMethod!.isNotEmpty) {
+        _selectedPaymentMethod = 'outro'; // Map unknown to outro
+      }
+
       _type = widget.transaction!.type;
-      _date = DateTime.parse(widget.transaction!.date);
+      _transactionDate = DateTime.parse(widget.transaction!.transactionDate);
       if (widget.transaction!.dueDate != null) {
         _dueDate = DateTime.parse(widget.transaction!.dueDate!);
       }
-      _isPaid = widget.transaction!.isPaid;
+      if (widget.transaction!.paidDate != null) {
+        _paidDate = DateTime.parse(widget.transaction!.paidDate!);
+      }
+      _status = widget.transaction!.status;
       _isFixed = widget.transaction!.isFixed;
+      _recurrenceType = widget.transaction!.recurrenceType;
       _categoryId = widget.transaction!.categoryId;
     }
   }
@@ -84,8 +105,8 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
             children: [
               SegmentedButton<String>(
                 segments: const [
-                  ButtonSegment(value: 'receita', label: Text('Receita', style: TextStyle(color: Colors.green))),
-                  ButtonSegment(value: 'despesa', label: Text('Despesa', style: TextStyle(color: Colors.red))),
+                  ButtonSegment(value: 'income', label: Text('Receita', style: TextStyle(color: Colors.green))),
+                  ButtonSegment(value: 'expense', label: Text('Despesa', style: TextStyle(color: Colors.red))),
                 ],
                 selected: {_type},
                 onSelectionChanged: (set) {
@@ -99,6 +120,12 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
               ),
               const SizedBox(height: 16),
               TextField(
+                controller: _descriptionController,
+                decoration: const InputDecoration(labelText: 'Descrição', border: OutlineInputBorder()),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 16),
+              TextField(
                 controller: _amountController,
                 decoration: const InputDecoration(labelText: 'Valor (R\$)', border: OutlineInputBorder()),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -109,17 +136,17 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () async {
-                        final dt = await showDatePicker(context: context, initialDate: _date, firstDate: DateTime(2000), lastDate: DateTime(2100));
-                        if(dt != null) setState(() => _date = dt);
+                        final dt = await showDatePicker(context: context, initialDate: _transactionDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
+                        if(dt != null) setState(() => _transactionDate = dt);
                       },
-                      child: Text('Data: ${DateFormat('dd/MM/yyyy').format(_date)}'),
+                      child: Text('Data: ${DateFormat('dd/MM/yyyy').format(_transactionDate)}'),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () async {
-                        final dt = await showDatePicker(context: context, initialDate: _dueDate ?? _date, firstDate: DateTime(2000), lastDate: DateTime(2100));
+                        final dt = await showDatePicker(context: context, initialDate: _dueDate ?? _transactionDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
                         if(dt != null) setState(() => _dueDate = dt);
                       },
                       child: Text(_dueDate == null ? 'Vencimento: -' : 'Venc. ${DateFormat('dd/MM/yyyy').format(_dueDate!)}'),
@@ -138,22 +165,53 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                 decoration: const InputDecoration(labelText: 'Categoria', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 16),
-              TextField(
-                controller: _paymentMethodController,
-                decoration: const InputDecoration(labelText: 'Forma de Pagamento (ex: PIX, Cartão)', border: OutlineInputBorder()),
+              DropdownButtonFormField<String>(
+                value: _selectedPaymentMethod,
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('Forma de Pagamento (Nenhuma)')),
+                  ..._paymentMethods.map((m) => DropdownMenuItem(value: m, child: Text(m.toUpperCase()))),
+                ],
+                onChanged: (v) => setState( ()=> _selectedPaymentMethod = v),
+                decoration: const InputDecoration(labelText: 'Forma de Pagamento', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: _status,
+                items: const [
+                  DropdownMenuItem(value: 'pending', child: Text('Pendente')),
+                  DropdownMenuItem(value: 'paid', child: Text('Efetuado / Pago')),
+                  DropdownMenuItem(value: 'overdue', child: Text('Em Atraso')),
+                  DropdownMenuItem(value: 'canceled', child: Text('Cancelado')),
+                ],
+                onChanged: (v) {
+                  setState(() {
+                     _status = v!;
+                     if (_status == 'paid') {
+                       _paidDate ??= DateTime.now();
+                     } else {
+                       _paidDate = null;
+                     }
+                  });
+                },
+                decoration: const InputDecoration(labelText: 'Status Atual', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 16),
               SwitchListTile(
-                title: Text(_type == 'receita' ? 'Foi recebido?' : 'Foi pago?'),
-                subtitle: Text(_isPaid ? 'Sim' : 'Não (Pendente)'),
-                value: _isPaid,
-                onChanged: (val) => setState(() => _isPaid = val),
-              ),
-              SwitchListTile(
-                title: const Text('Lançamento fixo?'),
-                subtitle: Text(_isFixed ? 'Mensal' : 'Avulso'),
+                title: const Text('Lançamento fixo mensal?'),
+                subtitle: Text(_isFixed ? 'Sim' : 'Não'),
                 value: _isFixed,
-                onChanged: (val) => setState(() => _isFixed = val),
+                onChanged: (val) {
+                  setState(() {
+                    _isFixed = val;
+                    _recurrenceType = val ? 'monthly' : 'none';
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _notesController,
+                decoration: const InputDecoration(labelText: 'Observações (Opcional)', border: OutlineInputBorder()),
+                maxLines: 3,
               ),
               const SizedBox(height: 32),
               ElevatedButton(
@@ -164,15 +222,20 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                     final t = FinancialTransaction(
                       id: widget.transaction?.id,
                       title: _titleController.text,
+                      description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
                       amount: amount,
                       type: _type,
-                      date: _date.toIso8601String(),
+                      transactionDate: _transactionDate.toIso8601String(),
                       dueDate: _dueDate?.toIso8601String(),
+                      paidDate: _paidDate?.toIso8601String(),
                       categoryId: _categoryId,
-                      paymentMethod: _paymentMethodController.text,
-                      isPaid: _isPaid,
+                      paymentMethod: _selectedPaymentMethod,
+                      status: _status,
                       isFixed: _isFixed,
+                      recurrenceType: _recurrenceType,
+                      notes: _notesController.text.isNotEmpty ? _notesController.text : null,
                       createdAt: widget.transaction?.createdAt ?? DateTime.now().toIso8601String(),
+                      updatedAt: DateTime.now().toIso8601String(),
                     );
                     if (widget.transaction == null) {
                       ref.read(transactionsProvider.notifier).addTransaction(t);

@@ -15,8 +15,8 @@ class FinanceScreen extends ConsumerStatefulWidget {
 
 class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   DateTime _selectedMonth = DateTime.now();
-  String _filterType = 'all'; // all, receita, despesa
-  String _filterStatus = 'all'; // all, paid, pending
+  String _filterType = 'all'; // all, income, expense
+  String _filterStatus = 'all'; // all, paid, pending, overdue
   int? _filterCategory;
   final TextEditingController _searchController = TextEditingController();
 
@@ -34,13 +34,16 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     
     // Apply Filters
     var filtered = allTransactions.where((t) {
-      final tDate = DateTime.tryParse(t.date);
+      final tDate = DateTime.tryParse(t.transactionDate);
       if (tDate == null) return false;
       if (tDate.month != _selectedMonth.month || tDate.year != _selectedMonth.year) return false;
       
       if (_filterType != 'all' && t.type != _filterType) return false;
-      if (_filterStatus == 'paid' && !t.isPaid) return false;
-      if (_filterStatus == 'pending' && t.isPaid) return false;
+      
+      if (_filterStatus == 'paid' && t.status != 'paid') return false;
+      if (_filterStatus == 'pending' && t.status != 'pending') return false;
+      if (_filterStatus == 'overdue' && t.status != 'overdue') return false;
+
       if (_filterCategory != null && t.categoryId != _filterCategory) return false;
       
       if (_searchController.text.isNotEmpty && !t.title.toLowerCase().contains(_searchController.text.toLowerCase())) {
@@ -54,21 +57,21 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     double receitasPendentes = 0;
     double despesasPagas = 0;
     double despesasPendentes = 0;
-    int despesasVencidas = 0;
+    int qtdeDespesasVencidas = 0;
 
     for (var t in allTransactions) { // calculando totais do mes
-      final tDate = DateTime.tryParse(t.date);
+      final tDate = DateTime.tryParse(t.transactionDate);
       if (tDate != null && tDate.month == _selectedMonth.month && tDate.year == _selectedMonth.year) {
-        if (t.type == 'receita') {
-          if (t.isPaid) receitasPagas += t.amount;
+        if (t.type == 'income') {
+          if (t.status == 'paid') receitasPagas += t.amount;
           else receitasPendentes += t.amount;
-        } else if (t.type == 'despesa') {
-          if (t.isPaid) despesasPagas += t.amount;
+        } else if (t.type == 'expense') {
+          if (t.status == 'paid') despesasPagas += t.amount;
           else {
             despesasPendentes += t.amount;
             final dueDate = t.dueDate != null ? DateTime.tryParse(t.dueDate!) : tDate;
-            if (dueDate != null && dueDate.isBefore(DateTime.now()) && dueDate.day < DateTime.now().day) {
-              despesasVencidas++;
+            if (t.status == 'overdue' || (dueDate != null && dueDate.isBefore(DateTime.now()) && dueDate.day < DateTime.now().day && t.status != 'paid')) {
+               qtdeDespesasVencidas++;
             }
           }
         }
@@ -101,7 +104,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  _buildSummaryCard(saldoMensal, saldoRealizado, totalReceitas, totalDespesas, despesasVencidas),
+                  _buildSummaryCard(saldoMensal, saldoRealizado, totalReceitas, totalDespesas, qtdeDespesasVencidas),
                   const SizedBox(height: 16),
                   TextField(
                     controller: _searchController,
@@ -120,15 +123,17 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                       children: [
                         _buildFilterChip('Todos', 'all', _filterType, (v) => setState(() => _filterType = v)),
                         const SizedBox(width: 8),
-                        _buildFilterChip('Receitas', 'receita', _filterType, (v) => setState(() => _filterType = v)),
+                        _buildFilterChip('Receitas', 'income', _filterType, (v) => setState(() => _filterType = v)),
                         const SizedBox(width: 8),
-                        _buildFilterChip('Despesas', 'despesa', _filterType, (v) => setState(() => _filterType = v)),
+                        _buildFilterChip('Despesas', 'expense', _filterType, (v) => setState(() => _filterType = v)),
                         const SizedBox(width: 16),
                         _buildFilterChip('Tudo', 'all', _filterStatus, (v) => setState(() => _filterStatus = v)),
                         const SizedBox(width: 8),
                         _buildFilterChip('Pago', 'paid', _filterStatus, (v) => setState(() => _filterStatus = v)),
                         const SizedBox(width: 8),
                         _buildFilterChip('Pendente', 'pending', _filterStatus, (v) => setState(() => _filterStatus = v)),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Atrasado', 'overdue', _filterStatus, (v) => setState(() => _filterStatus = v)),
                       ],
                     ),
                   ),
@@ -149,16 +154,17 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
             delegate: SliverChildBuilderDelegate(
               (context, index) {
                 final t = filtered[index];
+                final isPaid = t.status == 'paid';
                 return ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: t.type == 'receita' ? Colors.green.withOpacity(0.2) : Colors.red.withOpacity(0.2),
+                    backgroundColor: t.type == 'income' ? Colors.green.withOpacity(0.2) : Colors.red.withOpacity(0.2),
                     child: Icon(
-                      t.type == 'receita' ? Icons.arrow_upward : Icons.arrow_downward,
-                      color: t.type == 'receita' ? Colors.green : Colors.red,
+                      t.type == 'income' ? Icons.arrow_upward : Icons.arrow_downward,
+                      color: t.type == 'income' ? Colors.green : Colors.red,
                     ),
                   ),
-                  title: Text(t.title, style: TextStyle(decoration: t.isPaid ? TextDecoration.none : null)),
-                  subtitle: Text(DateFormat('dd/MM/yyyy').format(DateTime.parse(t.date))),
+                  title: Text(t.title, style: TextStyle(decoration: isPaid ? TextDecoration.none : null)),
+                  subtitle: Text(DateFormat('dd/MM/yyyy').format(DateTime.parse(t.transactionDate))),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -169,18 +175,31 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                           Text(
                             'R\$ ${t.amount.toStringAsFixed(2)}',
                             style: TextStyle(
-                              color: t.type == 'receita' ? Colors.green : Colors.red,
+                              color: t.type == 'income' ? Colors.green : Colors.red,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          Text(t.isPaid ? 'Efetuado' : 'Pendente', style: TextStyle(color: t.isPaid ? Colors.green : Colors.orange, fontSize: 12)),
+                          Text(
+                            t.status == 'paid' ? 'Efetuado' : (t.status == 'overdue' ? 'Atrasado' : 'Pendente'), 
+                            style: TextStyle(
+                              color: t.status == 'paid' ? Colors.green : (t.status == 'overdue' ? Colors.red : Colors.orange), 
+                              fontSize: 12
+                            )
+                          ),
                         ]
                       ),
                       Checkbox(
-                        value: t.isPaid,
+                        value: isPaid,
                         onChanged: (val) {
                           if (val != null) {
-                            ref.read(transactionsProvider.notifier).updateTransaction(t.copyWith(isPaid: val));
+                            final newStatus = val ? 'paid' : 'pending';
+                            ref.read(transactionsProvider.notifier).updateTransaction(
+                              t.copyWith(
+                                status: newStatus,
+                                paidDate: val ? DateTime.now().toIso8601String() : null,
+                                updatedAt: DateTime.now().toIso8601String(),
+                              )
+                            );
                           }
                         },
                       ),

@@ -1,55 +1,75 @@
 class FinancialTransaction {
   final int? id;
   final String title;
+  final String? description;
   final double amount;
-  final String type; // 'receita', 'despesa'
-  final String date;
+  final String type; // 'income', 'expense'
+  final String transactionDate;
   final String? dueDate;
+  final String? paidDate;
   final int? categoryId;
   final String? paymentMethod;
-  final bool isPaid;
+  final String status; // 'pending', 'paid', 'overdue', 'canceled'
   final bool isFixed;
+  final String recurrenceType; // 'none', 'monthly'
+  final String? notes;
   final String createdAt;
+  final String updatedAt;
 
   FinancialTransaction({
     this.id,
     required this.title,
+    this.description,
     required this.amount,
     required this.type,
-    required this.date,
+    required this.transactionDate,
     this.dueDate,
+    this.paidDate,
     this.categoryId,
     this.paymentMethod,
-    required this.isPaid,
-    this.isFixed = false,
+    required this.status,
+    required this.isFixed,
+    required this.recurrenceType,
+    this.notes,
     required this.createdAt,
+    required this.updatedAt,
   });
 
   FinancialTransaction copyWith({
     int? id,
     String? title,
+    String? description,
     double? amount,
     String? type,
-    String? date,
+    String? transactionDate,
     String? dueDate,
+    String? paidDate,
     int? categoryId,
     String? paymentMethod,
-    bool? isPaid,
+    String? status,
     bool? isFixed,
+    String? recurrenceType,
+    String? notes,
     String? createdAt,
+    String? updatedAt,
   }) {
     return FinancialTransaction(
       id: id ?? this.id,
       title: title ?? this.title,
+      description: description ?? this.description,
       amount: amount ?? this.amount,
       type: type ?? this.type,
-      date: date ?? this.date,
+      transactionDate: transactionDate ?? this.transactionDate,
       dueDate: dueDate ?? this.dueDate,
+      paidDate: paidDate ?? this.paidDate,
       categoryId: categoryId ?? this.categoryId,
       paymentMethod: paymentMethod ?? this.paymentMethod,
-      isPaid: isPaid ?? this.isPaid,
+      status: status ?? this.status,
       isFixed: isFixed ?? this.isFixed,
+      recurrenceType: recurrenceType ?? this.recurrenceType,
+      notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
@@ -57,31 +77,51 @@ class FinancialTransaction {
     return {
       'id': id,
       'title': title,
+      'description': description,
       'amount': amount,
       'type': type,
-      'date': date,
+      'transactionDate': transactionDate,
       'dueDate': dueDate,
+      'paidDate': paidDate,
       'categoryId': categoryId,
       'paymentMethod': paymentMethod,
-      'isPaid': isPaid ? 1 : 0,
+      'status': status,
       'isFixed': isFixed ? 1 : 0,
+      'recurrenceType': recurrenceType,
+      'notes': notes,
       'createdAt': createdAt,
+      'updatedAt': updatedAt,
     };
   }
 
   factory FinancialTransaction.fromMap(Map<String, dynamic> map) {
+    // Migration fallbacks for old SQLite structure
+    String mappedType = map['type'] ?? 'expense';
+    if (mappedType == 'receita') mappedType = 'income';
+    if (mappedType == 'despesa') mappedType = 'expense';
+
+    String mappedStatus = map['status'] ?? 'pending';
+    if (map['status'] == null && map['isPaid'] != null) {
+      mappedStatus = (map['isPaid'] == 1) ? 'paid' : 'pending';
+    }
+
     return FinancialTransaction(
       id: map['id'],
       title: map['title'],
+      description: map['description'],
       amount: map['amount'],
-      type: map['type'],
-      date: map['date'],
+      type: mappedType,
+      transactionDate: map['transactionDate'] ?? map['date'] ?? DateTime.now().toIso8601String(),
       dueDate: map['dueDate'],
+      paidDate: map['paidDate'],
       categoryId: map['categoryId'],
       paymentMethod: map['paymentMethod'],
-      isPaid: map['isPaid'] == 1,
+      status: mappedStatus,
       isFixed: map['isFixed'] == 1,
-      createdAt: map['createdAt'],
+      recurrenceType: map['recurrenceType'] ?? 'none',
+      notes: map['notes'],
+      createdAt: map['createdAt'] ?? DateTime.now().toIso8601String(),
+      updatedAt: map['updatedAt'] ?? DateTime.now().toIso8601String(),
     );
   }
 }
