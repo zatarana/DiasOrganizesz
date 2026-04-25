@@ -37,7 +37,7 @@ class CategoriesScreen extends ConsumerWidget {
               ElevatedButton(
                 onPressed: () {
                   if (nameController.text.isNotEmpty) {
-                    final cat = TaskCategory(name: nameController.text, color: 0xFF2196F3);
+                    final cat = TaskCategory(name: nameController.text, color: '0xFF2196F3', createdAt: DateTime.now().toIso8601String());
                     ref.read(categoriesProvider.notifier).addCategory(cat);
                     Navigator.pop(ctx);
                   }
@@ -99,7 +99,7 @@ class CategoriesScreen extends ConsumerWidget {
                 final cat = categories[i];
                 return ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: Color(cat.color),
+                    backgroundColor: Color(int.parse(cat.color)),
                     child: Icon(
                       cat.icon == 'person' ? Icons.person : (cat.icon == 'work' ? Icons.work : Icons.folder),
                       color: Colors.white,

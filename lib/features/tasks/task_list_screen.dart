@@ -20,7 +20,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     
     final tasks = allTasks.where((t) {
       final matchesSearch = t.title.toLowerCase().contains(_searchQuery.toLowerCase()) || 
-                            t.description.toLowerCase().contains(_searchQuery.toLowerCase());
+                            (t.description?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false);
       
       bool matchesStatus = true;
       if (_statusFilter == 'Pendentes') matchesStatus = t.status == 'pendente';

@@ -1,14 +1,16 @@
 class TaskCategory {
   final int? id;
   final String name;
-  final int color;
+  final String color;
   final String? icon;
+  final String createdAt;
 
   TaskCategory({
     this.id,
     required this.name,
     required this.color,
     this.icon,
+    required this.createdAt,
   });
 
   Map<String, dynamic> toMap() {
@@ -17,6 +19,7 @@ class TaskCategory {
       'name': name,
       'color': color,
       'icon': icon,
+      'createdAt': createdAt,
     };
   }
 
@@ -26,6 +29,7 @@ class TaskCategory {
       name: map['name'],
       color: map['color'],
       icon: map['icon'],
+      createdAt: map['createdAt'],
     );
   }
 }

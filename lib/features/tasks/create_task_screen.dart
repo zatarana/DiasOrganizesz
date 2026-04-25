@@ -32,7 +32,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
       _time = widget.task!.time;
       _priority = widget.task!.priority;
       _categoryId = widget.task!.categoryId;
-      _hasReminder = widget.task!.hasReminder;
+      _hasReminder = widget.task!.reminderEnabled;
     }
   }
 
@@ -48,13 +48,13 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
     final t = Task(
       id: widget.task?.id,
       title: _titleController.text,
-      description: _descController.text,
+      description: _descController.text.isEmpty ? null : _descController.text,
       date: _date,
       time: _time,
       categoryId: catId!,
       priority: _priority,
       status: widget.task?.status ?? 'pendente',
-      hasReminder: _hasReminder,
+      reminderEnabled: _hasReminder,
       createdAt: widget.task?.createdAt ?? DateTime.now().toIso8601String(),
       updatedAt: DateTime.now().toIso8601String(),
     );
@@ -70,10 +70,10 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
   }
 
   void _scheduleReminderIfNeeded(Task t) {
-    if (t.hasReminder && t.time != null) {
+    if (t.reminderEnabled && t.time != null && t.date != null) {
       try {
         final parts = t.time!.split(':');
-        final currentDt = DateTime.parse(t.date);
+        final currentDt = DateTime.parse(t.date!);
         final reminderTime = DateTime(currentDt.year, currentDt.month, currentDt.day, int.parse(parts[0]), int.parse(parts[1]));
         if (reminderTime.isAfter(DateTime.now())) {
            NotificationService().scheduleNotification(

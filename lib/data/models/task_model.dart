@@ -1,26 +1,26 @@
 class Task {
   final int? id;
   final String title;
-  final String description;
-  final int categoryId;
+  final String? description;
+  final int? categoryId;
   final String priority; // 'baixa', 'media', 'alta'
-  final String date;
+  final String? date;
   final String? time;
   final String status; // 'pendente', 'concluida', 'atrasada'
-  final bool hasReminder;
+  final bool reminderEnabled;
   final String createdAt;
   final String updatedAt;
 
   Task({
     this.id,
     required this.title,
-    required this.description,
-    required this.categoryId,
+    this.description,
+    this.categoryId,
     required this.priority,
-    required this.date,
+    this.date,
     this.time,
     required this.status,
-    required this.hasReminder,
+    required this.reminderEnabled,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -35,7 +35,7 @@ class Task {
       'date': date,
       'time': time,
       'status': status,
-      'hasReminder': hasReminder ? 1 : 0,
+      'reminderEnabled': reminderEnabled ? 1 : 0,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
     };
@@ -51,7 +51,7 @@ class Task {
       date: map['date'],
       time: map['time'],
       status: map['status'],
-      hasReminder: map['hasReminder'] == 1,
+      reminderEnabled: map['reminderEnabled'] == 1,
       createdAt: map['createdAt'],
       updatedAt: map['updatedAt'],
     );
@@ -66,7 +66,7 @@ class Task {
     String? date,
     String? time,
     String? status,
-    bool? hasReminder,
+    bool? reminderEnabled,
     String? createdAt,
     String? updatedAt,
   }) {
@@ -79,7 +79,7 @@ class Task {
       date: date ?? this.date,
       time: time ?? this.time,
       status: status ?? this.status,
-      hasReminder: hasReminder ?? this.hasReminder,
+      reminderEnabled: reminderEnabled ?? this.reminderEnabled,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

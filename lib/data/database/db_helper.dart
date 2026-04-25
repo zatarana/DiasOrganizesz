@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/task_model.dart';
 import '../models/category_model.dart';
+import '../models/setting_model.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -11,7 +12,7 @@ class DatabaseHelper {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDB('diasorganize.db');
+    _database = await _initDB('diasorganize_v2.db');
     return _database!;
   }
 
@@ -27,8 +28,9 @@ class DatabaseHelper {
       CREATE TABLE categories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
-        color INTEGER NOT NULL,
-        icon TEXT
+        color TEXT NOT NULL,
+        icon TEXT,
+        createdAt TEXT NOT NULL
       )
     ''');
 
@@ -36,23 +38,32 @@ class DatabaseHelper {
       CREATE TABLE tasks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT NOT NULL,
-        description TEXT NOT NULL,
-        categoryId INTEGER NOT NULL,
+        description TEXT,
+        categoryId INTEGER,
         priority TEXT NOT NULL,
-        date TEXT NOT NULL,
+        date TEXT,
         time TEXT,
         status TEXT NOT NULL,
-        hasReminder INTEGER NOT NULL,
+        reminderEnabled INTEGER NOT NULL,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         FOREIGN KEY (categoryId) REFERENCES categories (id)
       )
     ''');
+
+    await db.execute('''
+      CREATE TABLE settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key TEXT NOT NULL,
+        value TEXT NOT NULL
+      )
+    ''');
     
     // Inserir categorias padrão
-    await db.insert('categories', {'name': 'Pessoal', 'color': 0xFF2196F3, 'icon': 'person'});
-    await db.insert('categories', {'name': 'Trabalho', 'color': 0xFFFF9800, 'icon': 'work'});
-    await db.insert('categories', {'name': 'Estudo', 'color': 0xFF4CAF50, 'icon': 'school'});
+    final now = DateTime.now().toIso8601String();
+    await db.insert('categories', {'name': 'Pessoal', 'color': '0xFF2196F3', 'icon': 'person', 'createdAt': now});
+    await db.insert('categories', {'name': 'Trabalho', 'color': '0xFFFF9800', 'icon': 'work', 'createdAt': now});
+    await db.insert('categories', {'name': 'Estudo', 'color': '0xFF4CAF50', 'icon': 'school', 'createdAt': now});
   }
 
   Future<List<TaskCategory>> getCategories() async {
@@ -97,6 +108,26 @@ class DatabaseHelper {
   Future<int> deleteTask(int id) async {
     final db = await instance.database;
     return await db.delete('tasks', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // Settings
+  Future<AppSetting?> getSetting(String key) async {
+    final db = await instance.database;
+    final result = await db.query('settings', where: 'key = ?', whereArgs: [key]);
+    if (result.isNotEmpty) {
+      return AppSetting.fromMap(result.first);
+    }
+    return null;
+  }
+
+  Future<void> saveSetting(AppSetting setting) async {
+    final db = await instance.database;
+    final existing = await getSetting(setting.key);
+    if (existing != null) {
+      await db.update('settings', setting.toMap(), where: 'key = ?', whereArgs: [setting.key]);
+    } else {
+      await db.insert('settings', setting.toMap());
+    }
   }
 }
 
