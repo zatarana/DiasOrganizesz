@@ -6,6 +6,7 @@ import '../tasks/task_list_screen.dart';
 import '../calendar/calendar_screen.dart';
 import '../settings/settings_screen.dart';
 import '../statistics/stats_screen.dart';
+import 'package:intl/intl.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,6 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
     const TaskDashboard(),
     const TaskListScreen(),
     const CalendarScreen(),
+    const StatsScreen(),
     const SettingsScreen(),
   ];
 
@@ -46,6 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Início'),
           BottomNavigationBarItem(icon: Icon(Icons.list), label: 'Tarefas'),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: 'Calendário'),
+          BottomNavigationBarItem(icon: Icon(Icons.pie_chart), label: 'Estatísticas'),
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Ajustes'),
         ],
       ),
@@ -62,18 +65,25 @@ class TaskDashboard extends ConsumerWidget {
     final pd = tasks.where((t) => t.status == 'pendente').length;
     final cd = tasks.where((t) => t.status == 'concluida').length;
     final ad = tasks.where((t) => t.status == 'atrasada').length;
+    
+    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final todayTasks = tasks.where((t) => t.date == todayStr).toList();
 
-    return SafeArea(
-      child: Padding(
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('DiasOrganize', style: TextStyle(fontWeight: FontWeight.bold)),
+        centerTitle: false,
+      ),
+      body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Olá! Resumo do seu dia.',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              'Resumo do dia',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
@@ -86,28 +96,33 @@ class TaskDashboard extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Próximas tarefas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                TextButton(
-                  onPressed: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const StatsScreen()));
-                  },
-                  child: const Text('Ver Estatísticas'),
-                ),
+                const Text('Tarefas de hoje', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                if (todayTasks.isNotEmpty)
+                  Text('${todayTasks.length} tarefa(s)'),
               ],
             ),
+            const SizedBox(height: 8),
             Expanded(
-              child: tasks.isEmpty
-                  ? const Center(child: Text('Nenhuma tarefa pendente.'))
+              child: todayTasks.isEmpty
+                  ? const Center(child: Text('Nenhuma tarefa para hoje! 🎉'))
                   : ListView.builder(
-                      itemCount: tasks.length,
+                      itemCount: todayTasks.length,
                       itemBuilder: (ctx, i) {
-                        final t = tasks[i];
-                        return ListTile(
-                          title: Text(t.title),
-                          subtitle: Text(t.date),
-                          trailing: Icon(
-                            t.status == 'concluida' ? Icons.check_circle : Icons.circle_outlined,
-                            color: t.status == 'concluida' ? Colors.green : Colors.grey,
+                        final t = todayTasks[i];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            title: Text(t.title, style: TextStyle(decoration: t.status == 'concluida' ? TextDecoration.lineThrough : null)),
+                            subtitle: Text('${t.priority.toUpperCase()} - ${t.status}'),
+                            trailing: Icon(
+                              t.status == 'concluida' ? Icons.check_circle : Icons.circle_outlined,
+                              color: t.status == 'concluida' ? Colors.green : Colors.grey,
+                            ),
+                            onTap: () {
+                              ref.read(tasksProvider.notifier).updateTask(
+                                t.copyWith(status: t.status == 'concluida' ? 'pendente' : 'concluida')
+                              );
+                            },
                           ),
                         );
                       },
@@ -129,19 +144,19 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 3,
+      elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Container(
         width: 100,
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          gradient: LinearGradient(colors: [color.withOpacity(0.7), color]),
+          gradient: LinearGradient(colors: [color.withOpacity(0.8), color]),
         ),
         child: Column(
           children: [
-            Text(count.toString(), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
-            Text(title, style: const TextStyle(fontSize: 12, color: Colors.white)),
+            Text(count.toString(), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white)),
+            Text(title, style: const TextStyle(fontSize: 12, color: Colors.white), textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
           ],
         ),
       ),

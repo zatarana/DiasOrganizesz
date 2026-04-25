@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/providers.dart';
 import '../../data/models/category_model.dart';
+import '../../data/models/task_model.dart';
 
 class CategoriesScreen extends ConsumerWidget {
   const CategoriesScreen({super.key});
@@ -51,6 +52,35 @@ class CategoriesScreen extends ConsumerWidget {
     );
   }
 
+  void _confirmDelete(BuildContext context, WidgetRef ref, int categoryId) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir Categoria?'),
+        content: const Text('As tarefas vinculadas a esta categoria serão migradas para a categoria Pessoal. Deseja continuar?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () {
+              // Migrar tarefas para a primeira categoria padrão (id=1 que geralmente é Pessoal)
+              final tasks = ref.read(tasksProvider);
+              for (var t in tasks) {
+                if (t.categoryId == categoryId) {
+                   ref.read(tasksProvider.notifier).updateTask(t.copyWith(categoryId: 1));
+                }
+              }
+              // Deletar categoria
+              ref.read(categoriesProvider.notifier).removeCategory(categoryId);
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Categoria excluída com sucesso.')));
+            },
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final categories = ref.watch(categoriesProvider);
@@ -77,10 +107,8 @@ class CategoriesScreen extends ConsumerWidget {
                   ),
                   title: Text(cat.name),
                   trailing: IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    onPressed: () {
-                      ref.read(categoriesProvider.notifier).removeCategory(cat.id!);
-                    },
+                    icon: const Icon(Icons.delete, color: Colors.grey),
+                    onPressed: () => _confirmDelete(context, ref, cat.id!),
                   ),
                 );
               },

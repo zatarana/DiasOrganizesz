@@ -21,7 +21,7 @@ export default function App() {
         <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex flex-col space-y-6">
           <div className="flex items-center space-x-3 text-emerald-600 border-b border-slate-50 pb-4">
             <CheckCircle2 className="w-6 h-6" />
-            <h2 className="text-lg font-bold text-slate-800 tracking-tight">Arquivos Gerados</h2>
+            <h2 className="text-lg font-bold text-slate-800 tracking-tight">Arquivos e Telas Geradas</h2>
           </div>
           
           <ul className="space-y-4 text-slate-500 text-sm">
@@ -36,7 +36,7 @@ export default function App() {
               <span className="w-2 h-2 rounded-full border-2 border-indigo-200 group-hover:border-indigo-500 transition-colors mt-1.5 mr-4 flex-shrink-0" />
               <div>
                 <strong className="text-slate-800 block mb-0.5">Código Flutter (Dart)</strong>
-                <span>Toda a lógica, telas e banco de dados SQLite foram implementados na pasta <code className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold text-xs">lib/</code>.</span>
+                <span>Toda a lógica e 8 telas principais validadas (Home, Tarefas, Calendário, Categorias, Estatísticas e Ajustes) estão implementadas em <code className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold text-xs">lib/</code>.</span>
               </div>
             </li>
             <li className="flex items-start group">
@@ -49,15 +49,8 @@ export default function App() {
             <li className="flex items-start group">
               <span className="w-2 h-2 rounded-full border-2 border-indigo-200 group-hover:border-indigo-500 transition-colors mt-1.5 mr-4 flex-shrink-0" />
               <div>
-                <strong className="text-slate-800 block mb-0.5">Instruções Prontas</strong>
-                <span>O arquivo <code className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold text-xs">README.md</code> contém todos os passos detalhados.</span>
-              </div>
-            </li>
-            <li className="flex items-start group">
-              <span className="w-2 h-2 rounded-full border-2 border-indigo-200 group-hover:border-indigo-500 transition-colors mt-1.5 mr-4 flex-shrink-0" />
-              <div>
                 <strong className="text-slate-800 block mb-0.5">Módulo de Notificações, Configuração e Filtros implementados</strong>
-                <span>Os requisitos 3.2 até 3.8 do PRD foram revisados, integrados e validados no banco de dados SQLite.</span>
+                <span>Os requisitos do PRD foram revisados, integrados e validados no banco de dados SQLite.</span>
               </div>
             </li>
           </ul>

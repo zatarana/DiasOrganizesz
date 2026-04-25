@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../../domain/providers.dart';
+import '../tasks/create_task_screen.dart';
 
 class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key});
@@ -15,6 +16,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   DateTime? _selectedDay;
 
   @override
+  void initState() {
+    super.initState();
+    _selectedDay = _focusedDay;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final tasks = ref.watch(tasksProvider);
     
@@ -25,6 +32,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Calendário')),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          // Navigating to Create Task Screen could pass initial date, handled normally now.
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateTaskScreen()));
+        },
+        child: const Icon(Icons.add),
+      ),
       body: Column(
         children: [
           TableCalendar(
@@ -46,7 +60,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           const Divider(),
           Expanded(
             child: tasksForDay.isEmpty
-                ? const Center(child: Text('Sem tarefas para esta data.'))
+                ? const Center(child: Text('Nenhuma tarefa para esta data.'))
                 : ListView.builder(
                     itemCount: tasksForDay.length,
                     itemBuilder: (ctx, i) {
@@ -56,8 +70,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           t.status == 'concluida' ? Icons.check_circle : Icons.circle_outlined,
                           color: t.status == 'concluida' ? Colors.green : Colors.grey,
                         ),
-                        title: Text(t.title),
-                        subtitle: Text(t.status),
+                        title: Text(t.title, style: TextStyle(decoration: t.status == 'concluida' ? TextDecoration.lineThrough : null)),
+                        subtitle: Text('${t.time ?? ""} - Priority: ${t.priority.toUpperCase()}'),
+                        onTap: () {
+                           Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTaskScreen(task: t)));
+                        },
                       );
                     },
                   ),
