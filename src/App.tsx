@@ -84,8 +84,8 @@ export default function App() {
             <li className="flex items-start group">
               <span className="w-2 h-2 rounded-full border-2 border-indigo-200 group-hover:border-indigo-500 transition-colors mt-1.5 mr-4 flex-shrink-0" />
               <div>
-                <strong className="text-slate-800 block mb-0.5">Módulo de Finanças Implementado</strong>
-                <span>Tabela `transactions` adicionada no SQLite (data/database/db_helper.dart), provedores em Riverpod configurados, Card de Resumo de Saldo adicionado na Home, AppDrawer (Menu Deslizante) integrado, e tela completa de gerenciamento financeiro (`FinanceScreen`) adicionada para controle local. Operando totalmente offline!</span>
+                <strong className="text-slate-800 block mb-0.5">Finanças: Requisitos Completos</strong>
+                <span>Criação, edição, exclusão de receitas e despesas. Status (pago/pendente), vencimento, fixo/avulso e métodos de pagamento. Sistema robusto de filtros (mês, tipo, status e título) e cards com saldo realizado, previsto e alertas de despesas vencidas finalizados!</span>
               </div>
             </li>
           </ul>

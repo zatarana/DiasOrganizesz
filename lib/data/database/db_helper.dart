@@ -13,7 +13,7 @@ class DatabaseHelper {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDB('diasorganize_v2.db');
+    _database = await _initDB('diasorganize_v3.db');
     return _database!;
   }
 
@@ -23,7 +23,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path, 
-      version: 2, 
+      version: 3, 
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -38,11 +38,18 @@ class DatabaseHelper {
           amount REAL NOT NULL,
           type TEXT NOT NULL,
           date TEXT NOT NULL,
+          dueDate TEXT,
           categoryId INTEGER,
+          paymentMethod TEXT,
           isPaid INTEGER NOT NULL,
+          isFixed INTEGER NOT NULL DEFAULT 0,
           createdAt TEXT NOT NULL
         )
       ''');
+    } else if (oldVersion < 3) {
+       await db.execute('ALTER TABLE transactions ADD COLUMN dueDate TEXT');
+       await db.execute('ALTER TABLE transactions ADD COLUMN paymentMethod TEXT');
+       await db.execute('ALTER TABLE transactions ADD COLUMN isFixed INTEGER NOT NULL DEFAULT 0');
     }
   }
 
@@ -89,8 +96,11 @@ class DatabaseHelper {
         amount REAL NOT NULL,
         type TEXT NOT NULL,
         date TEXT NOT NULL,
+        dueDate TEXT,
         categoryId INTEGER,
+        paymentMethod TEXT,
         isPaid INTEGER NOT NULL,
+        isFixed INTEGER NOT NULL DEFAULT 0,
         createdAt TEXT NOT NULL
       )
     ''');
