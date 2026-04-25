@@ -218,8 +218,16 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                 style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
                 onPressed: () {
                   final amount = double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0;
-                  if (_titleController.text.isNotEmpty && amount > 0) {
-                    final t = FinancialTransaction(
+                  if (_titleController.text.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O título é obrigatório.')));
+                    return;
+                  }
+                  if (amount <= 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O valor deve ser maior que zero.')));
+                    return;
+                  }
+                  
+                  final t = FinancialTransaction(
                       id: widget.transaction?.id,
                       title: _titleController.text,
                       description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
@@ -243,9 +251,8 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                       ref.read(transactionsProvider.notifier).updateTransaction(t);
                     }
                     Navigator.pop(context);
-                  }
                 },
-                child: Text('Salvar'),
+                child: const Text('Salvar'),
               ),
             ],
           ),
