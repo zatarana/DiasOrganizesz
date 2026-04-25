@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/riverpod_providers.dart';
-import 'create_task_screen.dart';
-import 'task_list_screen.dart';
-import 'calendar_screen.dart';
-import 'settings_screen.dart';
-import 'stats_screen.dart';
+import '../../domain/providers.dart';
+import '../tasks/create_task_screen.dart';
+import '../tasks/task_list_screen.dart';
+import '../calendar/calendar_screen.dart';
+import '../settings/settings_screen.dart';
+import '../statistics/stats_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});

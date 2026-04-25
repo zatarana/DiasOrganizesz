@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/task_model.dart';
-import '../models/category_model.dart';
-import '../services/db_helper.dart';
+import '../data/models/task_model.dart';
+import '../data/models/category_model.dart';
+import '../data/database/db_helper.dart';
 
 final dbProvider = Provider<DatabaseHelper>((ref) => DatabaseHelper.instance);
 

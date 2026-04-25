@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/riverpod_providers.dart';
-import '../models/task_model.dart';
-import '../services/notification_service.dart';
+import '../../domain/providers.dart';
+import '../../data/models/task_model.dart';
+import '../../core/notifications/notification_service.dart';
 import 'package:intl/intl.dart';
 
 class CreateTaskScreen extends ConsumerStatefulWidget {

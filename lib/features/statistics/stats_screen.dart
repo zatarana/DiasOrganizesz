@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/riverpod_providers.dart';
+import '../../domain/providers.dart';
 
 class StatsScreen extends ConsumerWidget {
   const StatsScreen({super.key});
