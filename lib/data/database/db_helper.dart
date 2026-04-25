@@ -13,7 +13,7 @@ class DatabaseHelper {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDB('diasorganize_v4.db');
+    _database = await _initDB('diasorganize_v5.db');
     return _database!;
   }
 
@@ -23,14 +23,14 @@ class DatabaseHelper {
 
     return await openDatabase(
       path, 
-      version: 4, 
+      version: 5, 
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 4) {
+    if (oldVersion < 5) {
       await db.execute('''
         CREATE TABLE IF NOT EXISTS transactions (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,8 +60,40 @@ class DatabaseHelper {
         await db.execute('ALTER TABLE transactions ADD COLUMN recurrenceType TEXT DEFAULT "none"');
         await db.execute('ALTER TABLE transactions ADD COLUMN notes TEXT');
         await db.execute('ALTER TABLE transactions ADD COLUMN updatedAt TEXT');
-      } else if (oldVersion == 2) {
-        // ...
+      }
+      if (oldVersion < 5) {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS financial_categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            type TEXT NOT NULL,
+            color TEXT NOT NULL,
+            icon TEXT NOT NULL,
+            createdAt TEXT NOT NULL,
+            updatedAt TEXT NOT NULL
+          )
+        ''');
+        // Inserir categorias financeiras padrão
+        final now = DateTime.now().toIso8601String();
+        final defaultCats = [
+          {'name': 'Salário', 'type': 'income', 'color': '0xFF4CAF50', 'icon': 'attach_money'},
+          {'name': 'Alimentação', 'type': 'expense', 'color': '0xFFFF9800', 'icon': 'restaurant'},
+          {'name': 'Transporte', 'type': 'expense', 'color': '0xFF2196F3', 'icon': 'directions_car'},
+          {'name': 'Moradia', 'type': 'expense', 'color': '0xFF9C27B0', 'icon': 'home'},
+          {'name': 'Saúde', 'type': 'expense', 'color': '0xFFE91E63', 'icon': 'local_hospital'},
+          {'name': 'Educação', 'type': 'expense', 'color': '0xFF3F51B5', 'icon': 'school'},
+          {'name': 'Lazer', 'type': 'expense', 'color': '0xFFFFEB3B', 'icon': 'sports_esports'},
+          {'name': 'Assinaturas', 'type': 'expense', 'color': '0xFF00BCD4', 'icon': 'subscriptions'},
+          {'name': 'Dívidas', 'type': 'expense', 'color': '0xFFF44336', 'icon': 'money_off'},
+          {'name': 'Investimentos', 'type': 'both', 'color': '0xFF8BC34A', 'icon': 'trending_up'},
+          {'name': 'Trabalho', 'type': 'both', 'color': '0xFF607D8B', 'icon': 'work'},
+          {'name': 'Outros', 'type': 'both', 'color': '0xFF9E9E9E', 'icon': 'category'},
+        ];
+        for (var cat in defaultCats) {
+          cat['createdAt'] = now;
+          cat['updatedAt'] = now;
+          await db.insert('financial_categories', cat);
+        }
       }
     }
   }
@@ -220,6 +252,34 @@ class DatabaseHelper {
   Future<int> deleteTransaction(int id) async {
     final db = await instance.database;
     return await db.delete('transactions', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // Financial Categories
+  Future<List<Map<String, dynamic>>> getFinancialCategories() async {
+    final db = await instance.database;
+    return await db.query('financial_categories', orderBy: 'name ASC');
+  }
+
+  Future<int> createFinancialCategory(Map<String, dynamic> category) async {
+    final db = await instance.database;
+    return await db.insert('financial_categories', category);
+  }
+
+  Future<int> updateFinancialCategory(Map<String, dynamic> category) async {
+    final db = await instance.database;
+    return await db.update(
+      'financial_categories',
+      category,
+      where: 'id = ?',
+      whereArgs: [category['id']],
+    );
+  }
+
+  Future<int> deleteFinancialCategory(int id) async {
+    final db = await instance.database;
+    // Padrão: setar null nas transações que usam esta categoria
+    await db.update('transactions', {'categoryId': null}, where: 'categoryId = ?', whereArgs: [id]);
+    return await db.delete('financial_categories', where: 'id = ?', whereArgs: [id]);
   }
 }
 

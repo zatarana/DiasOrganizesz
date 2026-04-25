@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/task_model.dart';
 import '../data/models/category_model.dart';
+import '../data/models/financial_category_model.dart';
 import '../data/models/setting_model.dart';
 import '../data/models/transaction_model.dart';
 import '../data/database/db_helper.dart';

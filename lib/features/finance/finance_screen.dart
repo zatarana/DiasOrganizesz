@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../domain/providers.dart';
 import '../../data/models/transaction_model.dart';
-import '../../data/models/category_model.dart';
+import '../../data/models/financial_category_model.dart';
 import 'create_transaction_screen.dart';
+import 'finance_categories_screen.dart';
 
 class FinanceScreen extends ConsumerStatefulWidget {
   const FinanceScreen({super.key});
@@ -31,6 +32,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   @override
   Widget build(BuildContext context) {
     var allTransactions = ref.watch(transactionsProvider);
+    var allCategories = ref.watch(financialCategoriesProvider);
     
     // Apply Filters
     var filtered = allTransactions.where((t) {
@@ -86,6 +88,15 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Finanças'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.category),
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceCategoriesScreen()));
+            },
+            tooltip: 'Categorias',
+          ),
+        ],
       ),
       body: CustomScrollView(
         slivers: [
@@ -137,6 +148,30 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                       ],
                     ),
                   ),
+                  if (allCategories.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          ChoiceChip(
+                            label: const Text('Todas as Categorias'),
+                            selected: _filterCategory == null,
+                            onSelected: (b) => setState(() => _filterCategory = null),
+                          ),
+                          const SizedBox(width: 8),
+                          ...allCategories.map((c) => Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: ChoiceChip(
+                              label: Text(c.name),
+                              selected: _filterCategory == c.id,
+                              onSelected: (b) => setState(() => _filterCategory = b ? c.id : null),
+                            ),
+                          )),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   const Text('Movimentações', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ],
@@ -155,16 +190,21 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
               (context, index) {
                 final t = filtered[index];
                 final isPaid = t.status == 'paid';
+                final cat = allCategories.where((c) => c.id == t.categoryId).firstOrNull;
+                final color = cat != null ? Color(int.parse(cat.color)) : (t.type == 'income' ? Colors.green : Colors.red);
+                
                 return ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: t.type == 'income' ? Colors.green.withOpacity(0.2) : Colors.red.withOpacity(0.2),
+                    backgroundColor: color.withOpacity(0.2),
                     child: Icon(
                       t.type == 'income' ? Icons.arrow_upward : Icons.arrow_downward,
-                      color: t.type == 'income' ? Colors.green : Colors.red,
+                      color: color,
                     ),
                   ),
                   title: Text(t.title, style: TextStyle(decoration: isPaid ? TextDecoration.none : null)),
-                  subtitle: Text(DateFormat('dd/MM/yyyy').format(DateTime.parse(t.transactionDate))),
+                  subtitle: Text(
+                    '${DateFormat('dd/MM/yyyy').format(DateTime.parse(t.transactionDate))}${cat != null ? ' • ${cat.name}' : ''}'
+                  ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../domain/providers.dart';
 import '../../data/models/transaction_model.dart';
-import '../../data/models/category_model.dart';
+import '../../data/models/financial_category_model.dart';
 
 class CreateTransactionScreen extends ConsumerStatefulWidget {
   final FinancialTransaction? transaction;
@@ -65,7 +65,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
 
   @override
   Widget build(BuildContext context) {
-    final categories = ref.watch(categoriesProvider);
+    final categories = ref.watch(financialCategoriesProvider).where((c) => c.type == _type || c.type == 'both').toList();
 
     return Scaffold(
       appBar: AppBar(
