@@ -6,6 +6,7 @@ import '../../data/database/finance_planning_store.dart';
 import '../../data/models/budget_model.dart';
 import '../../data/models/financial_account_model.dart';
 import '../../data/models/financial_goal_model.dart';
+import '../../data/models/transaction_model.dart';
 import '../../domain/providers.dart';
 
 class FinancePlanningScreen extends ConsumerStatefulWidget {
@@ -46,21 +47,36 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
 
   bool _validMonth(String value) {
     if (!RegExp(r'^\d{4}-\d{2}$').hasMatch(value)) return false;
-    final parts = value.split('-');
-    final month = int.tryParse(parts[1]) ?? 0;
+    final month = int.tryParse(value.split('-')[1]) ?? 0;
     return month >= 1 && month <= 12;
   }
 
-  double _spentForBudget(Budget budget) {
-    final transactions = ref.read(transactionsProvider);
-    return transactions.where((transaction) {
-      if (transaction.status == 'canceled' || transaction.type != 'expense') return false;
-      if (budget.categoryId != null && transaction.categoryId != budget.categoryId) return false;
-      final date = DateTime.tryParse(transaction.dueDate ?? transaction.transactionDate);
-      if (date == null) return false;
-      final month = '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}';
-      return month == budget.month;
-    }).fold<double>(0, (sum, transaction) => sum + transaction.amount);
+  String _transactionMonth(FinancialTransaction transaction) {
+    final date = DateTime.tryParse(transaction.dueDate ?? transaction.transactionDate);
+    if (date == null) return '';
+    return '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}';
+  }
+
+  bool _matchesBudget(FinancialTransaction transaction, Budget budget) {
+    if (transaction.status == 'canceled' || transaction.type != 'expense') return false;
+    if (budget.categoryId != null && transaction.categoryId != budget.categoryId) return false;
+    return _transactionMonth(transaction) == budget.month;
+  }
+
+  double _plannedForBudget(Budget budget) {
+    return ref.read(transactionsProvider).where((transaction) => _matchesBudget(transaction, budget)).fold<double>(0, (sum, transaction) => sum + transaction.amount);
+  }
+
+  double _paidForBudget(Budget budget) {
+    return ref.read(transactionsProvider).where((transaction) => _matchesBudget(transaction, budget) && transaction.status == 'paid').fold<double>(0, (sum, transaction) => sum + transaction.amount);
+  }
+
+  FinancialAccount? _accountById(int? id) {
+    if (id == null) return null;
+    for (final account in _accounts) {
+      if (account.id == id) return account;
+    }
+    return null;
   }
 
   @override
@@ -125,10 +141,13 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
           const _EmptyState(text: 'Nenhum orçamento cadastrado ainda.')
         else
           ..._budgets.where((budget) => !budget.isArchived).map((budget) {
-            final spent = _spentForBudget(budget);
-            final ratio = budget.limitAmount <= 0 ? 0.0 : (spent / budget.limitAmount).clamp(0.0, 1.0).toDouble();
+            final planned = _plannedForBudget(budget);
+            final paid = _paidForBudget(budget);
+            final available = budget.limitAmount - planned;
+            final ratio = budget.limitAmount <= 0 ? 0.0 : (planned / budget.limitAmount).clamp(0.0, 1.0).toDouble();
             final categoryIndex = categories.indexWhere((category) => category.id == budget.categoryId);
             final categoryName = categoryIndex == -1 ? 'Todas as categorias' : categories[categoryIndex].name;
+            final overLimit = planned > budget.limitAmount;
             return Card(
               child: ListTile(
                 title: Text(budget.name),
@@ -138,11 +157,13 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
                     Text('${_monthLabel(budget.month)} • $categoryName'),
                     const SizedBox(height: 6),
                     LinearProgressIndicator(value: ratio),
-                    const SizedBox(height: 4),
-                    Text('Gastos previstos/realizados: ${_money(spent)} de ${_money(budget.limitAmount)}'),
+                    const SizedBox(height: 6),
+                    Text('Previsto: ${_money(planned)}'),
+                    Text('Pago: ${_money(paid)}'),
+                    Text('${overLimit ? 'Estourado em' : 'Disponível previsto'}: ${_money(available.abs())}', style: TextStyle(color: overLimit ? Colors.red : Colors.green)),
                   ],
                 ),
-                trailing: Icon(ratio >= 1 ? Icons.warning_amber : Icons.check_circle_outline, color: ratio >= 1 ? Colors.red : Colors.green),
+                trailing: Icon(overLimit ? Icons.warning_amber : Icons.check_circle_outline, color: overLimit ? Colors.red : Colors.green),
                 onTap: () => _showBudgetDialog(budget: budget),
               ),
             );
@@ -165,6 +186,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
         else
           ..._goals.where((goal) => goal.status != 'canceled').map((goal) {
             final goalRatio = goal.targetAmount <= 0 ? 0.0 : (goal.currentAmount / goal.targetAmount).clamp(0.0, 1.0).toDouble();
+            final account = _accountById(goal.accountId);
             return Card(
               child: ListTile(
                 title: Text(goal.name),
@@ -173,12 +195,21 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
                   children: [
                     if (goal.description != null && goal.description!.isNotEmpty) Text(goal.description!),
                     Text('Guardado: ${_money(goal.currentAmount)} de ${_money(goal.targetAmount)}'),
+                    Text(account == null ? 'Controle manual' : 'Conta de aporte: ${account.name}'),
                     const SizedBox(height: 6),
                     LinearProgressIndicator(value: goalRatio),
                     if (goal.targetDate != null) Text('Prazo: ${_safeDateLabel(goal.targetDate)}'),
+                    if (account == null) const Text('Dica: vincule uma conta para registrar aportes com impacto no saldo.', style: TextStyle(fontSize: 12, color: Colors.orange)),
                   ],
                 ),
-                trailing: Text('${(goalRatio * 100).toStringAsFixed(0)}%', style: const TextStyle(fontWeight: FontWeight.bold)),
+                trailing: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('${(goalRatio * 100).toStringAsFixed(0)}%', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    if (account != null && goal.status != 'completed')
+                      IconButton(icon: const Icon(Icons.add_circle_outline), tooltip: 'Aportar', onPressed: () => _showGoalDepositDialog(goal)),
+                  ],
+                ),
                 onTap: () => _showGoalDialog(goal: goal),
               ),
             );
@@ -213,14 +244,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nome da conta')),
-                TextField(
-                  controller: balanceController,
-                  decoration: const InputDecoration(
-                    labelText: 'Saldo inicial/base',
-                    helperText: 'O saldo atual será calculado com as transações pagas desta conta.',
-                  ),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                ),
+                TextField(controller: balanceController, decoration: const InputDecoration(labelText: 'Saldo inicial/base', helperText: 'O saldo atual será calculado com as transações pagas desta conta.'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
                 DropdownButtonFormField<String>(
                   value: type,
                   items: const [
@@ -230,9 +254,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
                     DropdownMenuItem(value: 'investment', child: Text('Investimento')),
                     DropdownMenuItem(value: 'other', child: Text('Outro')),
                   ],
-                  onChanged: (value) {
-                    if (value != null) setLocal(() => type = value);
-                  },
+                  onChanged: (value) { if (value != null) setLocal(() => type = value); },
                   decoration: const InputDecoration(labelText: 'Tipo'),
                 ),
                 if (account != null) SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Arquivar'), value: archived, onChanged: (v) => setLocal(() => archived = v)),
@@ -245,25 +267,12 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
               onPressed: () async {
                 final name = nameController.text.trim();
                 final baseBalance = double.tryParse(balanceController.text.replaceAll(',', '.'));
-                if (name.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe o nome da conta.')));
-                  return;
-                }
-                if (baseBalance == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe um saldo inicial válido.')));
+                if (name.isEmpty || baseBalance == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe nome e saldo inicial válido.')));
                   return;
                 }
                 final now = DateTime.now().toIso8601String();
-                final data = FinancialAccount(
-                  id: account?.id,
-                  name: name,
-                  type: type,
-                  initialBalance: baseBalance,
-                  currentBalance: account?.currentBalance ?? baseBalance,
-                  isArchived: archived,
-                  createdAt: account?.createdAt ?? now,
-                  updatedAt: now,
-                );
+                final data = FinancialAccount(id: account?.id, name: name, type: type, initialBalance: baseBalance, currentBalance: account?.currentBalance ?? baseBalance, isArchived: archived, createdAt: account?.createdAt ?? now, updatedAt: now);
                 await FinancePlanningStore.upsertAccount(await ref.read(dbProvider).database, data);
                 if (ctx.mounted) Navigator.pop(ctx);
                 await _loadAll();
@@ -291,20 +300,12 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
         builder: (ctx, setLocal) => AlertDialog(
           title: Text(budget == null ? 'Novo orçamento' : 'Editar orçamento'),
           content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nome')),
-                TextField(controller: limitController, decoration: const InputDecoration(labelText: 'Limite mensal'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
-                DropdownButtonFormField<int>(
-                  value: categoryId,
-                  items: [const DropdownMenuItem<int>(value: null, child: Text('Todas as categorias')), ...categories.map((c) => DropdownMenuItem<int>(value: c.id, child: Text(c.name)))],
-                  onChanged: (value) => setLocal(() => categoryId = value),
-                  decoration: const InputDecoration(labelText: 'Categoria'),
-                ),
-                TextField(controller: monthController, decoration: const InputDecoration(labelText: 'Mês (AAAA-MM)')),
-              ],
-            ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nome')),
+              TextField(controller: limitController, decoration: const InputDecoration(labelText: 'Limite mensal'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+              DropdownButtonFormField<int>(value: categoryId, items: [const DropdownMenuItem<int>(value: null, child: Text('Todas as categorias')), ...categories.map((c) => DropdownMenuItem<int>(value: c.id, child: Text(c.name)))], onChanged: (value) => setLocal(() => categoryId = value), decoration: const InputDecoration(labelText: 'Categoria')),
+              TextField(controller: monthController, decoration: const InputDecoration(labelText: 'Mês (AAAA-MM)')),
+            ]),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
@@ -313,16 +314,8 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
                 final name = nameController.text.trim();
                 final limit = double.tryParse(limitController.text.replaceAll(',', '.')) ?? 0;
                 final month = monthController.text.trim();
-                if (name.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe o nome do orçamento.')));
-                  return;
-                }
-                if (limit <= 0) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O limite mensal deve ser maior que zero.')));
-                  return;
-                }
-                if (!_validMonth(month)) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe o mês no formato AAAA-MM, com mês entre 01 e 12.')));
+                if (name.isEmpty || limit <= 0 || !_validMonth(month)) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe nome, limite maior que zero e mês válido.')));
                   return;
                 }
                 final now = DateTime.now().toIso8601String();
@@ -349,6 +342,8 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
     final currentController = TextEditingController(text: goal == null ? '' : goal.currentAmount.toStringAsFixed(2));
     DateTime? targetDate = goal?.targetDate == null ? null : DateTime.tryParse(goal!.targetDate!);
     String status = goal?.status ?? 'active';
+    int? accountId = _accounts.any((a) => !a.isArchived && a.id == goal?.accountId) ? goal?.accountId : null;
+    final selectableAccounts = _accounts.where((account) => !account.isArchived).toList();
 
     await showDialog(
       context: context,
@@ -356,31 +351,15 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
         builder: (ctx, setLocal) => AlertDialog(
           title: Text(goal == null ? 'Nova meta' : 'Editar meta'),
           content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nome')),
-                TextField(controller: descriptionController, decoration: const InputDecoration(labelText: 'Descrição')),
-                TextField(controller: targetController, decoration: const InputDecoration(labelText: 'Valor-alvo'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
-                TextField(controller: currentController, decoration: const InputDecoration(labelText: 'Valor atual'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    final picked = await showDatePicker(context: context, initialDate: targetDate ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
-                    if (picked != null) setLocal(() => targetDate = picked);
-                  },
-                  icon: const Icon(Icons.event),
-                  label: Text(targetDate == null ? 'Definir prazo' : _safeDateLabel(targetDate!.toIso8601String())),
-                ),
-                DropdownButtonFormField<String>(
-                  value: status,
-                  items: const [DropdownMenuItem(value: 'active', child: Text('Ativa')), DropdownMenuItem(value: 'completed', child: Text('Concluída')), DropdownMenuItem(value: 'paused', child: Text('Pausada')), DropdownMenuItem(value: 'canceled', child: Text('Cancelada'))],
-                  onChanged: (value) {
-                    if (value != null) setLocal(() => status = value);
-                  },
-                  decoration: const InputDecoration(labelText: 'Status'),
-                ),
-              ],
-            ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nome')),
+              TextField(controller: descriptionController, decoration: const InputDecoration(labelText: 'Descrição')),
+              TextField(controller: targetController, decoration: const InputDecoration(labelText: 'Valor-alvo'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+              TextField(controller: currentController, decoration: const InputDecoration(labelText: 'Valor atual/manual'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+              DropdownButtonFormField<int>(value: accountId, items: [const DropdownMenuItem<int>(value: null, child: Text('Sem conta vinculada')), ...selectableAccounts.map((a) => DropdownMenuItem<int>(value: a.id, child: Text(a.name)))], onChanged: (value) => setLocal(() => accountId = value), decoration: const InputDecoration(labelText: 'Conta para aportes')),
+              OutlinedButton.icon(onPressed: () async { final picked = await showDatePicker(context: context, initialDate: targetDate ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100)); if (picked != null) setLocal(() => targetDate = picked); }, icon: const Icon(Icons.event), label: Text(targetDate == null ? 'Definir prazo' : _safeDateLabel(targetDate!.toIso8601String()))),
+              DropdownButtonFormField<String>(value: status, items: const [DropdownMenuItem(value: 'active', child: Text('Ativa')), DropdownMenuItem(value: 'completed', child: Text('Concluída')), DropdownMenuItem(value: 'paused', child: Text('Pausada')), DropdownMenuItem(value: 'canceled', child: Text('Cancelada'))], onChanged: (value) { if (value != null) setLocal(() => status = value); }, decoration: const InputDecoration(labelText: 'Status')),
+            ]),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
@@ -389,22 +368,14 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
                 final name = nameController.text.trim();
                 final target = double.tryParse(targetController.text.replaceAll(',', '.')) ?? 0;
                 final current = double.tryParse(currentController.text.replaceAll(',', '.')) ?? 0;
-                if (name.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe o nome da meta.')));
-                  return;
-                }
-                if (target <= 0) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O valor-alvo deve ser maior que zero.')));
-                  return;
-                }
-                if (current < 0) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O valor atual não pode ser negativo.')));
+                if (name.isEmpty || target <= 0 || current < 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe nome, alvo maior que zero e valor atual válido.')));
                   return;
                 }
                 final normalizedCurrent = current > target ? target : current;
                 final normalizedStatus = normalizedCurrent >= target ? 'completed' : status;
                 final now = DateTime.now().toIso8601String();
-                final data = FinancialGoal(id: goal?.id, name: name, description: descriptionController.text.trim().isEmpty ? null : descriptionController.text.trim(), targetAmount: target, currentAmount: normalizedCurrent, targetDate: targetDate?.toIso8601String(), status: normalizedStatus, createdAt: goal?.createdAt ?? now, updatedAt: now);
+                final data = FinancialGoal(id: goal?.id, name: name, description: descriptionController.text.trim().isEmpty ? null : descriptionController.text.trim(), targetAmount: target, currentAmount: normalizedCurrent, accountId: accountId, targetDate: targetDate?.toIso8601String(), status: normalizedStatus, createdAt: goal?.createdAt ?? now, updatedAt: now);
                 await FinancePlanningStore.upsertGoal(await ref.read(dbProvider).database, data);
                 if (ctx.mounted) Navigator.pop(ctx);
                 await _loadAll();
@@ -421,6 +392,40 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
     currentController.dispose();
   }
 
+  Future<void> _showGoalDepositDialog(FinancialGoal goal) async {
+    final account = _accountById(goal.accountId);
+    if (account == null || account.isArchived) return;
+    final controller = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Aportar em ${goal.name}'),
+        content: TextField(controller: controller, decoration: InputDecoration(labelText: 'Valor do aporte', helperText: 'Será registrado como saída da conta ${account.name}.'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () async {
+              final amount = double.tryParse(controller.text.replaceAll(',', '.')) ?? 0;
+              if (amount <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe um valor maior que zero.')));
+                return;
+              }
+              final newCurrent = (goal.currentAmount + amount).clamp(0, goal.targetAmount).toDouble();
+              final now = DateTime.now().toIso8601String();
+              await ref.read(transactionsProvider.notifier).addTransaction(FinancialTransaction(title: 'Aporte - ${goal.name}', description: 'Aporte registrado pela meta financeira', amount: amount, type: 'expense', transactionDate: now, paidDate: now, accountId: account.id, paymentMethod: 'transferência', status: 'paid', notes: 'Aporte vinculado à meta ${goal.name}', createdAt: now, updatedAt: now));
+              await FinancePlanningStore.upsertGoal(await ref.read(dbProvider).database, goal.copyWith(currentAmount: newCurrent, status: newCurrent >= goal.targetAmount ? 'completed' : goal.status, updatedAt: now));
+              if (ctx.mounted) Navigator.pop(ctx);
+              await ref.read(transactionsProvider.notifier).loadTransactions();
+              await _loadAll();
+            },
+            child: const Text('Aportar'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+  }
+
   String _monthLabel(String month) {
     final parts = month.split('-');
     if (parts.length != 2) return month;
@@ -429,31 +434,11 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
   }
 
   IconData _accountIcon(String type) {
-    switch (type) {
-      case 'wallet':
-        return Icons.account_balance_wallet;
-      case 'credit_card':
-        return Icons.credit_card;
-      case 'investment':
-        return Icons.trending_up;
-      default:
-        return Icons.account_balance;
-    }
+    switch (type) { case 'wallet': return Icons.account_balance_wallet; case 'credit_card': return Icons.credit_card; case 'investment': return Icons.trending_up; default: return Icons.account_balance; }
   }
 
   String _accountTypeLabel(String type) {
-    switch (type) {
-      case 'wallet':
-        return 'Carteira/Dinheiro';
-      case 'credit_card':
-        return 'Cartão';
-      case 'investment':
-        return 'Investimento';
-      case 'other':
-        return 'Outro';
-      default:
-        return 'Banco';
-    }
+    switch (type) { case 'wallet': return 'Carteira/Dinheiro'; case 'credit_card': return 'Cartão'; case 'investment': return 'Investimento'; case 'other': return 'Outro'; default: return 'Banco'; }
   }
 
   String _safeDateLabel(String? raw) {
@@ -470,9 +455,6 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 32),
-      child: Center(child: Text(text, textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey))),
-    );
+    return Padding(padding: const EdgeInsets.symmetric(vertical: 32), child: Center(child: Text(text, textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey))));
   }
 }
