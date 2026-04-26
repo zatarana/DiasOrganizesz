@@ -41,10 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
       floatingActionButton: showFab
           ? FloatingActionButton(
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const CreateTaskScreen()),
-                );
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateTaskScreen()));
               },
               child: const Icon(Icons.add),
             )
@@ -74,24 +71,15 @@ class MoreScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Mais módulos')),
       body: ListView(
-        children: [
-          const ListTile(
-            title: Text('Acesso rápido', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-          ),
-          _MoreTile(
-            icon: Icons.money_off,
-            title: 'Dívidas',
-            subtitle: 'Acesse rapidamente suas dívidas e parcelas',
-            page: const DebtsScreen(),
-          ),
-          const Divider(),
-          const ListTile(
-            title: Text('Outros recursos', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-          ),
-          _MoreTile(icon: Icons.calendar_month, title: 'Calendário', page: const CalendarScreen()),
-          _MoreTile(icon: Icons.category, title: 'Categorias', page: const CategoriesScreen()),
-          _MoreTile(icon: Icons.pie_chart, title: 'Estatísticas', page: const StatsScreen()),
-          _MoreTile(icon: Icons.settings, title: 'Configurações', page: const SettingsScreen()),
+        children: const [
+          ListTile(title: Text('Acesso rápido', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey))),
+          _MoreTile(icon: Icons.money_off, title: 'Dívidas', subtitle: 'Acesse rapidamente suas dívidas e parcelas', page: DebtsScreen()),
+          Divider(),
+          ListTile(title: Text('Outros recursos', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey))),
+          _MoreTile(icon: Icons.calendar_month, title: 'Calendário', page: CalendarScreen()),
+          _MoreTile(icon: Icons.category, title: 'Categorias', page: CategoriesScreen()),
+          _MoreTile(icon: Icons.pie_chart, title: 'Estatísticas', page: StatsScreen()),
+          _MoreTile(icon: Icons.settings, title: 'Configurações', page: SettingsScreen()),
         ],
       ),
     );
@@ -139,16 +127,60 @@ class TaskDashboard extends ConsumerWidget {
     final pendingTasks = tasks.where((task) => task.status == 'pendente').length;
     final overdueTasks = tasks.where((task) => task.status == 'atrasada').length;
 
-    final monthTransactions = transactions.where((transaction) {
-      final date = DateTime.tryParse(transaction.transactionDate);
-      return date != null && date.year == now.year && date.month == now.month && transaction.status != 'canceled';
-    }).toList();
+    DateTime? expectedDate(transaction) => DateTime.tryParse(transaction.dueDate ?? transaction.transactionDate);
+    DateTime? paidDate(transaction) => transaction.paidDate == null ? null : DateTime.tryParse(transaction.paidDate!);
+    bool sameMonth(DateTime? date) => date != null && date.year == now.year && date.month == now.month;
 
-    final income = monthTransactions.where((t) => t.type == 'income').fold<double>(0, (sum, t) => sum + t.amount);
-    final expenses = monthTransactions.where((t) => t.type == 'expense').fold<double>(0, (sum, t) => sum + t.amount);
-    final balance = income - expenses;
-    final openDebts = debts.where((debt) => debt.status != 'paid' && debt.status != 'canceled').length;
+    double receitasPrevistas = 0;
+    double despesasPrevistas = 0;
+    double receitasPagas = 0;
+    double despesasPagas = 0;
+    int overdueDebtInstallments = 0;
+
+    final todayOnly = DateTime(now.year, now.month, now.day);
+    for (final transaction in transactions.where((t) => t.status != 'canceled')) {
+      final expected = expectedDate(transaction);
+      final paid = paidDate(transaction);
+      final expectedInMonth = sameMonth(expected);
+      final paidInMonth = transaction.status == 'paid' && (sameMonth(paid) || (paid == null && expectedInMonth));
+
+      if (expectedInMonth) {
+        if (transaction.type == 'income') {
+          receitasPrevistas += transaction.amount;
+        } else if (transaction.type == 'expense') {
+          despesasPrevistas += transaction.amount;
+          final due = expected == null ? null : DateTime(expected.year, expected.month, expected.day);
+          if (transaction.debtId != null && transaction.status == 'overdue') overdueDebtInstallments++;
+          if (transaction.debtId != null && transaction.status == 'pending' && due != null && due.isBefore(todayOnly)) overdueDebtInstallments++;
+        }
+      }
+
+      if (paidInMonth) {
+        if (transaction.type == 'income') {
+          receitasPagas += transaction.amount;
+        } else if (transaction.type == 'expense') {
+          despesasPagas += transaction.amount;
+        }
+      }
+    }
+
+    final saldoRealizado = receitasPagas - despesasPagas;
+    final saldoPrevisto = receitasPrevistas - despesasPrevistas;
+
+    final activeDebts = debts.where((debt) => debt.status != 'paid' && debt.status != 'canceled').toList();
+    final openDebts = activeDebts.length;
+    double remainingDebts = 0;
+    for (final debt in debts.where((debt) => debt.status != 'canceled')) {
+      final abatido = transactions.where((t) => t.debtId == debt.id && t.status == 'paid').fold<double>(0, (sum, t) => sum + t.amount + (t.discountAmount ?? 0));
+      remainingDebts += (debt.totalAmount - abatido).clamp(0, double.infinity).toDouble();
+    }
+
     final activeProjects = projects.where((project) => project.status == 'active').length;
+    final overdueProjects = projects.where((project) {
+      if (project.endDate == null || project.status == 'completed' || project.status == 'canceled') return false;
+      final end = DateTime.tryParse(project.endDate!);
+      return end != null && end.isBefore(now);
+    }).length;
 
     String money(num value) {
       if (hideValues) return currency == 'USD' ? '\$ ******' : 'R\$ ******';
@@ -157,9 +189,7 @@ class TaskDashboard extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('DiasOrganize', style: TextStyle(fontWeight: FontWeight.bold)),
-      ),
+      appBar: AppBar(title: const Text('DiasOrganize', style: TextStyle(fontWeight: FontWeight.bold))),
       drawer: const AppDrawer(),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -176,7 +206,7 @@ class TaskDashboard extends ConsumerWidget {
                 title: 'Financeiro do mês',
                 icon: Icons.account_balance_wallet,
                 color: Colors.blue,
-                lines: ['Receitas: ${money(income)}', 'Despesas: ${money(expenses)}', 'Saldo: ${money(balance)}'],
+                lines: ['Previsto: ${money(saldoPrevisto)}', 'Receitas: ${money(receitasPrevistas)}', 'Realizado: ${money(saldoRealizado)}'],
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceScreen())),
               ),
               _DashboardSummaryCard(
@@ -190,14 +220,14 @@ class TaskDashboard extends ConsumerWidget {
                 title: 'Dívidas',
                 icon: Icons.money_off,
                 color: Colors.deepOrange,
-                lines: ['Em aberto: $openDebts', 'Parcelas: ${transactions.where((t) => t.debtId != null).length}'],
+                lines: ['Em aberto: $openDebts', 'Restante: ${money(remainingDebts)}', 'Parcelas atraso: $overdueDebtInstallments'],
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtsScreen())),
               ),
               _DashboardSummaryCard(
                 title: 'Projetos',
                 icon: Icons.rocket_launch,
                 color: Colors.purple,
-                lines: ['Ativos: $activeProjects', 'Total: ${projects.length}'],
+                lines: ['Ativos: $activeProjects', 'Atrasados: $overdueProjects', 'Total: ${projects.length}'],
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProjectsScreen())),
               ),
             ],
@@ -220,10 +250,7 @@ class TaskDashboard extends ConsumerWidget {
             ...todayTasks.map((task) => Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
-                    title: Text(
-                      task.title,
-                      style: TextStyle(decoration: task.status == 'concluida' ? TextDecoration.lineThrough : null),
-                    ),
+                    title: Text(task.title, style: TextStyle(decoration: task.status == 'concluida' ? TextDecoration.lineThrough : null)),
                     subtitle: Text('${task.priority.toUpperCase()} - ${task.status}'),
                     trailing: Icon(
                       task.status == 'concluida' ? Icons.check_circle : Icons.circle_outlined,
@@ -231,10 +258,7 @@ class TaskDashboard extends ConsumerWidget {
                     ),
                     onTap: () {
                       ref.read(tasksProvider.notifier).updateTask(
-                            task.copyWith(
-                              status: task.status == 'concluida' ? 'pendente' : 'concluida',
-                              updatedAt: DateTime.now().toIso8601String(),
-                            ),
+                            task.copyWith(status: task.status == 'concluida' ? 'pendente' : 'concluida', updatedAt: DateTime.now().toIso8601String()),
                           );
                     },
                   ),
@@ -252,13 +276,7 @@ class _DashboardSummaryCard extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
 
-  const _DashboardSummaryCard({
-    required this.title,
-    required this.lines,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
+  const _DashboardSummaryCard({required this.title, required this.lines, required this.icon, required this.color, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -276,18 +294,14 @@ class _DashboardSummaryCard extends StatelessWidget {
                 children: [
                   Icon(icon, color: color, size: 18),
                   const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis),
-                  ),
+                  Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis)),
                 ],
               ),
               const SizedBox(height: 6),
-              ...lines.map(
-                (line) => Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11)),
-                ),
-              ),
+              ...lines.map((line) => Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11)),
+                  )),
             ],
           ),
         ),
