@@ -34,8 +34,8 @@ class FinancialTransaction {
     this.paymentMethod,
     required this.status,
     this.reminderEnabled = false,
-    required this.isFixed,
-    required this.recurrenceType,
+    this.isFixed = false,
+    this.recurrenceType = 'none',
     this.notes,
     this.debtId,
     this.installmentNumber,
@@ -120,7 +120,6 @@ class FinancialTransaction {
   }
 
   factory FinancialTransaction.fromMap(Map<String, dynamic> map) {
-    // Migration fallbacks for old SQLite structure
     String mappedType = map['type'] ?? 'expense';
     if (mappedType == 'receita') mappedType = 'income';
     if (mappedType == 'despesa') mappedType = 'expense';
@@ -130,11 +129,16 @@ class FinancialTransaction {
       mappedStatus = (map['isPaid'] == 1) ? 'paid' : 'pending';
     }
 
+    double asDouble(dynamic value) {
+      if (value is num) return value.toDouble();
+      return double.tryParse('$value') ?? 0.0;
+    }
+
     return FinancialTransaction(
       id: map['id'],
-      title: map['title'],
+      title: map['title'] ?? 'Movimentação sem título',
       description: map['description'],
-      amount: map['amount'],
+      amount: asDouble(map['amount']),
       type: mappedType,
       transactionDate: map['transactionDate'] ?? map['date'] ?? DateTime.now().toIso8601String(),
       dueDate: map['dueDate'],
@@ -149,7 +153,7 @@ class FinancialTransaction {
       debtId: map['debtId'],
       installmentNumber: map['installmentNumber'],
       totalInstallments: map['totalInstallments'],
-      discountAmount: map['discountAmount'],
+      discountAmount: map['discountAmount'] == null ? null : asDouble(map['discountAmount']),
       createdAt: map['createdAt'] ?? DateTime.now().toIso8601String(),
       updatedAt: map['updatedAt'] ?? DateTime.now().toIso8601String(),
     );
