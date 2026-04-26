@@ -106,10 +106,21 @@ class FinancePlanningStore {
     }
   }
 
-  static Future<List<FinancialAccount>> getAccounts(Database db) async {
-    await recalculateAllAccountBalances(db);
+  static Future<List<FinancialAccount>> getAccounts(Database db, {bool recalculateBeforeRead = false}) async {
+    await ensureTables(db);
+    if (recalculateBeforeRead) await recalculateAllAccountBalances(db);
     final rows = await db.query('financial_accounts', orderBy: 'isArchived ASC, name ASC');
     return rows.map(FinancialAccount.fromMap).toList();
+  }
+
+  static Future<double> getActiveAccountsBalance(Database db) async {
+    await ensureTables(db);
+    final rows = await db.rawQuery('''
+      SELECT COALESCE(SUM(currentBalance), 0) AS total
+      FROM financial_accounts
+      WHERE isArchived = 0
+    ''');
+    return _asDouble(rows.first['total']);
   }
 
   static Future<List<Budget>> getBudgets(Database db) async {
