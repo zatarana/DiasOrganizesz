@@ -45,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: const Icon(Icons.add),
             )
           : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (idx) => setState(() => _currentIndex = idx),
