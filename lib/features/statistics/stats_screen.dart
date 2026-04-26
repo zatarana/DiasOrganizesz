@@ -70,7 +70,7 @@ class StatsScreen extends ConsumerWidget {
     final debtTransactions = transactions.where((t) => t.debtId != null && t.status != 'canceled').toList();
     final totalDividas = debts.where((d) => d.status != 'canceled').fold<double>(0, (s, d) => s + d.totalAmount);
     final totalJaPago = debtTransactions.where((t) => t.status == 'paid').fold<double>(0, (s, t) => s + t.amount);
-    final totalRestante = (totalDividas - totalJaPago).clamp(0, double.infinity);
+    final totalRestante = (totalDividas - totalJaPago).clamp(0, double.infinity).toDouble();
     final percentualQuitado = totalDividas == 0 ? 0.0 : (totalJaPago / totalDividas) * 100;
     final parcelasPagas = debtTransactions.where((t) => t.status == 'paid').length;
     final parcelasPendentes = debtTransactions.where((t) => t.status == 'pending').length;
@@ -80,7 +80,7 @@ class StatsScreen extends ConsumerWidget {
     double debtMaxRemainingValue = -1;
     for (final d in debts.where((d) => d.status != 'canceled')) {
       final paidForDebt = debtTransactions.where((t) => t.debtId == d.id && t.status == 'paid').fold<double>(0, (s, t) => s + t.amount);
-      final remaining = (d.totalAmount - paidForDebt).clamp(0, double.infinity);
+      final remaining = (d.totalAmount - paidForDebt).clamp(0, double.infinity).toDouble();
       if (remaining > debtMaxRemainingValue) {
         debtMaxRemainingValue = remaining;
         debtMaxRemaining = d.name;
