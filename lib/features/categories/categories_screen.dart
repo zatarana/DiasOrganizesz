@@ -2,14 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/providers.dart';
 import '../../data/models/category_model.dart';
-import '../../data/models/task_model.dart';
 
 class CategoriesScreen extends ConsumerWidget {
   const CategoriesScreen({super.key});
 
   void _showAddCategoryModal(BuildContext context, WidgetRef ref) {
     final nameController = TextEditingController();
-    
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -37,7 +36,11 @@ class CategoriesScreen extends ConsumerWidget {
               ElevatedButton(
                 onPressed: () {
                   if (nameController.text.isNotEmpty) {
-                    final cat = TaskCategory(name: nameController.text, color: '0xFF2196F3', createdAt: DateTime.now().toIso8601String());
+                    final cat = TaskCategory(
+                      name: nameController.text,
+                      color: '0xFF2196F3',
+                      createdAt: DateTime.now().toIso8601String(),
+                    );
                     ref.read(categoriesProvider.notifier).addCategory(cat);
                     Navigator.pop(ctx);
                   }
@@ -62,14 +65,12 @@ class CategoriesScreen extends ConsumerWidget {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           TextButton(
             onPressed: () {
-              // Migrar tarefas para a primeira categoria padrão (id=1 que geralmente é Pessoal)
               final tasks = ref.read(tasksProvider);
-              for (var t in tasks) {
-                if (t.categoryId == categoryId) {
-                   ref.read(tasksProvider.notifier).updateTask(t.copyWith(categoryId: 1));
+              for (final task in tasks) {
+                if (task.categoryId == categoryId) {
+                  ref.read(tasksProvider.notifier).updateTask(task.copyWith(categoryId: 1));
                 }
               }
-              // Deletar categoria
               ref.read(categoriesProvider.notifier).removeCategory(categoryId);
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Categoria excluída com sucesso.')));
