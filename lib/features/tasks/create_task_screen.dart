@@ -43,7 +43,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
       _categoryId = widget.task!.categoryId;
       _projectId = widget.task!.projectId ?? widget.projectId;
       _projectStepId = widget.task!.projectStepId;
-      _hasReminder = widget.task!.reminderEnabled;
+      _hasReminder = widget.task!.reminderEnabled && widget.task!.time != null;
     }
   }
 
@@ -54,6 +54,28 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
     super.dispose();
   }
 
+  bool _isSelectedDateTimeOverdue() {
+    final date = DateTime.tryParse(_date);
+    if (date == null) return false;
+
+    if (_time != null) {
+      final parts = _time!.split(':');
+      if (parts.length == 2) {
+        final hour = int.tryParse(parts[0]) ?? 23;
+        final minute = int.tryParse(parts[1]) ?? 59;
+        return DateTime(date.year, date.month, date.day, hour, minute).isBefore(DateTime.now());
+      }
+    }
+
+    return DateTime(date.year, date.month, date.day, 23, 59, 59).isBefore(DateTime.now());
+  }
+
+  String _normalizedStatusForSave() {
+    final current = widget.task?.status ?? 'pendente';
+    if (current == 'concluida' || current == 'canceled') return current;
+    return _isSelectedDateTimeOverdue() ? 'atrasada' : 'pendente';
+  }
+
   Future<void> _save() async {
     if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Título é obrigatório.')));
@@ -62,6 +84,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
 
     final categories = ref.read(categoriesProvider);
     final catId = _categoryId ?? (categories.isNotEmpty ? categories.first.id : 1);
+    final hasValidReminder = _hasReminder && _time != null;
 
     final task = Task(
       id: widget.task?.id,
@@ -73,8 +96,8 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
       projectId: _projectId,
       projectStepId: _projectId == null ? null : _projectStepId,
       priority: _priority,
-      status: widget.task?.status ?? 'pendente',
-      reminderEnabled: _hasReminder,
+      status: _normalizedStatusForSave(),
+      reminderEnabled: hasValidReminder,
       createdAt: widget.task?.createdAt ?? DateTime.now().toIso8601String(),
       updatedAt: DateTime.now().toIso8601String(),
     );
@@ -183,7 +206,18 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: Colors.grey.shade400)),
                     title: Text(_time ?? '--:--'),
                     subtitle: const Text('Horário (Opcional)'),
-                    trailing: const Icon(Icons.access_time),
+                    trailing: _time == null
+                        ? const Icon(Icons.access_time)
+                        : IconButton(
+                            tooltip: 'Limpar horário',
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              setState(() {
+                                _time = null;
+                                _hasReminder = false;
+                              });
+                            },
+                          ),
                     onTap: () async {
                       final selected = await showTimePicker(context: context, initialTime: TimeOfDay.now());
                       if (selected != null) {
@@ -198,7 +232,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
             SwitchListTile(
               title: const Text('Ativar Lembrete Local'),
               subtitle: const Text('Requer data e horário definidos'),
-              value: _hasReminder,
+              value: _time != null && _hasReminder,
               onChanged: _time != null ? (val) => setState(() => _hasReminder = val) : null,
             ),
             const SizedBox(height: 16),
