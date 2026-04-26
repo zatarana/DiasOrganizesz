@@ -33,6 +33,16 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   void _nextMonth() => setState(() => _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1));
   void _prevMonth() => setState(() => _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1, 1));
 
+  Future<void> _openPlanning() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const FinancePlanningScreen()));
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _openTransactionForm({FinancialTransaction? transaction}) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTransactionScreen(transaction: transaction)));
+    if (mounted) setState(() {});
+  }
+
   bool _isSameMonth(DateTime? date, DateTime month) => date != null && date.month == month.month && date.year == month.year;
   DateTime? _expectedDate(FinancialTransaction transaction) => DateTime.tryParse(transaction.dueDate ?? transaction.transactionDate);
   DateTime? _paidDate(FinancialTransaction transaction) => transaction.paidDate == null ? null : DateTime.tryParse(transaction.paidDate!);
@@ -143,6 +153,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nenhum lançamento fixo encontrado no mês anterior.')));
     }
+    setState(() {});
   }
 
   String _statusAfterUnpay(FinancialTransaction transaction) {
@@ -157,7 +168,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     if (isPaid && transaction.accountId == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Escolha uma conta antes de marcar como pago.')));
-      await Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTransactionScreen(transaction: transaction)));
+      await _openTransactionForm(transaction: transaction);
       return;
     }
 
@@ -267,7 +278,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       appBar: AppBar(
         title: const Text('Finanças'),
         actions: [
-          IconButton(icon: const Icon(Icons.savings_outlined), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinancePlanningScreen())), tooltip: 'Contas, orçamentos e metas'),
+          IconButton(icon: const Icon(Icons.savings_outlined), onPressed: _openPlanning, tooltip: 'Contas, orçamentos e metas'),
           IconButton(icon: const Icon(Icons.auto_mode), onPressed: _generateFixedTransactions, tooltip: 'Gerar Recorrentes do Mês Anterior'),
           IconButton(icon: const Icon(Icons.category), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceCategoriesScreen())), tooltip: 'Categorias'),
         ],
@@ -284,7 +295,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinancePlanningScreen())), icon: const Icon(Icons.savings_outlined), label: const Text('Contas, Orçamentos e Metas')),
+                      ElevatedButton.icon(onPressed: _openPlanning, icon: const Icon(Icons.savings_outlined), label: const Text('Contas, Orçamentos e Metas')),
                       const SizedBox(height: 12),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -297,54 +308,19 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                       const SizedBox(height: 8),
                       _buildSummaryCard(realAccountBalance, saldoPrevisto, resultadoRealizado, receitasPrevistas, despesasPrevistas, qtdeDespesasVencidas),
                       const SizedBox(height: 16),
-                      _buildAnalysisSection(
-                        previousResult: previousResult,
-                        resultDiff: resultDiff,
-                        expenseDiff: expenseDiff,
-                        paidExpenseRatio: paidExpenseRatio,
-                        topCategoryName: topCategory?.name ?? (topCategoryEntry == null ? 'Sem gastos pagos' : 'Sem categoria'),
-                        topCategoryAmount: topCategoryEntry?.value ?? 0,
-                        paidExpenses: despesasPagas,
-                        paidIncomes: receitasPagas,
-                      ),
+                      _buildAnalysisSection(previousResult: previousResult, resultDiff: resultDiff, expenseDiff: expenseDiff, paidExpenseRatio: paidExpenseRatio, topCategoryName: topCategory?.name ?? (topCategoryEntry == null ? 'Sem gastos pagos' : 'Sem categoria'), topCategoryAmount: topCategoryEntry?.value ?? 0, paidExpenses: despesasPagas, paidIncomes: receitasPagas),
                       const SizedBox(height: 16),
-                      TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(hintText: 'Buscar movimentação...', prefixIcon: const Icon(Icons.search), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), contentPadding: const EdgeInsets.symmetric(horizontal: 16)),
-                        onChanged: (_) => setState(() {}),
-                      ),
+                      TextField(controller: _searchController, decoration: InputDecoration(hintText: 'Buscar movimentação...', prefixIcon: const Icon(Icons.search), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), contentPadding: const EdgeInsets.symmetric(horizontal: 16)), onChanged: (_) => setState(() {})),
                       const SizedBox(height: 16),
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            _buildFilterChip('Todos', 'all', _filterType, (v) => setState(() => _filterType = v)),
-                            const SizedBox(width: 8),
-                            _buildFilterChip('Receitas', 'income', _filterType, (v) => setState(() => _filterType = v)),
-                            const SizedBox(width: 8),
-                            _buildFilterChip('Despesas', 'expense', _filterType, (v) => setState(() => _filterType = v)),
-                            const SizedBox(width: 16),
-                            _buildFilterChip('Tudo', 'all', _filterStatus, (v) => setState(() => _filterStatus = v)),
-                            const SizedBox(width: 8),
-                            _buildFilterChip('Pago', 'paid', _filterStatus, (v) => setState(() => _filterStatus = v)),
-                            const SizedBox(width: 8),
-                            _buildFilterChip('Pendente', 'pending', _filterStatus, (v) => setState(() => _filterStatus = v)),
-                            const SizedBox(width: 8),
-                            _buildFilterChip('Atrasado', 'overdue', _filterStatus, (v) => setState(() => _filterStatus = v)),
-                          ],
-                        ),
+                        child: Row(children: [_buildFilterChip('Todos', 'all', _filterType, (v) => setState(() => _filterType = v)), const SizedBox(width: 8), _buildFilterChip('Receitas', 'income', _filterType, (v) => setState(() => _filterType = v)), const SizedBox(width: 8), _buildFilterChip('Despesas', 'expense', _filterType, (v) => setState(() => _filterType = v)), const SizedBox(width: 16), _buildFilterChip('Tudo', 'all', _filterStatus, (v) => setState(() => _filterStatus = v)), const SizedBox(width: 8), _buildFilterChip('Pago', 'paid', _filterStatus, (v) => setState(() => _filterStatus = v)), const SizedBox(width: 8), _buildFilterChip('Pendente', 'pending', _filterStatus, (v) => setState(() => _filterStatus = v)), const SizedBox(width: 8), _buildFilterChip('Atrasado', 'overdue', _filterStatus, (v) => setState(() => _filterStatus = v))]),
                       ),
                       if (allCategories.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              ChoiceChip(label: const Text('Todas as Categorias'), selected: _filterCategory == null, onSelected: (_) => setState(() => _filterCategory = null)),
-                              const SizedBox(width: 8),
-                              ...allCategories.map((c) => Padding(padding: const EdgeInsets.only(right: 8.0), child: ChoiceChip(label: Text(c.name), selected: _filterCategory == c.id, onSelected: (selected) => setState(() => _filterCategory = selected ? c.id : null)))),
-                            ],
-                          ),
+                          child: Row(children: [ChoiceChip(label: const Text('Todas as Categorias'), selected: _filterCategory == null, onSelected: (_) => setState(() => _filterCategory = null)), const SizedBox(width: 8), ...allCategories.map((c) => Padding(padding: const EdgeInsets.only(right: 8.0), child: ChoiceChip(label: Text(c.name), selected: _filterCategory == c.id, onSelected: (selected) => setState(() => _filterCategory = selected ? c.id : null))))]),
                         ),
                       ],
                       const SizedBox(height: 16),
@@ -356,50 +332,37 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
               filtered.isEmpty
                   ? SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(32.0), child: Center(child: Text('Nenhuma movimentação para o período e filtros atuais.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600)))))
                   : SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final transaction = filtered[index];
-                          final isPaid = transaction.status == 'paid';
-                          final isCanceled = transaction.status == 'canceled';
-                          final cat = _findCategory(allCategories, transaction.categoryId);
-                          final color = _safeCategoryColor(cat, transaction);
-                          final expected = _expectedDate(transaction);
-
-                          return ListTile(
-                            leading: CircleAvatar(backgroundColor: isCanceled ? Colors.grey.withOpacity(0.2) : color.withOpacity(0.2), child: Icon(transaction.type == 'income' ? Icons.arrow_upward : Icons.arrow_downward, color: isCanceled ? Colors.grey : color)),
-                            title: Text(transaction.title, style: TextStyle(decoration: isCanceled ? TextDecoration.lineThrough : null, color: isCanceled ? Colors.grey : Colors.black87)),
-                            subtitle: Text('${expected == null ? 'Sem data' : 'Venc./Prev.: ${DateFormat('dd/MM/yyyy').format(expected)}'}${cat != null ? ' • ${cat.name}' : ''}'),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text('R\$ ${transaction.amount.toStringAsFixed(2)}', style: TextStyle(color: isCanceled ? Colors.grey : (transaction.type == 'income' ? Colors.green : Colors.red), fontWeight: FontWeight.bold, decoration: isCanceled ? TextDecoration.lineThrough : null)),
-                                    Text(isCanceled ? 'Cancelado' : (transaction.status == 'paid' ? 'Efetuado' : (transaction.status == 'overdue' ? 'Atrasado' : 'Pendente')), style: TextStyle(color: isCanceled ? Colors.grey : (transaction.status == 'paid' ? Colors.green : (transaction.status == 'overdue' ? Colors.red : Colors.orange)), fontSize: 12)),
-                                  ],
-                                ),
-                                Checkbox(value: isPaid, onChanged: isCanceled ? null : (val) { if (val != null) _togglePaid(transaction, val); }),
-                              ],
-                            ),
-                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTransactionScreen(transaction: transaction))),
-                          );
-                        },
-                        childCount: filtered.length,
-                      ),
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        final transaction = filtered[index];
+                        final isPaid = transaction.status == 'paid';
+                        final isCanceled = transaction.status == 'canceled';
+                        final cat = _findCategory(allCategories, transaction.categoryId);
+                        final color = _safeCategoryColor(cat, transaction);
+                        final expected = _expectedDate(transaction);
+                        return ListTile(
+                          leading: CircleAvatar(backgroundColor: isCanceled ? Colors.grey.withOpacity(0.2) : color.withOpacity(0.2), child: Icon(transaction.type == 'income' ? Icons.arrow_upward : Icons.arrow_downward, color: isCanceled ? Colors.grey : color)),
+                          title: Text(transaction.title, style: TextStyle(decoration: isCanceled ? TextDecoration.lineThrough : null, color: isCanceled ? Colors.grey : Colors.black87)),
+                          subtitle: Text('${expected == null ? 'Sem data' : 'Venc./Prev.: ${DateFormat('dd/MM/yyyy').format(expected)}'}${cat != null ? ' • ${cat.name}' : ''}'),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [Text('R\$ ${transaction.amount.toStringAsFixed(2)}', style: TextStyle(color: isCanceled ? Colors.grey : (transaction.type == 'income' ? Colors.green : Colors.red), fontWeight: FontWeight.bold, decoration: isCanceled ? TextDecoration.lineThrough : null)), Text(isCanceled ? 'Cancelado' : (transaction.status == 'paid' ? 'Efetuado' : (transaction.status == 'overdue' ? 'Atrasado' : 'Pendente')), style: TextStyle(color: isCanceled ? Colors.grey : (transaction.status == 'paid' ? Colors.green : (transaction.status == 'overdue' ? Colors.red : Colors.orange)), fontSize: 12))]),
+                              Checkbox(value: isPaid, onChanged: isCanceled ? null : (val) { if (val != null) _togglePaid(transaction, val); }),
+                            ],
+                          ),
+                          onTap: () => _openTransactionForm(transaction: transaction),
+                        );
+                      }, childCount: filtered.length),
                     ),
             ],
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateTransactionScreen())), child: const Icon(Icons.add)),
+      floatingActionButton: FloatingActionButton(onPressed: () => _openTransactionForm(), child: const Icon(Icons.add)),
     );
   }
 
-  Widget _buildFilterChip(String label, String value, String groupValue, Function(String) onSelect) {
-    return ChoiceChip(label: Text(label), selected: groupValue == value, onSelected: (selected) { if (selected) onSelect(value); });
-  }
+  Widget _buildFilterChip(String label, String value, String groupValue, Function(String) onSelect) => ChoiceChip(label: Text(label), selected: groupValue == value, onSelected: (selected) { if (selected) onSelect(value); });
 
   Widget _buildSummaryCard(double realBalance, double saldoPrevisto, double resultadoRealizado, double receitas, double despesas, int despesasVencidas) {
     return Card(
@@ -407,111 +370,43 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20.0),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(child: _summaryValue('Saldo real em contas', realBalance, realBalance >= 0 ? Colors.green : Colors.red, big: true)),
-                const SizedBox(width: 12),
-                Expanded(child: _summaryValue('Resultado do mês', resultadoRealizado, resultadoRealizado >= 0 ? Colors.green : Colors.red)),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Divider(),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 16,
-              runSpacing: 12,
-              children: [
-                _buildStat('Previsto mês', saldoPrevisto, saldoPrevisto >= 0 ? Colors.green : Colors.red),
-                _buildStat('Receitas previstas', receitas, Colors.green),
-                _buildStat('Despesas previstas', despesas, Colors.red),
-              ],
-            ),
-            if (despesasVencidas > 0) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
-                child: Row(children: [const Icon(Icons.warning, color: Colors.red, size: 20), const SizedBox(width: 8), Expanded(child: Text('$despesasVencidas despesa(s) vencida(s)!', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)))]),
-              )
-            ]
-          ],
-        ),
+        child: Column(children: [
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: _summaryValue('Saldo real em contas', realBalance, realBalance >= 0 ? Colors.green : Colors.red, big: true)), const SizedBox(width: 12), Expanded(child: _summaryValue('Resultado do mês', resultadoRealizado, resultadoRealizado >= 0 ? Colors.green : Colors.red))]),
+          const SizedBox(height: 16),
+          const Divider(),
+          const SizedBox(height: 16),
+          Wrap(spacing: 16, runSpacing: 12, children: [_buildStat('Previsto mês', saldoPrevisto, saldoPrevisto >= 0 ? Colors.green : Colors.red), _buildStat('Receitas previstas', receitas, Colors.green), _buildStat('Despesas previstas', despesas, Colors.red)]),
+          if (despesasVencidas > 0) ...[const SizedBox(height: 16), Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)), child: Row(children: [const Icon(Icons.warning, color: Colors.red, size: 20), const SizedBox(width: 8), Expanded(child: Text('$despesasVencidas despesa(s) vencida(s)!', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)))]))]
+        ]),
       ),
     );
   }
 
   Widget _summaryValue(String label, double amount, Color color, {bool big = false}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey), maxLines: 2, overflow: TextOverflow.ellipsis),
-        const SizedBox(height: 4),
-        Text('R\$ ${amount.toStringAsFixed(2)}', style: TextStyle(fontSize: big ? 21 : 17, fontWeight: FontWeight.bold, color: color), maxLines: 1, overflow: TextOverflow.ellipsis),
-      ],
-    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey), maxLines: 2, overflow: TextOverflow.ellipsis), const SizedBox(height: 4), Text('R\$ ${amount.toStringAsFixed(2)}', style: TextStyle(fontSize: big ? 21 : 17, fontWeight: FontWeight.bold, color: color), maxLines: 1, overflow: TextOverflow.ellipsis)]);
   }
 
   Widget _buildAnalysisSection({required double previousResult, required double resultDiff, required double expenseDiff, required double paidExpenseRatio, required String topCategoryName, required double topCategoryAmount, required double paidExpenses, required double paidIncomes}) {
     final economyRate = paidIncomes <= 0 ? 0.0 : ((paidIncomes - paidExpenses) / paidIncomes) * 100;
     final resultLabel = resultDiff >= 0 ? 'Melhor que mês anterior' : 'Pior que mês anterior';
     final expenseLabel = expenseDiff <= 0 ? 'Gastos menores' : 'Gastos maiores';
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Análise de gastos', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            LinearProgressIndicator(value: paidExpenseRatio),
-            const SizedBox(height: 6),
-            Text('Despesas pagas representam ${(paidExpenseRatio * 100).toStringAsFixed(0)}% das despesas previstas.'),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                _analysisChip(Icons.compare_arrows, '$resultLabel: R\$ ${resultDiff.abs().toStringAsFixed(2)}', resultDiff >= 0 ? Colors.green : Colors.red),
-                _analysisChip(Icons.trending_up, '$expenseLabel: R\$ ${expenseDiff.abs().toStringAsFixed(2)}', expenseDiff <= 0 ? Colors.green : Colors.orange),
-                _analysisChip(Icons.pie_chart, 'Maior gasto: $topCategoryName — R\$ ${topCategoryAmount.toStringAsFixed(2)}', Colors.blue),
-                _analysisChip(Icons.savings, 'Taxa de sobra: ${economyRate.toStringAsFixed(1)}%', economyRate >= 0 ? Colors.green : Colors.red),
-              ],
-            ),
-            if (previousResult != 0) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Resultado mês anterior: R\$ ${previousResult.toStringAsFixed(2)}', style: TextStyle(color: Colors.grey.shade700))),
-          ],
-        ),
-      ),
-    );
+    return Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Análise de gastos', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 10),
+      LinearProgressIndicator(value: paidExpenseRatio),
+      const SizedBox(height: 6),
+      Text('Despesas pagas representam ${(paidExpenseRatio * 100).toStringAsFixed(0)}% das despesas previstas.'),
+      const SizedBox(height: 12),
+      Wrap(spacing: 10, runSpacing: 10, children: [_analysisChip(Icons.compare_arrows, '$resultLabel: R\$ ${resultDiff.abs().toStringAsFixed(2)}', resultDiff >= 0 ? Colors.green : Colors.red), _analysisChip(Icons.trending_up, '$expenseLabel: R\$ ${expenseDiff.abs().toStringAsFixed(2)}', expenseDiff <= 0 ? Colors.green : Colors.orange), _analysisChip(Icons.pie_chart, 'Maior gasto: $topCategoryName — R\$ ${topCategoryAmount.toStringAsFixed(2)}', Colors.blue), _analysisChip(Icons.savings, 'Taxa de sobra: ${economyRate.toStringAsFixed(1)}%', economyRate >= 0 ? Colors.green : Colors.red)]),
+      if (previousResult != 0) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Resultado mês anterior: R\$ ${previousResult.toStringAsFixed(2)}', style: TextStyle(color: Colors.grey.shade700))),
+    ])));
   }
 
   Widget _analysisChip(IconData icon, String label, Color color) {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 320),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(12)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 6),
-          Flexible(child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontWeight: FontWeight.w600))),
-        ],
-      ),
-    );
+    return Container(constraints: const BoxConstraints(maxWidth: 320), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(12)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 18, color: color), const SizedBox(width: 6), Flexible(child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontWeight: FontWeight.w600)))]));
   }
 
   Widget _buildStat(String label, double amount, Color color) {
-    return SizedBox(
-      width: 140,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey), maxLines: 1, overflow: TextOverflow.ellipsis),
-        const SizedBox(height: 4),
-        Text('R\$ ${amount.toStringAsFixed(2)}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color), maxLines: 1, overflow: TextOverflow.ellipsis),
-      ]),
-    );
+    return SizedBox(width: 140, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey), maxLines: 1, overflow: TextOverflow.ellipsis), const SizedBox(height: 4), Text('R\$ ${amount.toStringAsFixed(2)}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color), maxLines: 1, overflow: TextOverflow.ellipsis)]));
   }
 }
