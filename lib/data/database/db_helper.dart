@@ -362,6 +362,16 @@ class DatabaseHelper {
     return transaction.type == 'income' ? transaction.amount : -transaction.amount;
   }
 
+  Future<FinancialTransaction> _sanitizeAccountLink(Database db, FinancialTransaction transaction) async {
+    if (transaction.accountId == null) return transaction;
+    await FinancePlanningStore.ensureTables(db);
+    final rows = await db.query('financial_accounts', columns: ['id', 'isArchived'], where: 'id = ?', whereArgs: [transaction.accountId], limit: 1);
+    if (rows.isEmpty) return transaction.copyWith(clearAccountId: true);
+    final archived = rows.first['isArchived'] == 1;
+    if (archived && transaction.status != 'paid') return transaction.copyWith(clearAccountId: true);
+    return transaction;
+  }
+
   Future<void> _applyAccountDelta(Transaction txn, int accountId, double delta) async {
     if (delta == 0) return;
     await txn.rawUpdate(
@@ -446,12 +456,13 @@ class DatabaseHelper {
     final db = await instance.database;
     await FinancePlanningStore.ensureTables(db);
     await _addColumnIfMissing(db, 'transactions', 'accountId INTEGER');
+    final sanitized = await _sanitizeAccountLink(db, transaction);
     late int id;
     await db.transaction((txn) async {
-      id = await txn.insert('transactions', transaction.toMap());
-      await _syncAccountBalanceOnCreate(txn, transaction.copyWith(id: id));
+      id = await txn.insert('transactions', sanitized.toMap());
+      await _syncAccountBalanceOnCreate(txn, sanitized.copyWith(id: id));
     });
-    return transaction.copyWith(id: id);
+    return sanitized.copyWith(id: id);
   }
 
   Future<int> updateTransaction(FinancialTransaction transaction) async {
@@ -461,10 +472,11 @@ class DatabaseHelper {
     final oldRows = await db.query('transactions', where: 'id = ?', whereArgs: [transaction.id], limit: 1);
     if (oldRows.isEmpty) return 0;
     final oldTransaction = FinancialTransaction.fromMap(oldRows.first);
+    final sanitized = await _sanitizeAccountLink(db, transaction);
     late int count;
     await db.transaction((txn) async {
-      count = await txn.update('transactions', transaction.toMap(), where: 'id = ?', whereArgs: [transaction.id]);
-      await _syncAccountBalanceOnUpdate(txn, oldTransaction, transaction);
+      count = await txn.update('transactions', sanitized.toMap(), where: 'id = ?', whereArgs: [sanitized.id]);
+      await _syncAccountBalanceOnUpdate(txn, oldTransaction, sanitized);
     });
     return count;
   }
@@ -505,6 +517,7 @@ class DatabaseHelper {
 
   Future<int> deleteFinancialCategory(int id) async {
     final db = await instance.database;
+    await FinancePlanningStore.clearCategoryLinks(db, id);
     await db.update('transactions', {'categoryId': null}, where: 'categoryId = ?', whereArgs: [id]);
     await db.update('debts', {'categoryId': null}, where: 'categoryId = ?', whereArgs: [id]);
     return db.delete('financial_categories', where: 'id = ?', whereArgs: [id]);
