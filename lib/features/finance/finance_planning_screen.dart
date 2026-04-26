@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../data/database/finance_planning_store.dart';
 import '../../data/models/budget_model.dart';
 import '../../data/models/financial_account_model.dart';
 import '../../data/models/financial_goal_model.dart';
@@ -26,63 +27,17 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
     _loadAll();
   }
 
-  Future<void> _ensureTables() async {
-    final db = await ref.read(dbProvider).database;
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS financial_accounts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        type TEXT NOT NULL,
-        initialBalance REAL NOT NULL DEFAULT 0,
-        currentBalance REAL NOT NULL DEFAULT 0,
-        color TEXT NOT NULL DEFAULT '0xFF2196F3',
-        icon TEXT NOT NULL DEFAULT 'account_balance',
-        isArchived INTEGER NOT NULL DEFAULT 0,
-        createdAt TEXT NOT NULL,
-        updatedAt TEXT NOT NULL
-      )
-    ''');
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS budgets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        categoryId INTEGER,
-        limitAmount REAL NOT NULL,
-        month TEXT NOT NULL,
-        isArchived INTEGER NOT NULL DEFAULT 0,
-        createdAt TEXT NOT NULL,
-        updatedAt TEXT NOT NULL
-      )
-    ''');
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS financial_goals (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        description TEXT,
-        targetAmount REAL NOT NULL,
-        currentAmount REAL NOT NULL DEFAULT 0,
-        targetDate TEXT,
-        status TEXT NOT NULL DEFAULT 'active',
-        color TEXT NOT NULL DEFAULT '0xFF4CAF50',
-        icon TEXT NOT NULL DEFAULT 'flag',
-        createdAt TEXT NOT NULL,
-        updatedAt TEXT NOT NULL
-      )
-    ''');
-  }
-
   Future<void> _loadAll() async {
     setState(() => _loading = true);
-    await _ensureTables();
     final db = await ref.read(dbProvider).database;
-    final accountRows = await db.query('financial_accounts', orderBy: 'isArchived ASC, name ASC');
-    final budgetRows = await db.query('budgets', orderBy: 'month DESC, name ASC');
-    final goalRows = await db.query('financial_goals', orderBy: 'status ASC, targetDate ASC, name ASC');
+    final accounts = await FinancePlanningStore.getAccounts(db);
+    final budgets = await FinancePlanningStore.getBudgets(db);
+    final goals = await FinancePlanningStore.getGoals(db);
     if (!mounted) return;
     setState(() {
-      _accounts = accountRows.map(FinancialAccount.fromMap).toList();
-      _budgets = budgetRows.map(Budget.fromMap).toList();
-      _goals = goalRows.map(FinancialGoal.fromMap).toList();
+      _accounts = accounts;
+      _budgets = budgets;
+      _goals = goals;
       _loading = false;
     });
   }
@@ -288,12 +243,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
                   createdAt: account?.createdAt ?? now,
                   updatedAt: now,
                 );
-                final db = await ref.read(dbProvider).database;
-                if (account == null) {
-                  await db.insert('financial_accounts', data.toMap());
-                } else {
-                  await db.update('financial_accounts', data.toMap(), where: 'id = ?', whereArgs: [account.id]);
-                }
+                await FinancePlanningStore.upsertAccount(await ref.read(dbProvider).database, data);
                 if (ctx.mounted) Navigator.pop(ctx);
                 await _loadAll();
               },
@@ -345,12 +295,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
                 if (name.isEmpty || limit <= 0 || !RegExp(r'^\d{4}-\d{2}$').hasMatch(month)) return;
                 final now = DateTime.now().toIso8601String();
                 final data = Budget(id: budget?.id, name: name, categoryId: categoryId, limitAmount: limit, month: month, isArchived: budget?.isArchived ?? false, createdAt: budget?.createdAt ?? now, updatedAt: now);
-                final db = await ref.read(dbProvider).database;
-                if (budget == null) {
-                  await db.insert('budgets', data.toMap());
-                } else {
-                  await db.update('budgets', data.toMap(), where: 'id = ?', whereArgs: [budget.id]);
-                }
+                await FinancePlanningStore.upsertBudget(await ref.read(dbProvider).database, data);
                 if (ctx.mounted) Navigator.pop(ctx);
                 await _loadAll();
               },
@@ -415,12 +360,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
                 if (name.isEmpty || target <= 0 || current < 0) return;
                 final now = DateTime.now().toIso8601String();
                 final data = FinancialGoal(id: goal?.id, name: name, description: descriptionController.text.trim().isEmpty ? null : descriptionController.text.trim(), targetAmount: target, currentAmount: current, targetDate: targetDate?.toIso8601String(), status: status, createdAt: goal?.createdAt ?? now, updatedAt: now);
-                final db = await ref.read(dbProvider).database;
-                if (goal == null) {
-                  await db.insert('financial_goals', data.toMap());
-                } else {
-                  await db.update('financial_goals', data.toMap(), where: 'id = ?', whereArgs: [goal.id]);
-                }
+                await FinancePlanningStore.upsertGoal(await ref.read(dbProvider).database, data);
                 if (ctx.mounted) Navigator.pop(ctx);
                 await _loadAll();
               },
