@@ -44,6 +44,13 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
 
   String _money(num value) => 'R\$ ${value.toDouble().toStringAsFixed(2)}';
 
+  bool _validMonth(String value) {
+    if (!RegExp(r'^\d{4}-\d{2}$').hasMatch(value)) return false;
+    final parts = value.split('-');
+    final month = int.tryParse(parts[1]) ?? 0;
+    return month >= 1 && month <= 12;
+  }
+
   double _spentForBudget(Budget budget) {
     final transactions = ref.read(transactionsProvider);
     return transactions.where((transaction) {
@@ -98,7 +105,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
                 child: ListTile(
                   leading: CircleAvatar(backgroundColor: Colors.blue.withOpacity(0.12), child: Icon(_accountIcon(account.type), color: Colors.blue)),
                   title: Text(account.name),
-                  subtitle: Text('${_accountTypeLabel(account.type)}${account.isArchived ? ' • arquivada' : ''}'),
+                  subtitle: Text('${_accountTypeLabel(account.type)}${account.isArchived ? ' • arquivada' : ''}\nBase: ${_money(account.initialBalance)}'),
                   trailing: Text(_money(account.currentBalance), style: const TextStyle(fontWeight: FontWeight.bold)),
                   onTap: () => _showAccountDialog(account: account),
                 ),
@@ -132,7 +139,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
                     const SizedBox(height: 6),
                     LinearProgressIndicator(value: ratio),
                     const SizedBox(height: 4),
-                    Text('Usado: ${_money(spent)} de ${_money(budget.limitAmount)}'),
+                    Text('Gastos previstos/realizados: ${_money(spent)} de ${_money(budget.limitAmount)}'),
                   ],
                 ),
                 trailing: Icon(ratio >= 1 ? Icons.warning_amber : Icons.check_circle_outline, color: ratio >= 1 ? Colors.red : Colors.green),
@@ -192,7 +199,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
 
   Future<void> _showAccountDialog({FinancialAccount? account}) async {
     final nameController = TextEditingController(text: account?.name ?? '');
-    final balanceController = TextEditingController(text: account == null ? '' : account.currentBalance.toStringAsFixed(2));
+    final balanceController = TextEditingController(text: account == null ? '' : account.initialBalance.toStringAsFixed(2));
     String type = account?.type ?? 'bank';
     bool archived = account?.isArchived ?? false;
 
@@ -206,7 +213,14 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nome da conta')),
-                TextField(controller: balanceController, decoration: const InputDecoration(labelText: 'Saldo atual'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+                TextField(
+                  controller: balanceController,
+                  decoration: const InputDecoration(
+                    labelText: 'Saldo inicial/base',
+                    helperText: 'O saldo atual será calculado com as transações pagas desta conta.',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
                 DropdownButtonFormField<String>(
                   value: type,
                   items: const [
@@ -230,15 +244,22 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
             TextButton(
               onPressed: () async {
                 final name = nameController.text.trim();
-                final balance = double.tryParse(balanceController.text.replaceAll(',', '.')) ?? 0;
-                if (name.isEmpty) return;
+                final baseBalance = double.tryParse(balanceController.text.replaceAll(',', '.'));
+                if (name.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe o nome da conta.')));
+                  return;
+                }
+                if (baseBalance == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe um saldo inicial válido.')));
+                  return;
+                }
                 final now = DateTime.now().toIso8601String();
                 final data = FinancialAccount(
                   id: account?.id,
                   name: name,
                   type: type,
-                  initialBalance: account?.initialBalance ?? balance,
-                  currentBalance: balance,
+                  initialBalance: baseBalance,
+                  currentBalance: account?.currentBalance ?? baseBalance,
                   isArchived: archived,
                   createdAt: account?.createdAt ?? now,
                   updatedAt: now,
@@ -292,7 +313,18 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
                 final name = nameController.text.trim();
                 final limit = double.tryParse(limitController.text.replaceAll(',', '.')) ?? 0;
                 final month = monthController.text.trim();
-                if (name.isEmpty || limit <= 0 || !RegExp(r'^\d{4}-\d{2}$').hasMatch(month)) return;
+                if (name.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe o nome do orçamento.')));
+                  return;
+                }
+                if (limit <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O limite mensal deve ser maior que zero.')));
+                  return;
+                }
+                if (!_validMonth(month)) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe o mês no formato AAAA-MM, com mês entre 01 e 12.')));
+                  return;
+                }
                 final now = DateTime.now().toIso8601String();
                 final data = Budget(id: budget?.id, name: name, categoryId: categoryId, limitAmount: limit, month: month, isArchived: budget?.isArchived ?? false, createdAt: budget?.createdAt ?? now, updatedAt: now);
                 await FinancePlanningStore.upsertBudget(await ref.read(dbProvider).database, data);
@@ -357,9 +389,22 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
                 final name = nameController.text.trim();
                 final target = double.tryParse(targetController.text.replaceAll(',', '.')) ?? 0;
                 final current = double.tryParse(currentController.text.replaceAll(',', '.')) ?? 0;
-                if (name.isEmpty || target <= 0 || current < 0) return;
+                if (name.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe o nome da meta.')));
+                  return;
+                }
+                if (target <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O valor-alvo deve ser maior que zero.')));
+                  return;
+                }
+                if (current < 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O valor atual não pode ser negativo.')));
+                  return;
+                }
+                final normalizedCurrent = current > target ? target : current;
+                final normalizedStatus = normalizedCurrent >= target ? 'completed' : status;
                 final now = DateTime.now().toIso8601String();
-                final data = FinancialGoal(id: goal?.id, name: name, description: descriptionController.text.trim().isEmpty ? null : descriptionController.text.trim(), targetAmount: target, currentAmount: current, targetDate: targetDate?.toIso8601String(), status: status, createdAt: goal?.createdAt ?? now, updatedAt: now);
+                final data = FinancialGoal(id: goal?.id, name: name, description: descriptionController.text.trim().isEmpty ? null : descriptionController.text.trim(), targetAmount: target, currentAmount: normalizedCurrent, targetDate: targetDate?.toIso8601String(), status: normalizedStatus, createdAt: goal?.createdAt ?? now, updatedAt: now);
                 await FinancePlanningStore.upsertGoal(await ref.read(dbProvider).database, data);
                 if (ctx.mounted) Navigator.pop(ctx);
                 await _loadAll();
