@@ -4,6 +4,7 @@ class Task {
   final String? description;
   final int? categoryId;
   final int? projectId;
+  final int? projectStepId;
   final String priority; // 'baixa', 'media', 'alta'
   final String? date;
   final String? time;
@@ -18,6 +19,7 @@ class Task {
     this.description,
     this.categoryId,
     this.projectId,
+    this.projectStepId,
     required this.priority,
     this.date,
     this.time,
@@ -34,6 +36,7 @@ class Task {
       'description': description,
       'categoryId': categoryId,
       'projectId': projectId,
+      'projectStepId': projectStepId,
       'priority': priority,
       'date': date,
       'time': time,
@@ -51,6 +54,7 @@ class Task {
       description: map['description'],
       categoryId: map['categoryId'],
       projectId: map['projectId'],
+      projectStepId: map['projectStepId'],
       priority: map['priority'],
       date: map['date'],
       time: map['time'],
@@ -67,6 +71,9 @@ class Task {
     String? description,
     int? categoryId,
     int? projectId,
+    int? projectStepId,
+    bool clearProjectId = false,
+    bool clearProjectStepId = false,
     String? priority,
     String? date,
     String? time,
@@ -80,7 +87,8 @@ class Task {
       title: title ?? this.title,
       description: description ?? this.description,
       categoryId: categoryId ?? this.categoryId,
-      projectId: projectId ?? this.projectId,
+      projectId: clearProjectId ? null : (projectId ?? this.projectId),
+      projectStepId: clearProjectStepId ? null : (projectStepId ?? this.projectStepId),
       priority: priority ?? this.priority,
       date: date ?? this.date,
       time: time ?? this.time,

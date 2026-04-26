@@ -24,6 +24,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
   String _priority = 'media';
   int? _categoryId;
   int? _projectId;
+  int? _projectStepId;
   bool _hasReminder = false;
 
   @override
@@ -41,6 +42,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
       _priority = widget.task!.priority;
       _categoryId = widget.task!.categoryId;
       _projectId = widget.task!.projectId ?? widget.projectId;
+      _projectStepId = widget.task!.projectStepId;
       _hasReminder = widget.task!.reminderEnabled;
     }
   }
@@ -62,6 +64,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
       time: _time,
       categoryId: catId!,
       projectId: _projectId,
+      projectStepId: _projectId == null ? null : _projectStepId,
       priority: _priority,
       status: widget.task?.status ?? 'pendente',
       reminderEnabled: _hasReminder,
@@ -205,11 +208,31 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                      ...projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))),
                    ],
                    onChanged: (val) {
-                     setState(() => _projectId = val);
+                     setState(() {
+                       _projectId = val;
+                       _projectStepId = null;
+                     });
                    },
                  );
               }
             ),
+            if (_projectId != null) ...[
+              const SizedBox(height: 16),
+              Consumer(
+                builder: (context, ref, child) {
+                  final steps = ref.watch(projectStepsProvider(_projectId!));
+                  return DropdownButtonFormField<int>(
+                    value: _projectStepId,
+                    decoration: const InputDecoration(labelText: 'Etapa do Projeto (Opcional)', border: OutlineInputBorder()),
+                    items: [
+                      const DropdownMenuItem<int>(value: null, child: Text('Sem etapa específica')),
+                      ...steps.map((s) => DropdownMenuItem<int>(value: s.id, child: Text(s.title))),
+                    ],
+                    onChanged: (val) => setState(() => _projectStepId = val),
+                  );
+                },
+              ),
+            ],
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
               value: _priority,
