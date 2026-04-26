@@ -49,8 +49,57 @@ class FinancePlanningStore {
     ''');
   }
 
-  static Future<List<FinancialAccount>> getAccounts(Database db) async {
+  static double _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse('$value') ?? 0.0;
+  }
+
+  static Future<double> _paidTransactionDelta(Database db, int accountId) async {
+    final rows = await db.rawQuery(
+      '''
+      SELECT COALESCE(SUM(
+        CASE
+          WHEN type = 'income' THEN amount
+          WHEN type = 'expense' THEN -amount
+          ELSE 0
+        END
+      ), 0) AS delta
+      FROM transactions
+      WHERE status = 'paid' AND accountId = ?
+      ''',
+      [accountId],
+    );
+    return _asDouble(rows.first['delta']);
+  }
+
+  static Future<void> recalculateAccountBalance(Database db, int accountId) async {
     await ensureTables(db);
+    final rows = await db.query('financial_accounts', where: 'id = ?', whereArgs: [accountId], limit: 1);
+    if (rows.isEmpty) return;
+    final account = FinancialAccount.fromMap(rows.first);
+    final delta = await _paidTransactionDelta(db, accountId);
+    await db.update(
+      'financial_accounts',
+      {
+        'currentBalance': account.initialBalance + delta,
+        'updatedAt': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [accountId],
+    );
+  }
+
+  static Future<void> recalculateAllAccountBalances(Database db) async {
+    await ensureTables(db);
+    final rows = await db.query('financial_accounts', columns: ['id']);
+    for (final row in rows) {
+      final id = row['id'];
+      if (id is int) await recalculateAccountBalance(db, id);
+    }
+  }
+
+  static Future<List<FinancialAccount>> getAccounts(Database db) async {
+    await recalculateAllAccountBalances(db);
     final rows = await db.query('financial_accounts', orderBy: 'isArchived ASC, name ASC');
     return rows.map(FinancialAccount.fromMap).toList();
   }
@@ -70,9 +119,10 @@ class FinancePlanningStore {
   static Future<void> upsertAccount(Database db, FinancialAccount account) async {
     await ensureTables(db);
     if (account.id == null) {
-      await db.insert('financial_accounts', account.toMap());
+      await db.insert('financial_accounts', account.copyWith(currentBalance: account.initialBalance).toMap());
     } else {
       await db.update('financial_accounts', account.toMap(), where: 'id = ?', whereArgs: [account.id]);
+      await recalculateAccountBalance(db, account.id!);
     }
   }
 
@@ -107,7 +157,7 @@ class FinancePlanningStore {
   }
 
   static Future<Map<String, dynamic>> exportTables(Database db) async {
-    await ensureTables(db);
+    await recalculateAllAccountBalances(db);
     return {
       'financial_accounts': await db.query('financial_accounts', orderBy: 'id ASC'),
       'budgets': await db.query('budgets', orderBy: 'id ASC'),
