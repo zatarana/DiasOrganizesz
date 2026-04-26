@@ -34,6 +34,7 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
     final steps = project.id == null ? <ProjectStep>[] : ref.watch(projectStepsProvider(project.id!));
 
     final doneTasks = projectTasks.where((t) => t.status == 'concluida').length;
+    final doneSteps = steps.where((s) => s.status == 'completed').length;
     final progress = (project.progress / 100).clamp(0.0, 1.0);
     final daysRemaining = _daysRemaining(project.endDate);
 
@@ -70,7 +71,6 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 16),
             _sectionTitle('Seção 2: Progresso'),
             Card(
@@ -84,11 +84,11 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
                     LinearProgressIndicator(value: progress, minHeight: 8),
                     const SizedBox(height: 8),
                     Text('Tarefas concluídas: $doneTasks/${projectTasks.length}'),
+                    Text('Etapas concluídas: $doneSteps/${steps.length}'),
                   ],
                 ),
               ),
             ),
-
             const SizedBox(height: 16),
             _sectionTitle('Seção 3: Etapas'),
             Card(
@@ -106,17 +106,11 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
                     if (steps.isEmpty)
                       const Text('Nenhuma etapa criada.')
                     else
-                      ...steps.map((step) => ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: const Icon(Icons.flag_outlined),
-                            title: Text(step.title),
-                            subtitle: Text('Status: ${step.status}'),
-                          )),
+                      ...steps.map((step) => _buildStepTile(step, project)),
                   ],
                 ),
               ),
             ),
-
             const SizedBox(height: 16),
             _sectionTitle('Seção 4: Tarefas'),
             Card(
@@ -146,10 +140,10 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
                             style: TextStyle(decoration: isCompleted ? TextDecoration.lineThrough : null),
                           ),
                           subtitle: Text(t.date ?? 'Sem data'),
-                          onChanged: (val) {
+                          onChanged: (val) async {
                             if (val == null) return;
-                            final updated = t.copyWith(status: val ? 'concluida' : 'pendente');
-                            ref.read(tasksProvider.notifier).updateTask(updated);
+                            final updated = t.copyWith(status: val ? 'concluida' : 'pendente', updatedAt: DateTime.now().toIso8601String());
+                            await ref.read(tasksProvider.notifier).updateTask(updated);
                             if (val) _maybeSuggestCompleteProject(project.id, project.status);
                           },
                         );
@@ -158,7 +152,6 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 16),
             _sectionTitle('Seção 5: Ações'),
             Card(
@@ -198,6 +191,40 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
     );
   }
 
+  Widget _buildStepTile(ProjectStep step, Project project) {
+    final isCompleted = step.status == 'completed';
+    final subtitleParts = <String>[
+      'Status: ${_stepStatusLabel(step.status)}',
+      if (step.dueDate != null) 'Prazo: ${_dateLabel(step.dueDate)}',
+    ];
+
+    return CheckboxListTile(
+      contentPadding: EdgeInsets.zero,
+      value: isCompleted,
+      title: Text(
+        step.title,
+        style: TextStyle(decoration: isCompleted ? TextDecoration.lineThrough : null),
+      ),
+      subtitle: Text(subtitleParts.join(' • ')),
+      secondary: IconButton(
+        icon: const Icon(Icons.delete_outline, color: Colors.red),
+        onPressed: step.id == null ? null : () => _confirmDeleteStep(step),
+      ),
+      onChanged: (val) async {
+        if (val == null) return;
+        final now = DateTime.now().toIso8601String();
+        final updated = step.copyWith(
+          status: val ? 'completed' : 'pending',
+          completedAt: val ? now : null,
+          clearCompletedAt: !val,
+          updatedAt: now,
+        );
+        await ref.read(projectStepsProvider(step.projectId).notifier).updateStep(updated);
+        if (val) _maybeSuggestCompleteProject(project.id, project.status);
+      },
+    );
+  }
+
   Widget _sectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -217,8 +244,23 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
         return 'Pausado';
       case 'completed':
         return 'Concluído';
+      case 'canceled':
+        return 'Cancelado';
       default:
         return status;
+    }
+  }
+
+  String _stepStatusLabel(String status) {
+    switch (status) {
+      case 'completed':
+        return 'Concluída';
+      case 'in_progress':
+        return 'Em andamento';
+      case 'canceled':
+        return 'Cancelada';
+      default:
+        return 'Pendente';
     }
   }
 
@@ -271,52 +313,73 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocalState) => AlertDialog(
-        title: const Text('Adicionar etapa'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: controller,
-              decoration: const InputDecoration(hintText: 'Título da etapa'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
+          title: const Text('Adicionar etapa'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(hintText: 'Título da etapa'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final dt = await showDatePicker(
+                    context: context,
+                    initialDate: dueDate ?? DateTime.now(),
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime(2100),
+                  );
+                  if (dt != null) setLocalState(() => dueDate = dt);
+                },
+                icon: const Icon(Icons.event),
+                label: Text(dueDate == null ? 'Definir prazo (opcional)' : 'Prazo: ${_dateLabel(dueDate!.toIso8601String())}'),
+              ),
+              SwitchListTile(
+                title: const Text('Lembrete de prazo'),
+                value: remind,
+                onChanged: dueDate != null ? (v) => setLocalState(() => remind = v) : null,
+              )
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+            TextButton(
               onPressed: () async {
-                final dt = await showDatePicker(
-                  context: context,
-                  initialDate: dueDate ?? DateTime.now(),
-                  firstDate: DateTime(2000),
-                  lastDate: DateTime(2100),
-                );
-                if (dt != null) setLocalState(() => dueDate = dt);
+                final title = controller.text.trim();
+                if (title.isEmpty) return;
+                await ref.read(projectStepsProvider(projectId).notifier).addStep(
+                      title,
+                      dueDate: dueDate?.toIso8601String(),
+                      reminderEnabled: remind,
+                    );
+                Navigator.pop(ctx);
               },
-              icon: const Icon(Icons.event),
-              label: Text(dueDate == null ? 'Definir prazo (opcional)' : 'Prazo: ${_dateLabel(dueDate!.toIso8601String())}'),
+              child: const Text('Adicionar'),
             ),
-            SwitchListTile(
-              title: const Text('Lembrete de prazo'),
-              value: remind,
-              onChanged: dueDate != null ? (v) => setLocalState(() => remind = v) : null,
-            )
           ],
         ),
+      ),
+    );
+  }
+
+  void _confirmDeleteStep(ProjectStep step) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir etapa'),
+        content: Text('Deseja excluir a etapa "${step.title}"?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           TextButton(
             onPressed: () async {
-              final title = controller.text.trim();
-              if (title.isEmpty) return;
-              await ref.read(projectStepsProvider(projectId).notifier).addStep(
-                title,
-                dueDate: dueDate?.toIso8601String(),
-                reminderEnabled: remind,
-              );
+              await ref.read(projectStepsProvider(step.projectId).notifier).removeStep(step.id!);
               Navigator.pop(ctx);
             },
-            child: const Text('Adicionar'),
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
           ),
         ],
-      )),
+      ),
     );
   }
 
@@ -329,22 +392,26 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               if (widget.project.id != null) {
-                ref.read(projectsProvider.notifier).removeProject(widget.project.id!, deleteLinkedTasks: false);
+                await ref.read(projectsProvider.notifier).removeProject(widget.project.id!, deleteLinkedTasks: false);
               }
-              Navigator.pop(ctx);
-              Navigator.pop(context);
+              if (mounted) {
+                Navigator.pop(ctx);
+                Navigator.pop(context);
+              }
             },
             child: const Text('Manter tarefas (desvincular)'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               if (widget.project.id != null) {
-                ref.read(projectsProvider.notifier).removeProject(widget.project.id!, deleteLinkedTasks: true);
+                await ref.read(projectsProvider.notifier).removeProject(widget.project.id!, deleteLinkedTasks: true);
               }
-              Navigator.pop(ctx);
-              Navigator.pop(context);
+              if (mounted) {
+                Navigator.pop(ctx);
+                Navigator.pop(context);
+              }
             },
             child: const Text('Excluir tarefas vinculadas', style: TextStyle(color: Colors.red)),
           )
@@ -355,25 +422,27 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
 
   void _maybeSuggestCompleteProject(int? projectId, String currentProjectStatus) {
     if (projectId == null || currentProjectStatus == 'completed') return;
-    final allTasks = ref.read(tasksProvider);
-    final projectTasks = allTasks.where((t) => t.projectId == projectId).toList();
-    final allCompleted = projectTasks.isNotEmpty && projectTasks.every((t) => t.status == 'concluida');
-    if (!allCompleted) return;
+
+    final allTasks = ref.read(tasksProvider).where((t) => t.projectId == projectId).toList();
+    final allSteps = ref.read(projectStepsProvider(projectId));
+    final hasWork = allTasks.isNotEmpty || allSteps.isNotEmpty;
+    final tasksDone = allTasks.isEmpty || allTasks.every((t) => t.status == 'concluida');
+    final stepsDone = allSteps.isEmpty || allSteps.every((s) => s.status == 'completed');
+
+    if (!hasWork || !tasksDone || !stepsDone) return;
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Projeto pronto para conclusão'),
-        content: const Text('Todas as tarefas deste projeto foram concluídas. Deseja marcar o projeto como concluído?'),
+        content: const Text('Todas as tarefas e etapas deste projeto foram concluídas. Deseja marcar o projeto como concluído?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Agora não')),
           TextButton(
             onPressed: () {
               final projects = ref.read(projectsProvider);
               final idx = projects.indexWhere((p) => p.id == projectId);
-              if (idx != -1) {
-                _updateStatus(projects[idx], 'completed');
-              }
+              if (idx != -1) _updateStatus(projects[idx], 'completed');
               Navigator.pop(ctx);
             },
             child: const Text('Marcar como concluído'),
