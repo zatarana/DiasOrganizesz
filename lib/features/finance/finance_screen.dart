@@ -128,6 +128,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
         dueDate: newDueDate?.toIso8601String(),
         paidDate: null,
         categoryId: source.categoryId,
+        accountId: source.accountId,
         paymentMethod: source.paymentMethod,
         status: 'pending',
         reminderEnabled: source.reminderEnabled,
@@ -160,6 +161,13 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   }
 
   Future<void> _togglePaid(FinancialTransaction transaction, bool isPaid) async {
+    if (isPaid && transaction.accountId == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Escolha uma conta antes de marcar como pago.')));
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTransactionScreen(transaction: transaction)));
+      return;
+    }
+
     final updated = transaction.copyWith(
       status: isPaid ? 'paid' : _statusAfterUnpay(transaction),
       paidDate: isPaid ? DateTime.now().toIso8601String() : null,
