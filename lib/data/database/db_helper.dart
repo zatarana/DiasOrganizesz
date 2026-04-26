@@ -24,12 +24,7 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    return openDatabase(
-      path,
-      version: 14,
-      onCreate: _createDB,
-      onUpgrade: _onUpgrade,
-    );
+    return openDatabase(path, version: 14, onCreate: _createDB, onUpgrade: _onUpgrade);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -109,16 +104,12 @@ class DatabaseHelper {
         }
       } catch (_) {}
     }
-    if (oldVersion < 11) {
-      await _addColumnIfMissing(db, 'tasks', 'projectStepId INTEGER');
-    }
+    if (oldVersion < 11) await _addColumnIfMissing(db, 'tasks', 'projectStepId INTEGER');
     if (oldVersion < 12) {
       await _addColumnIfMissing(db, 'projects', 'notes TEXT');
       await _addColumnIfMissing(db, 'projects', 'completedAt TEXT');
     }
-    if (oldVersion < 13) {
-      await _addColumnIfMissing(db, 'projects', 'progress REAL NOT NULL DEFAULT 0');
-    }
+    if (oldVersion < 13) await _addColumnIfMissing(db, 'projects', 'progress REAL NOT NULL DEFAULT 0');
     if (oldVersion < 14) {
       await _addColumnIfMissing(db, 'transactions', 'reminderEnabled INTEGER NOT NULL DEFAULT 0');
       await _addColumnIfMissing(db, 'projects', 'reminderEnabled INTEGER NOT NULL DEFAULT 0');
@@ -129,9 +120,7 @@ class DatabaseHelper {
   Future<void> _addColumnIfMissing(Database db, String table, String columnSql) async {
     try {
       await db.execute('ALTER TABLE $table ADD COLUMN $columnSql');
-    } catch (_) {
-      // SQLite throws when the column already exists. Safe to ignore in migrations.
-    }
+    } catch (_) {}
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -310,19 +299,13 @@ class DatabaseHelper {
   Future<List<TaskCategory>> getCategories() async {
     final db = await instance.database;
     final result = await db.query('categories');
-    return result.map(TaskCategory.fromMap).toList();
+    return result.map((json) => TaskCategory.fromMap(json)).toList();
   }
 
   Future<TaskCategory> createCategory(TaskCategory category) async {
     final db = await instance.database;
     final id = await db.insert('categories', category.toMap());
-    return TaskCategory(
-      id: id,
-      name: category.name,
-      color: category.color,
-      icon: category.icon,
-      createdAt: category.createdAt,
-    );
+    return TaskCategory(id: id, name: category.name, color: category.color, icon: category.icon, createdAt: category.createdAt);
   }
 
   Future<int> deleteCategory(int id) async {
@@ -333,7 +316,7 @@ class DatabaseHelper {
   Future<List<Task>> getTasks() async {
     final db = await instance.database;
     final result = await db.query('tasks', orderBy: 'date ASC, time ASC');
-    return result.map(Task.fromMap).toList();
+    return result.map((json) => Task.fromMap(json)).toList();
   }
 
   Future<Task> createTask(Task task) async {
@@ -366,7 +349,7 @@ class DatabaseHelper {
   Future<List<FinancialTransaction>> getTransactions() async {
     final db = await instance.database;
     final result = await db.query('transactions', orderBy: 'transactionDate DESC');
-    return result.map(FinancialTransaction.fromMap).toList();
+    return result.map((json) => FinancialTransaction.fromMap(json)).toList();
   }
 
   Future<FinancialTransaction> createTransaction(FinancialTransaction transaction) async {
@@ -388,7 +371,7 @@ class DatabaseHelper {
   Future<List<FinancialCategory>> getFinancialCategories() async {
     final db = await instance.database;
     final result = await db.query('financial_categories', orderBy: 'name ASC');
-    return result.map(FinancialCategory.fromMap).toList();
+    return result.map((json) => FinancialCategory.fromMap(json)).toList();
   }
 
   Future<FinancialCategory> createFinancialCategory(FinancialCategory category) async {
@@ -452,20 +435,22 @@ class DatabaseHelper {
       await db.update('tasks', {'projectId': null, 'projectStepId': null}, where: 'projectId = ?', whereArgs: [id]);
     }
     await db.delete('project_steps', where: 'projectId = ?', whereArgs: [id]);
-    await db.delete('project_stages', where: 'projectId = ?', whereArgs: [id]);
+    try {
+      await db.delete('project_stages', where: 'projectId = ?', whereArgs: [id]);
+    } catch (_) {}
     return db.delete('projects', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<List<ProjectStep>> getProjectSteps(int projectId) async {
     final db = await instance.database;
     final result = await db.query('project_steps', where: 'projectId = ?', whereArgs: [projectId], orderBy: 'orderIndex ASC, id ASC');
-    return result.map(ProjectStep.fromMap).toList();
+    return result.map((json) => ProjectStep.fromMap(json)).toList();
   }
 
   Future<List<ProjectStep>> getAllProjectSteps() async {
     final db = await instance.database;
     final result = await db.query('project_steps', orderBy: 'projectId ASC, orderIndex ASC, id ASC');
-    return result.map(ProjectStep.fromMap).toList();
+    return result.map((json) => ProjectStep.fromMap(json)).toList();
   }
 
   Future<ProjectStep> createProjectStep(ProjectStep step) async {
