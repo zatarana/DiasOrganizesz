@@ -25,6 +25,9 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Normalizar estrutura Android do Flutter
+        run: flutter create --platforms=android .
+
       - name: Instalar dependências
         run: flutter pub get
 
