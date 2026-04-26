@@ -16,92 +16,122 @@ class StatsScreen extends ConsumerWidget {
 
     final now = DateTime.now();
 
-    final createdTasks = tasks.length;
-    final completedTasks = tasks.where((t) => t.status == 'concluida').length;
-    final pendingTasks = tasks.where((t) => t.status == 'pendente').length;
-    final overdueTasks = tasks.where((t) => t.status == 'atrasada').length;
+    DateTime? expectedDate(transaction) => DateTime.tryParse(transaction.dueDate ?? transaction.transactionDate);
+    DateTime? paidDate(transaction) => transaction.paidDate == null ? null : DateTime.tryParse(transaction.paidDate!);
+    bool sameMonth(DateTime? date) => date != null && date.year == now.year && date.month == now.month;
+
+    final validTasks = tasks.where((t) => t.status != 'canceled').toList();
+    final createdTasks = validTasks.length;
+    final completedTasks = validTasks.where((t) => t.status == 'concluida').length;
+    final pendingTasks = validTasks.where((t) => t.status == 'pendente').length;
+    final overdueTasks = validTasks.where((t) => t.status == 'atrasada').length;
     final completionRate = createdTasks == 0 ? 0.0 : (completedTasks / createdTasks) * 100;
 
     final categoryCounts = <int, int>{};
-    for (final t in tasks) {
-      if (t.categoryId != null) {
-        categoryCounts[t.categoryId!] = (categoryCounts[t.categoryId!] ?? 0) + 1;
-      }
+    for (final task in validTasks) {
+      if (task.categoryId != null) categoryCounts[task.categoryId!] = (categoryCounts[task.categoryId!] ?? 0) + 1;
     }
     String topTaskCategory = '-';
     if (categoryCounts.isNotEmpty) {
       final topId = categoryCounts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
-      final idx = categories.indexWhere((c) => c.id == topId);
+      final idx = categories.indexWhere((category) => category.id == topId);
       if (idx != -1) topTaskCategory = categories[idx].name;
     }
 
-    final monthTransactions = transactions.where((t) {
-      final dt = DateTime.tryParse(t.transactionDate);
-      return dt != null && dt.year == now.year && dt.month == now.month && t.status != 'canceled';
-    }).toList();
-
-    final receitasMes = monthTransactions.where((t) => t.type == 'income').fold<double>(0, (s, t) => s + t.amount);
-    final despesasMes = monthTransactions.where((t) => t.type == 'expense').fold<double>(0, (s, t) => s + t.amount);
-    final saldoMes = receitasMes - despesasMes;
-
+    double receitasPrevistas = 0;
+    double despesasPrevistas = 0;
+    double receitasPagas = 0;
+    double despesasPagas = 0;
+    double totalPendente = 0;
+    double totalPago = 0;
     final expenseByCategory = <int, double>{};
-    for (final t in monthTransactions.where((t) => t.type == 'expense')) {
-      if (t.categoryId != null) {
-        expenseByCategory[t.categoryId!] = (expenseByCategory[t.categoryId!] ?? 0) + t.amount;
+    final paymentCounts = <String, int>{};
+
+    final monthExpectedTransactions = <dynamic>[];
+    final monthPaidTransactions = <dynamic>[];
+
+    for (final transaction in transactions.where((t) => t.status != 'canceled')) {
+      final expected = expectedDate(transaction);
+      final paid = paidDate(transaction);
+      final expectedInMonth = sameMonth(expected);
+      final paidInMonth = transaction.status == 'paid' && (sameMonth(paid) || (paid == null && expectedInMonth));
+
+      if (expectedInMonth) {
+        monthExpectedTransactions.add(transaction);
+        if (transaction.type == 'income') {
+          receitasPrevistas += transaction.amount;
+        } else if (transaction.type == 'expense') {
+          despesasPrevistas += transaction.amount;
+          if (transaction.categoryId != null) {
+            expenseByCategory[transaction.categoryId!] = (expenseByCategory[transaction.categoryId!] ?? 0) + transaction.amount;
+          }
+        }
+        if (transaction.status == 'pending' || transaction.status == 'overdue') totalPendente += transaction.amount;
+      }
+
+      if (paidInMonth) {
+        monthPaidTransactions.add(transaction);
+        if (transaction.type == 'income') {
+          receitasPagas += transaction.amount;
+        } else if (transaction.type == 'expense') {
+          despesasPagas += transaction.amount;
+        }
+        totalPago += transaction.amount;
+        final method = (transaction.paymentMethod == null || transaction.paymentMethod!.isEmpty) ? 'não informado' : transaction.paymentMethod!;
+        paymentCounts[method] = (paymentCounts[method] ?? 0) + 1;
       }
     }
+
+    final saldoPrevisto = receitasPrevistas - despesasPrevistas;
+    final saldoRealizado = receitasPagas - despesasPagas;
+
     String topExpenseCategory = '-';
     if (expenseByCategory.isNotEmpty) {
       final topCatId = expenseByCategory.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
-      final idx = financialCategories.indexWhere((c) => c.id == topCatId);
+      final idx = financialCategories.indexWhere((category) => category.id == topCatId);
       if (idx != -1) topExpenseCategory = financialCategories[idx].name;
     }
 
-    final paymentCounts = <String, int>{};
-    for (final t in monthTransactions) {
-      final method = (t.paymentMethod == null || t.paymentMethod!.isEmpty) ? 'não informado' : t.paymentMethod!;
-      paymentCounts[method] = (paymentCounts[method] ?? 0) + 1;
-    }
     final mostUsedPayment = paymentCounts.isEmpty ? '-' : paymentCounts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
 
-    final totalPendente = monthTransactions.where((t) => t.status == 'pending' || t.status == 'overdue').fold<double>(0, (s, t) => s + t.amount);
-    final totalPago = monthTransactions.where((t) => t.status == 'paid').fold<double>(0, (s, t) => s + t.amount);
-
     final debtTransactions = transactions.where((t) => t.debtId != null && t.status != 'canceled').toList();
-    final totalDividas = debts.where((d) => d.status != 'canceled').fold<double>(0, (s, d) => s + d.totalAmount);
-    final totalJaPago = debtTransactions.where((t) => t.status == 'paid').fold<double>(0, (s, t) => s + t.amount);
-    final totalRestante = (totalDividas - totalJaPago).clamp(0, double.infinity).toDouble();
-    final percentualQuitado = totalDividas == 0 ? 0.0 : (totalJaPago / totalDividas) * 100;
-    final parcelasPagas = debtTransactions.where((t) => t.status == 'paid').length;
-    final parcelasPendentes = debtTransactions.where((t) => t.status == 'pending').length;
-    final parcelasAtrasadas = debtTransactions.where((t) => t.status == 'overdue').length;
+    final totalDividas = debts.where((debt) => debt.status != 'canceled').fold<double>(0, (sum, debt) => sum + debt.totalAmount);
+    final totalPagoEmDividas = debtTransactions.where((transaction) => transaction.status == 'paid').fold<double>(0, (sum, transaction) => sum + transaction.amount);
+    final totalDescontosDividas = debtTransactions.where((transaction) => transaction.status == 'paid').fold<double>(0, (sum, transaction) => sum + (transaction.discountAmount ?? 0));
+    final totalAbatidoDividas = totalPagoEmDividas + totalDescontosDividas;
+    final totalRestante = (totalDividas - totalAbatidoDividas).clamp(0, double.infinity).toDouble();
+    final percentualQuitado = totalDividas == 0 ? 0.0 : (totalAbatidoDividas / totalDividas) * 100;
+    final parcelasPagas = debtTransactions.where((transaction) => transaction.status == 'paid').length;
+    final parcelasPendentes = debtTransactions.where((transaction) => transaction.status == 'pending').length;
+    final parcelasAtrasadas = debtTransactions.where((transaction) => transaction.status == 'overdue').length;
 
     String debtMaxRemaining = '-';
     double debtMaxRemainingValue = -1;
-    for (final d in debts.where((d) => d.status != 'canceled')) {
-      final paidForDebt = debtTransactions.where((t) => t.debtId == d.id && t.status == 'paid').fold<double>(0, (s, t) => s + t.amount);
-      final remaining = (d.totalAmount - paidForDebt).clamp(0, double.infinity).toDouble();
+    for (final debt in debts.where((debt) => debt.status != 'canceled')) {
+      final abatido = debtTransactions.where((transaction) => transaction.debtId == debt.id && transaction.status == 'paid').fold<double>(0, (sum, transaction) => sum + transaction.amount + (transaction.discountAmount ?? 0));
+      final remaining = (debt.totalAmount - abatido).clamp(0, double.infinity).toDouble();
       if (remaining > debtMaxRemainingValue) {
         debtMaxRemainingValue = remaining;
-        debtMaxRemaining = d.name;
+        debtMaxRemaining = debt.name;
       }
     }
 
-    final projetosCriados = projects.length;
-    final projetosAndamento = projects.where((p) => p.status == 'active').length;
-    final projetosConcluidos = projects.where((p) => p.status == 'completed').length;
-    final projetosPausados = projects.where((p) => p.status == 'paused').length;
-    final projetosAtrasados = projects.where((p) {
-      if (p.endDate == null || p.status == 'completed' || p.status == 'canceled') return false;
-      final end = DateTime.tryParse(p.endDate!);
+    final projetosValidos = projects.where((project) => project.status != 'canceled').toList();
+    final projetosCriados = projetosValidos.length;
+    final projetosAndamento = projetosValidos.where((project) => project.status == 'active').length;
+    final projetosConcluidos = projetosValidos.where((project) => project.status == 'completed').length;
+    final projetosPausados = projetosValidos.where((project) => project.status == 'paused').length;
+    final projetosAtrasados = projetosValidos.where((project) {
+      if (project.endDate == null || project.status == 'completed') return false;
+      final end = DateTime.tryParse(project.endDate!);
       return end != null && end.isBefore(now);
     }).length;
-    final mediaProgresso = projects.isEmpty ? 0.0 : projects.fold<double>(0, (s, p) => s + p.progress) / projects.length;
+    final mediaProgresso = projetosValidos.isEmpty ? 0.0 : projetosValidos.fold<double>(0, (sum, project) => sum + project.progress) / projetosValidos.length;
 
     String projetoMaisProximo = '-';
-    final withDue = projects.where((p) {
-      if (p.endDate == null || p.status == 'completed' || p.status == 'canceled') return false;
-      final end = DateTime.tryParse(p.endDate!);
+    final withDue = projetosValidos.where((project) {
+      if (project.endDate == null || project.status == 'completed') return false;
+      final end = DateTime.tryParse(project.endDate!);
       return end != null && end.isAfter(now);
     }).toList()
       ..sort((a, b) => DateTime.parse(a.endDate!).compareTo(DateTime.parse(b.endDate!)));
@@ -134,17 +164,22 @@ class StatsScreen extends ConsumerWidget {
               _Metric('Categoria com mais tarefas', topTaskCategory),
             ]),
             _StatsList(items: [
-              _Metric('Receitas do mês', 'R\$ ${receitasMes.toStringAsFixed(2)}'),
-              _Metric('Despesas do mês', 'R\$ ${despesasMes.toStringAsFixed(2)}'),
-              _Metric('Saldo do mês', 'R\$ ${saldoMes.toStringAsFixed(2)}'),
-              _Metric('Categoria com maior gasto', topExpenseCategory),
+              _Metric('Receitas previstas do mês', 'R\$ ${receitasPrevistas.toStringAsFixed(2)}'),
+              _Metric('Despesas previstas do mês', 'R\$ ${despesasPrevistas.toStringAsFixed(2)}'),
+              _Metric('Saldo previsto', 'R\$ ${saldoPrevisto.toStringAsFixed(2)}'),
+              _Metric('Receitas pagas/recebidas', 'R\$ ${receitasPagas.toStringAsFixed(2)}'),
+              _Metric('Despesas pagas', 'R\$ ${despesasPagas.toStringAsFixed(2)}'),
+              _Metric('Saldo realizado', 'R\$ ${saldoRealizado.toStringAsFixed(2)}'),
+              _Metric('Categoria com maior gasto previsto', topExpenseCategory),
               _Metric('Forma de pagamento mais usada', mostUsedPayment),
-              _Metric('Total pendente', 'R\$ ${totalPendente.toStringAsFixed(2)}'),
-              _Metric('Total pago', 'R\$ ${totalPago.toStringAsFixed(2)}'),
+              _Metric('Total pendente previsto', 'R\$ ${totalPendente.toStringAsFixed(2)}'),
+              _Metric('Total realizado', 'R\$ ${totalPago.toStringAsFixed(2)}'),
             ]),
             _StatsList(items: [
               _Metric('Total em dívidas', 'R\$ ${totalDividas.toStringAsFixed(2)}'),
-              _Metric('Total já pago', 'R\$ ${totalJaPago.toStringAsFixed(2)}'),
+              _Metric('Pago em dinheiro', 'R\$ ${totalPagoEmDividas.toStringAsFixed(2)}'),
+              _Metric('Descontos abatidos', 'R\$ ${totalDescontosDividas.toStringAsFixed(2)}'),
+              _Metric('Total abatido', 'R\$ ${totalAbatidoDividas.toStringAsFixed(2)}'),
               _Metric('Total restante', 'R\$ ${totalRestante.toStringAsFixed(2)}'),
               _Metric('Percentual quitado', '${percentualQuitado.toStringAsFixed(1)}%'),
               _Metric('Parcelas pagas', '$parcelasPagas'),
@@ -163,7 +198,8 @@ class StatsScreen extends ConsumerWidget {
             ]),
             _StatsList(items: [
               _Metric('Tarefas totais', '$createdTasks'),
-              _Metric('Saldo do mês', 'R\$ ${saldoMes.toStringAsFixed(2)}'),
+              _Metric('Saldo previsto do mês', 'R\$ ${saldoPrevisto.toStringAsFixed(2)}'),
+              _Metric('Saldo realizado do mês', 'R\$ ${saldoRealizado.toStringAsFixed(2)}'),
               _Metric('Dívidas restantes', 'R\$ ${totalRestante.toStringAsFixed(2)}'),
               _Metric('Projetos em andamento', '$projetosAndamento'),
               _Metric('Média progresso projetos', '${mediaProgresso.toStringAsFixed(1)}%'),
