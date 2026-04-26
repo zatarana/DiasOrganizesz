@@ -22,8 +22,6 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
     final transactions = ref.watch(transactionsProvider);
     final appSettings = ref.watch(appSettingsProvider);
     final showPaidDebts = (appSettings[AppSettingKeys.debtsShowPaid] ?? 'true') == 'true';
-    final appSettings = ref.watch(appSettingsProvider);
-    final showPaidDebts = (appSettings[AppSettingKeys.debtsShowPaid] ?? 'true') == 'true';
 
     double totalDividas = 0;
     double totalPago = 0;
@@ -78,11 +76,7 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
                if (nextDueDate == null) nextDueDate = due;
             } else {
                if (nextDueDate == null) nextDueDate = due;
-
-       if (!showPaidDebts && (d.status == 'paid' || isPaidOut) && _currentFilter != 'quitadas') {
-         return false;
-       }
-                         if (showPaidDebts) _buildFilterChip('Quitadas', 'quitadas'),
+            }
           }
         }
       }

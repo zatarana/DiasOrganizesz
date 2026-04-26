@@ -91,7 +91,7 @@ class _DebtDetailsScreenState extends ConsumerState<DebtDetailsScreen> {
             // New Ad-Hoc Transaction specifically for this debt
             final newT = FinancialTransaction(
               title: 'Pagamento - ${currentDebt.name}',
-              amount: currentDebt.totalAmount > 0 ? (currentDebt.totalAmount - paidForThisDebt).clamp(0, double.infinity) : 0,
+              amount: currentDebt.totalAmount > 0 ? (currentDebt.totalAmount - paidForThisDebt).clamp(0, double.infinity).toDouble() : 0,
               type: 'expense',
               status: 'pending',
               debtId: currentDebt.id,
