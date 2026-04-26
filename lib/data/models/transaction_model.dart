@@ -16,6 +16,7 @@ class FinancialTransaction {
   final int? debtId;
   final int? installmentNumber;
   final int? totalInstallments;
+  final double? discountAmount;
   final String createdAt;
   final String updatedAt;
 
@@ -37,6 +38,7 @@ class FinancialTransaction {
     this.debtId,
     this.installmentNumber,
     this.totalInstallments,
+    this.discountAmount,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -59,6 +61,7 @@ class FinancialTransaction {
     int? debtId,
     int? installmentNumber,
     int? totalInstallments,
+    double? discountAmount,
     String? createdAt,
     String? updatedAt,
   }) {
@@ -80,6 +83,7 @@ class FinancialTransaction {
       debtId: debtId ?? this.debtId,
       installmentNumber: installmentNumber ?? this.installmentNumber,
       totalInstallments: totalInstallments ?? this.totalInstallments,
+      discountAmount: discountAmount ?? this.discountAmount,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -104,6 +108,7 @@ class FinancialTransaction {
       'debtId': debtId,
       'installmentNumber': installmentNumber,
       'totalInstallments': totalInstallments,
+      'discountAmount': discountAmount,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
     };
@@ -138,6 +143,7 @@ class FinancialTransaction {
       debtId: map['debtId'],
       installmentNumber: map['installmentNumber'],
       totalInstallments: map['totalInstallments'],
+      discountAmount: map['discountAmount'],
       createdAt: map['createdAt'] ?? DateTime.now().toIso8601String(),
       updatedAt: map['updatedAt'] ?? DateTime.now().toIso8601String(),
     );

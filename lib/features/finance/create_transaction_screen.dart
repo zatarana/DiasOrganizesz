@@ -18,6 +18,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   final _descriptionController = TextEditingController();
   final _amountController = TextEditingController();
   final _notesController = TextEditingController();
+  final _discountController = TextEditingController();
   String _type = 'expense';
   DateTime _transactionDate = DateTime.now();
   DateTime? _dueDate;
@@ -39,7 +40,12 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
     if (widget.transaction != null) {
       _titleController.text = widget.transaction!.title;
       _descriptionController.text = widget.transaction!.description ?? '';
-      _notesController.text = widget.transaction!.notes ?? '';
+      if (widget.transaction!.notes != null) {
+        _notesController.text = widget.transaction!.notes ?? '';
+      }
+      if (widget.transaction!.discountAmount != null && widget.transaction!.discountAmount! > 0) {
+        _discountController.text = widget.transaction!.discountAmount!.toStringAsFixed(2);
+      }
       _amountController.text = widget.transaction!.amount.toStringAsFixed(2);
       
       if (_paymentMethods.contains(widget.transaction!.paymentMethod?.toLowerCase())) {
@@ -130,6 +136,18 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                 decoration: const InputDecoration(labelText: 'Valor (R\$)', border: OutlineInputBorder()),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
               ),
+              if (_status == 'paid') ...[
+                 const SizedBox(height: 16),
+                 TextField(
+                   controller: _discountController,
+                   decoration: InputDecoration(
+                     labelText: 'Desconto / Economia gerada (R\$)', 
+                     border: const OutlineInputBorder(),
+                     hintText: _type == 'expense' ? 'Desconto por pagar antecipado' : 'Desconto concedido',
+                   ),
+                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                 ),
+              ],
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -218,6 +236,8 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                 style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
                 onPressed: () {
                   final amount = double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0;
+                  final discount = double.tryParse(_discountController.text.replaceAll(',', '.')) ?? 0.0;
+
                   if (_titleController.text.trim().isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O título é obrigatório.')));
                     return;
@@ -242,6 +262,10 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                       isFixed: _isFixed,
                       recurrenceType: _recurrenceType,
                       notes: _notesController.text.isNotEmpty ? _notesController.text : null,
+                      debtId: widget.transaction?.debtId,
+                      installmentNumber: widget.transaction?.installmentNumber,
+                      totalInstallments: widget.transaction?.totalInstallments,
+                      discountAmount: discount > 0 ? discount : null,
                       createdAt: widget.transaction?.createdAt ?? DateTime.now().toIso8601String(),
                       updatedAt: DateTime.now().toIso8601String(),
                     );

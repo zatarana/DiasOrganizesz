@@ -33,19 +33,29 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
       
       double paidForThisDebt = 0;
       double overdueForThisDebt = 0;
+      double totalDiscountForThisDebt = 0;
+      int paidInstallments = 0;
+      int overdueInstallments = 0;
       
       final linkedTransactions = transactions.where((t) => t.debtId == debt.id && t.status != 'canceled');
       
       for (var t in linkedTransactions) {
         if (t.status == 'paid') {
           paidForThisDebt += t.amount;
+          paidInstallments++;
+          if (t.discountAmount != null && t.discountAmount! > 0) {
+             paidForThisDebt += t.discountAmount!; // economy counts as paid against the total limit technically, or reduces remaining
+             totalDiscountForThisDebt += t.discountAmount!;
+          }
         } else if (t.status == 'overdue') {
           overdueForThisDebt += t.amount;
+          overdueInstallments++;
         } else if (t.status == 'pending') {
           if (t.dueDate != null) {
             final due = DateTime.tryParse(t.dueDate!);
             if (due != null && due.isBefore(DateTime.now()) && due.day < DateTime.now().day) {
                overdueForThisDebt += t.amount; // just in case it wasn't flagged overdue, but logic covers it.
+               overdueInstallments++;
             }
           }
         }
@@ -58,8 +68,11 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
         'debt': debt,
         'paidAmount': paidForThisDebt,
         'overdueAmount': overdueForThisDebt,
+        'totalDiscount': totalDiscountForThisDebt,
         'remainingAmount': debt.totalAmount - paidForThisDebt,
         'installmentsCount': linkedTransactions.length,
+        'paidInstallments': paidInstallments,
+        'overdueInstallments': overdueInstallments,
       });
     }
 
@@ -103,7 +116,9 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
 
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
                   onTap: () {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => CreateDebtScreen(debt: d)));
                   },
@@ -115,36 +130,60 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(d.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            Text('R\$ ${d.totalAmount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                            Expanded(child: Text(d.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), overflow: TextOverflow.ellipsis)),
+                            Text('R\$ ${d.totalAmount.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
                           ],
                         ),
-                        if (d.creditor != null && d.creditor!.isNotEmpty)
-                          Text('Credor: ${d.creditor}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                        if (d.creditorName != null && d.creditorName!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4.0),
+                            child: Text('Credor: ${d.creditorName}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                          ),
                         const SizedBox(height: 12),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Pago: R\$ ${paid.toStringAsFixed(2)}', style: const TextStyle(color: Colors.green, fontSize: 12)),
-                            Text('Falta: R\$ ${remaining.toStringAsFixed(2)}', style: const TextStyle(color: Colors.orange, fontSize: 12)),
+                            Text('Pago: R\$ ${paid.toStringAsFixed(2)}', style: const TextStyle(color: Colors.green, fontSize: 13, fontWeight: FontWeight.bold)),
+                            Text('Falta: R\$ ${remaining > 0 ? remaining.toStringAsFixed(2) : "0.00"}', style: const TextStyle(color: Colors.orange, fontSize: 13, fontWeight: FontWeight.bold)),
                           ],
                         ),
-                        const SizedBox(height: 8),
-                        LinearProgressIndicator(
-                          value: progress.clamp(0.0, 1.0),
-                          backgroundColor: Colors.grey.shade200,
-                          color: progress == 1.0 ? Colors.green : Colors.blue,
+                        if (ds['installmentsCount'] > 0) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Parcelas: ${ds['paidInstallments']} / ${ds['installmentsCount']} pagas',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                          ),
+                        ],
+                        const SizedBox(height: 10),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: progress.clamp(0.0, 1.0),
+                            minHeight: 8,
+                            backgroundColor: Colors.grey.shade200,
+                            color: progress >= 1.0 ? Colors.green : Colors.blue,
+                          ),
                         ),
-                        if (ds['overdueAmount'] > 0)
+                        if (progress >= 1.0)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8.0),
+                            child: Text('DÍVIDA QUITADA! 🎉', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
+                          )
+                        else if (ds['overdueAmount'] > 0)
                           Padding(
                             padding: const EdgeInsets.only(top: 8.0),
                             child: Row(
                               children: [
                                 const Icon(Icons.warning, color: Colors.red, size: 16),
                                 const SizedBox(width: 4),
-                                Text('Rtraso: R\$ ${(ds['overdueAmount'] as double).toStringAsFixed(2)}', style: const TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold)),
+                                Text('Atraso: R\$ ${(ds['overdueAmount'] as double).toStringAsFixed(2)} (${ds['overdueInstallments']} parcelas)', style: const TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold)),
                               ],
                             ),
+                          ),
+                        if (ds['totalDiscount'] > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text('Economia gerada: R\$ ${(ds['totalDiscount'] as double).toStringAsFixed(2)}', style: const TextStyle(color: Colors.teal, fontSize: 12, fontWeight: FontWeight.bold)),
                           )
                       ],
                     ),

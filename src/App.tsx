@@ -105,8 +105,8 @@ export default function App() {
             <li className="flex items-start group">
               <span className="w-2 h-2 rounded-full border-2 border-indigo-200 group-hover:border-indigo-500 transition-colors mt-1.5 mr-4 flex-shrink-0" />
               <div>
-                <strong className="text-slate-800 block mb-0.5">Módulo de Dívidas Integrado</strong>
-                <span>Dívidas cadastradas isoladamente, com capacidade de prever ou projetar automaticamente diversas parcelas em Despesas (dentro do módulo Financeiro). Resumo de pagamento acompanha todas as parcelas integradas à dívida base!</span>
+                <strong className="text-slate-800 block mb-0.5">Módulo de Dívidas Integrado Avançado</strong>
+                <span>Dívidas cadastradas por valor total ou por parcelamento automático (valor e qtde parcelas), com categorias financeiras vinculadas. Lançamentos permitem inserir 'Desconto Obtido / Economia' gerando abatimentos reais no total das dívidas pagas antecipadamente na previsão consolidada de saldo.</span>
               </div>
             </li>
           </ul>

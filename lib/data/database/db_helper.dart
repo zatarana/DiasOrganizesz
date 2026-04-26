@@ -13,7 +13,7 @@ class DatabaseHelper {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDB('diasorganize_v6.db');
+    _database = await _initDB('diasorganize_v7.db');
     return _database!;
   }
 
@@ -23,14 +23,14 @@ class DatabaseHelper {
 
     return await openDatabase(
       path, 
-      version: 6, 
+      version: 7, 
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 6) {
+    if (oldVersion < 7) {
       await db.execute('''
         CREATE TABLE IF NOT EXISTS transactions (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,6 +112,14 @@ class DatabaseHelper {
         await db.execute('ALTER TABLE transactions ADD COLUMN installmentNumber INTEGER');
         await db.execute('ALTER TABLE transactions ADD COLUMN totalInstallments INTEGER');
       }
+      if (oldVersion < 7) {
+        // v7 migrations
+        await db.execute('ALTER TABLE debts ADD COLUMN categoryId INTEGER');
+        await db.execute('ALTER TABLE debts ADD COLUMN installmentsCount INTEGER');
+        await db.execute('ALTER TABLE debts ADD COLUMN installmentValue REAL');
+        await db.execute('ALTER TABLE debts ADD COLUMN firstDueDate TEXT');
+        await db.execute('ALTER TABLE transactions ADD COLUMN discountAmount REAL DEFAULT 0');
+      }
     }
   }
 
@@ -170,6 +178,7 @@ class DatabaseHelper {
         debtId INTEGER,
         installmentNumber INTEGER,
         totalInstallments INTEGER,
+        discountAmount REAL DEFAULT 0,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       )
@@ -190,11 +199,17 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE debts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
+        name TEXT NOT NULL,
         description TEXT,
         totalAmount REAL NOT NULL,
-        creditor TEXT,
+        installmentCount INTEGER,
+        installmentAmount REAL,
+        startDate TEXT,
+        firstDueDate TEXT,
+        categoryId INTEGER,
+        creditorName TEXT,
         status TEXT NOT NULL,
+        notes TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       )
