@@ -52,11 +52,11 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Título é obrigatório.')));
       return;
     }
-    
+
     final categories = ref.read(categoriesProvider);
     final catId = _categoryId ?? (categories.isNotEmpty ? categories.first.id : 1);
 
-    final t = Task(
+    final task = Task(
       id: widget.task?.id,
       title: _titleController.text,
       description: _descController.text.isEmpty ? null : _descController.text,
@@ -73,34 +73,34 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
     );
 
     if (widget.task == null) {
-      final insertedTask = await ref.read(tasksProvider.notifier).addTaskWithReturn(t);
+      final insertedTask = await ref.read(tasksProvider.notifier).addTaskWithReturn(task);
       _scheduleReminderIfNeeded(insertedTask);
     } else {
-      await ref.read(tasksProvider.notifier).updateTask(t);
-      _scheduleReminderIfNeeded(t);
+      await ref.read(tasksProvider.notifier).updateTask(task);
+      _scheduleReminderIfNeeded(task);
     }
     Navigator.pop(context);
   }
 
-  void _scheduleReminderIfNeeded(Task t) {
-    if (t.reminderEnabled && t.time != null && t.date != null) {
+  void _scheduleReminderIfNeeded(Task task) {
+    if (task.reminderEnabled && task.time != null && task.date != null) {
       try {
-        final parts = t.time!.split(':');
-        final currentDt = DateTime.parse(t.date!);
+        final parts = task.time!.split(':');
+        final currentDt = DateTime.parse(task.date!);
         final reminderTime = DateTime(currentDt.year, currentDt.month, currentDt.day, int.parse(parts[0]), int.parse(parts[1]));
         if (reminderTime.isAfter(DateTime.now())) {
-           NotificationService().scheduleNotification(
-             id: t.id ?? 0,
-             title: 'Lembrete: ${t.title}',
-             body: 'Sua tarefa está programada para agora!',
-             scheduledDate: reminderTime,
-           );
+          NotificationService().scheduleNotification(
+            id: task.id ?? 0,
+            title: 'Lembrete: ${task.title}',
+            body: 'Sua tarefa está programada para agora!',
+            scheduledDate: reminderTime,
+          );
         }
       } catch (e) {
         debugPrint('Erro ao agendar notificacao: $e');
       }
     } else {
-      NotificationService().cancelNotification(t.id ?? 0);
+      NotificationService().cancelNotification(task.id ?? 0);
     }
   }
 
@@ -145,15 +145,13 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                     subtitle: const Text('Data'),
                     trailing: const Icon(Icons.calendar_today),
                     onTap: () async {
-                      final d = await showDatePicker(
+                      final selected = await showDatePicker(
                         context: context,
                         initialDate: DateTime.parse(_date),
                         firstDate: DateTime(2000),
                         lastDate: DateTime(2100),
                       );
-                      if (d != null) {
-                        setState(() => _date = DateFormat('yyyy-MM-dd').format(d));
-                      }
+                      if (selected != null) setState(() => _date = DateFormat('yyyy-MM-dd').format(selected));
                     },
                   ),
                 ),
@@ -165,9 +163,9 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                     subtitle: const Text('Horário (Opcional)'),
                     trailing: const Icon(Icons.access_time),
                     onTap: () async {
-                      final t = await showTimePicker(context: context, initialTime: TimeOfDay.now());
-                      if (t != null) {
-                        setState(() => _time = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}');
+                      final selected = await showTimePicker(context: context, initialTime: TimeOfDay.now());
+                      if (selected != null) {
+                        setState(() => _time = '${selected.hour.toString().padLeft(2, '0')}:${selected.minute.toString().padLeft(2, '0')}');
                       }
                     },
                   ),
@@ -184,37 +182,37 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
             const SizedBox(height: 16),
             Consumer(
               builder: (context, ref, child) {
-                 final categories = ref.watch(categoriesProvider);
-                 if (categories.isEmpty) return const SizedBox.shrink();
-                 return DropdownButtonFormField<int>(
-                   value: _categoryId ?? categories.first.id,
-                   decoration: const InputDecoration(labelText: 'Categoria', border: OutlineInputBorder()),
-                   items: categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
-                   onChanged: (val) {
-                     if (val != null) setState(() => _categoryId = val);
-                   },
-                 );
-              }
+                final categories = ref.watch(categoriesProvider);
+                if (categories.isEmpty) return const SizedBox.shrink();
+                return DropdownButtonFormField<int>(
+                  initialValue: _categoryId ?? categories.first.id,
+                  decoration: const InputDecoration(labelText: 'Categoria', border: OutlineInputBorder()),
+                  items: categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+                  onChanged: (val) {
+                    if (val != null) setState(() => _categoryId = val);
+                  },
+                );
+              },
             ),
             const SizedBox(height: 16),
             Consumer(
               builder: (context, ref, child) {
-                 final projects = ref.watch(projectsProvider);
-                 return DropdownButtonFormField<int>(
-                   value: _projectId,
-                   decoration: const InputDecoration(labelText: 'Vincular ao Projeto (Opcional)', border: OutlineInputBorder()),
-                   items: [
-                     const DropdownMenuItem<int>(value: null, child: Text('Nenhum projeto')),
-                     ...projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))),
-                   ],
-                   onChanged: (val) {
-                     setState(() {
-                       _projectId = val;
-                       _projectStepId = null;
-                     });
-                   },
-                 );
-              }
+                final projects = ref.watch(projectsProvider);
+                return DropdownButtonFormField<int>(
+                  initialValue: _projectId,
+                  decoration: const InputDecoration(labelText: 'Vincular ao Projeto (Opcional)', border: OutlineInputBorder()),
+                  items: [
+                    const DropdownMenuItem<int>(value: null, child: Text('Nenhum projeto')),
+                    ...projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))),
+                  ],
+                  onChanged: (val) {
+                    setState(() {
+                      _projectId = val;
+                      _projectStepId = null;
+                    });
+                  },
+                );
+              },
             ),
             if (_projectId != null) ...[
               const SizedBox(height: 16),
@@ -222,7 +220,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                 builder: (context, ref, child) {
                   final steps = ref.watch(projectStepsProvider(_projectId!));
                   return DropdownButtonFormField<int>(
-                    value: _projectStepId,
+                    initialValue: _projectStepId,
                     decoration: const InputDecoration(labelText: 'Etapa do Projeto (Opcional)', border: OutlineInputBorder()),
                     items: [
                       const DropdownMenuItem<int>(value: null, child: Text('Sem etapa específica')),
@@ -235,7 +233,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
             ],
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: _priority,
+              initialValue: _priority,
               decoration: const InputDecoration(labelText: 'Prioridade', border: OutlineInputBorder()),
               items: const [
                 DropdownMenuItem(value: 'baixa', child: Text('Baixa')),
