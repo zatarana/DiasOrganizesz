@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+
+import '../../data/database/finance_planning_store.dart';
 import '../../domain/providers.dart';
 import '../../data/models/financial_category_model.dart';
 import '../../data/models/transaction_model.dart';
@@ -28,24 +30,17 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     super.dispose();
   }
 
-  void _nextMonth() {
-    setState(() => _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1));
-  }
+  void _nextMonth() => setState(() => _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1));
+  void _prevMonth() => setState(() => _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1, 1));
 
-  void _prevMonth() {
-    setState(() => _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1, 1));
-  }
+  bool _isSameMonth(DateTime? date, DateTime month) => date != null && date.month == month.month && date.year == month.year;
+  DateTime? _expectedDate(FinancialTransaction transaction) => DateTime.tryParse(transaction.dueDate ?? transaction.transactionDate);
+  DateTime? _paidDate(FinancialTransaction transaction) => transaction.paidDate == null ? null : DateTime.tryParse(transaction.paidDate!);
 
-  bool _isSameMonth(DateTime? date, DateTime month) {
-    return date != null && date.month == month.month && date.year == month.year;
-  }
-
-  DateTime? _expectedDate(FinancialTransaction transaction) {
-    return DateTime.tryParse(transaction.dueDate ?? transaction.transactionDate);
-  }
-
-  DateTime? _paidDate(FinancialTransaction transaction) {
-    return transaction.paidDate == null ? null : DateTime.tryParse(transaction.paidDate!);
+  Future<double> _loadRealAccountBalance() async {
+    final db = await ref.read(dbProvider).database;
+    final accounts = await FinancePlanningStore.getAccounts(db);
+    return accounts.where((account) => !account.isArchived).fold<double>(0, (sum, account) => sum + account.currentBalance);
   }
 
   FinancialCategory? _findCategory(List<FinancialCategory> categories, int? categoryId) {
@@ -78,28 +73,23 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     if (!existing.isFixed) return false;
     final existingExpected = _expectedDate(existing);
     if (!_isSameMonth(existingExpected, targetExpectedDate)) return false;
-    return existing.title == source.title &&
-        existing.type == source.type &&
-        existing.categoryId == source.categoryId &&
-        existing.amount.toStringAsFixed(2) == source.amount.toStringAsFixed(2);
+    return existing.title == source.title && existing.type == source.type && existing.categoryId == source.categoryId && existing.amount.toStringAsFixed(2) == source.amount.toStringAsFixed(2);
   }
 
   Future<void> _generateFixedTransactions() async {
     final allTransactions = ref.read(transactionsProvider);
+    final accounts = await FinancePlanningStore.getAccounts(await ref.read(dbProvider).database);
+    final activeAccountIds = accounts.where((account) => !account.isArchived && account.id != null).map((account) => account.id!).toSet();
     final previousMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1, 1);
 
     final previousFixed = allTransactions.where((transaction) {
       final expected = _expectedDate(transaction);
-      return expected != null &&
-          expected.month == previousMonth.month &&
-          expected.year == previousMonth.year &&
-          transaction.isFixed &&
-          transaction.recurrenceType == 'monthly' &&
-          transaction.status != 'canceled';
+      return expected != null && expected.month == previousMonth.month && expected.year == previousMonth.year && transaction.isFixed && transaction.recurrenceType == 'monthly' && transaction.status != 'canceled';
     }).toList();
 
     int added = 0;
     int skipped = 0;
+    int accountCleared = 0;
 
     for (final source in previousFixed) {
       final oldTransactionDate = DateTime.tryParse(source.transactionDate) ?? previousMonth;
@@ -118,6 +108,9 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
         continue;
       }
 
+      final copiedAccountId = source.accountId != null && activeAccountIds.contains(source.accountId) ? source.accountId : null;
+      if (source.accountId != null && copiedAccountId == null) accountCleared++;
+
       final now = DateTime.now().toIso8601String();
       final newTransaction = FinancialTransaction(
         title: source.title,
@@ -128,7 +121,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
         dueDate: newDueDate?.toIso8601String(),
         paidDate: null,
         categoryId: source.categoryId,
-        accountId: source.accountId,
+        accountId: copiedAccountId,
         paymentMethod: source.paymentMethod,
         status: 'pending',
         reminderEnabled: source.reminderEnabled,
@@ -144,7 +137,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
 
     if (!mounted) return;
     if (added > 0) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$added lançamento(s) fixo(s) gerado(s). ${skipped > 0 ? '$skipped duplicado(s) ignorado(s).' : ''}')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$added lançamento(s) fixo(s) gerado(s). ${skipped > 0 ? '$skipped duplicado(s) ignorado(s).' : ''}${accountCleared > 0 ? ' $accountCleared conta(s) arquivada(s) removida(s).' : ''}')));
     } else if (skipped > 0) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Nenhum lançamento novo. $skipped recorrente(s) já existiam neste mês.')));
     } else {
@@ -175,6 +168,28 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       updatedAt: DateTime.now().toIso8601String(),
     );
     await ref.read(transactionsProvider.notifier).updateTransaction(updated);
+    setState(() {});
+  }
+
+  double _paidIncomeForMonth(List<FinancialTransaction> transactions, DateTime month) {
+    return transactions.where((t) => t.status == 'paid' && t.type == 'income' && (_isSameMonth(_paidDate(t), month) || (_paidDate(t) == null && _isSameMonth(_expectedDate(t), month)))).fold<double>(0, (sum, t) => sum + t.amount);
+  }
+
+  double _paidExpenseForMonth(List<FinancialTransaction> transactions, DateTime month) {
+    return transactions.where((t) => t.status == 'paid' && t.type == 'expense' && (_isSameMonth(_paidDate(t), month) || (_paidDate(t) == null && _isSameMonth(_expectedDate(t), month)))).fold<double>(0, (sum, t) => sum + t.amount);
+  }
+
+  Map<int?, double> _paidExpensesByCategory(List<FinancialTransaction> transactions, DateTime month) {
+    final result = <int?, double>{};
+    for (final transaction in transactions) {
+      if (transaction.status != 'paid' || transaction.type != 'expense') continue;
+      final paid = _paidDate(transaction);
+      final expected = _expectedDate(transaction);
+      final inMonth = _isSameMonth(paid, month) || (paid == null && _isSameMonth(expected, month));
+      if (!inMonth) continue;
+      result[transaction.categoryId] = (result[transaction.categoryId] ?? 0) + transaction.amount;
+    }
+    return result;
   }
 
   @override
@@ -185,14 +200,12 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     final filtered = allTransactions.where((transaction) {
       if (transaction.status == 'canceled' && _filterStatus != 'all') return false;
       if (!_belongsToSelectedMonth(transaction)) return false;
-
       if (_filterType != 'all' && transaction.type != _filterType) return false;
       if (_filterStatus == 'paid' && transaction.status != 'paid') return false;
       if (_filterStatus == 'pending' && transaction.status != 'pending') return false;
       if (_filterStatus == 'overdue' && transaction.status != 'overdue') return false;
       if (_filterCategory != null && transaction.categoryId != _filterCategory) return false;
       if (_searchController.text.trim().isNotEmpty && !transaction.title.toLowerCase().contains(_searchController.text.trim().toLowerCase())) return false;
-
       return true;
     }).toList()
       ..sort((a, b) {
@@ -237,220 +250,158 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     }
 
     final saldoPrevisto = receitasPrevistas - despesasPrevistas;
-    final saldoRealizado = receitasPagas - despesasPagas;
+    final resultadoRealizado = receitasPagas - despesasPagas;
+    final previousMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1, 1);
+    final previousIncome = _paidIncomeForMonth(allTransactions, previousMonth);
+    final previousExpense = _paidExpenseForMonth(allTransactions, previousMonth);
+    final previousResult = previousIncome - previousExpense;
+    final resultDiff = resultadoRealizado - previousResult;
+    final expenseDiff = despesasPagas - previousExpense;
+    final paidExpenseRatio = despesasPrevistas <= 0 ? 0.0 : (despesasPagas / despesasPrevistas).clamp(0.0, 1.0).toDouble();
+    final categoryTotals = _paidExpensesByCategory(allTransactions, _selectedMonth);
+    final sortedCategories = categoryTotals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final topCategoryEntry = sortedCategories.isEmpty ? null : sortedCategories.first;
+    final topCategory = topCategoryEntry == null ? null : _findCategory(allCategories, topCategoryEntry.key);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Finanças'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.savings_outlined),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinancePlanningScreen())),
-            tooltip: 'Contas, orçamentos e metas',
-          ),
-          IconButton(
-            icon: const Icon(Icons.auto_mode),
-            onPressed: _generateFixedTransactions,
-            tooltip: 'Gerar Recorrentes do Mês Anterior',
-          ),
-          IconButton(
-            icon: const Icon(Icons.category),
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceCategoriesScreen()));
-            },
-            tooltip: 'Categorias',
-          ),
+          IconButton(icon: const Icon(Icons.savings_outlined), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinancePlanningScreen())), tooltip: 'Contas, orçamentos e metas'),
+          IconButton(icon: const Icon(Icons.auto_mode), onPressed: _generateFixedTransactions, tooltip: 'Gerar Recorrentes do Mês Anterior'),
+          IconButton(icon: const Icon(Icons.category), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceCategoriesScreen())), tooltip: 'Categorias'),
         ],
       ),
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinancePlanningScreen())),
-                    icon: const Icon(Icons.savings_outlined),
-                    label: const Text('Contas, Orçamentos e Metas'),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: FutureBuilder<double>(
+        future: _loadRealAccountBalance(),
+        builder: (context, accountSnapshot) {
+          final realAccountBalance = accountSnapshot.data ?? 0;
+          return CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      IconButton(icon: const Icon(Icons.chevron_left), onPressed: _prevMonth),
-                      Text(DateFormat('MMMM yyyy', 'pt_BR').format(_selectedMonth).toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      IconButton(icon: const Icon(Icons.chevron_right), onPressed: _nextMonth),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  _buildSummaryCard(saldoPrevisto, saldoRealizado, receitasPrevistas, despesasPrevistas, qtdeDespesasVencidas),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Buscar movimentação...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                    ),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                  const SizedBox(height: 16),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _buildFilterChip('Todos', 'all', _filterType, (v) => setState(() => _filterType = v)),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('Receitas', 'income', _filterType, (v) => setState(() => _filterType = v)),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('Despesas', 'expense', _filterType, (v) => setState(() => _filterType = v)),
-                        const SizedBox(width: 16),
-                        _buildFilterChip('Tudo', 'all', _filterStatus, (v) => setState(() => _filterStatus = v)),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('Pago', 'paid', _filterStatus, (v) => setState(() => _filterStatus = v)),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('Pendente', 'pending', _filterStatus, (v) => setState(() => _filterStatus = v)),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('Atrasado', 'overdue', _filterStatus, (v) => setState(() => _filterStatus = v)),
-                      ],
-                    ),
-                  ),
-                  if (allCategories.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
+                      ElevatedButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinancePlanningScreen())), icon: const Icon(Icons.savings_outlined), label: const Text('Contas, Orçamentos e Metas')),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          ChoiceChip(
-                            label: const Text('Todas as Categorias'),
-                            selected: _filterCategory == null,
-                            onSelected: (_) => setState(() => _filterCategory = null),
-                          ),
-                          const SizedBox(width: 8),
-                          ...allCategories.map((c) => Padding(
-                                padding: const EdgeInsets.only(right: 8.0),
-                                child: ChoiceChip(
-                                  label: Text(c.name),
-                                  selected: _filterCategory == c.id,
-                                  onSelected: (selected) => setState(() => _filterCategory = selected ? c.id : null),
-                                ),
-                              )),
+                          IconButton(icon: const Icon(Icons.chevron_left), onPressed: _prevMonth),
+                          Text(DateFormat('MMMM yyyy', 'pt_BR').format(_selectedMonth).toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          IconButton(icon: const Icon(Icons.chevron_right), onPressed: _nextMonth),
                         ],
                       ),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  const Text('Movimentações', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ],
-              ),
-            ),
-          ),
-          filtered.isEmpty
-              ? SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32.0),
-                    child: Center(
-                      child: Text(
-                        'Nenhuma movimentação para o período e filtros atuais.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey.shade600),
+                      const SizedBox(height: 8),
+                      _buildSummaryCard(realAccountBalance, saldoPrevisto, resultadoRealizado, receitasPrevistas, despesasPrevistas, qtdeDespesasVencidas),
+                      const SizedBox(height: 16),
+                      _buildAnalysisSection(
+                        previousResult: previousResult,
+                        resultDiff: resultDiff,
+                        expenseDiff: expenseDiff,
+                        paidExpenseRatio: paidExpenseRatio,
+                        topCategoryName: topCategory?.name ?? (topCategoryEntry == null ? 'Sem gastos pagos' : 'Sem categoria'),
+                        topCategoryAmount: topCategoryEntry?.value ?? 0,
+                        paidExpenses: despesasPagas,
+                        paidIncomes: receitasPagas,
                       ),
-                    ),
-                  ),
-                )
-              : SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final transaction = filtered[index];
-                      final isPaid = transaction.status == 'paid';
-                      final isCanceled = transaction.status == 'canceled';
-                      final cat = _findCategory(allCategories, transaction.categoryId);
-                      final color = _safeCategoryColor(cat, transaction);
-                      final expected = _expectedDate(transaction);
-
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: isCanceled ? Colors.grey.withOpacity(0.2) : color.withOpacity(0.2),
-                          child: Icon(
-                            transaction.type == 'income' ? Icons.arrow_upward : Icons.arrow_downward,
-                            color: isCanceled ? Colors.grey : color,
-                          ),
-                        ),
-                        title: Text(
-                          transaction.title,
-                          style: TextStyle(
-                            decoration: isCanceled ? TextDecoration.lineThrough : null,
-                            color: isCanceled ? Colors.grey : Colors.black87,
-                          ),
-                        ),
-                        subtitle: Text('${expected == null ? 'Sem data' : 'Venc./Prev.: ${DateFormat('dd/MM/yyyy').format(expected)}'}${cat != null ? ' • ${cat.name}' : ''}'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(hintText: 'Buscar movimentação...', prefixIcon: const Icon(Icons.search), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), contentPadding: const EdgeInsets.symmetric(horizontal: 16)),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 16),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
                           children: [
-                            Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  'R\$ ${transaction.amount.toStringAsFixed(2)}',
-                                  style: TextStyle(
-                                    color: isCanceled ? Colors.grey : (transaction.type == 'income' ? Colors.green : Colors.red),
-                                    fontWeight: FontWeight.bold,
-                                    decoration: isCanceled ? TextDecoration.lineThrough : null,
-                                  ),
-                                ),
-                                Text(
-                                  isCanceled ? 'Cancelado' : (transaction.status == 'paid' ? 'Efetuado' : (transaction.status == 'overdue' ? 'Atrasado' : 'Pendente')),
-                                  style: TextStyle(
-                                    color: isCanceled ? Colors.grey : (transaction.status == 'paid' ? Colors.green : (transaction.status == 'overdue' ? Colors.red : Colors.orange)),
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            Checkbox(
-                              value: isPaid,
-                              onChanged: isCanceled
-                                  ? null
-                                  : (val) {
-                                      if (val != null) _togglePaid(transaction, val);
-                                    },
-                            ),
+                            _buildFilterChip('Todos', 'all', _filterType, (v) => setState(() => _filterType = v)),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('Receitas', 'income', _filterType, (v) => setState(() => _filterType = v)),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('Despesas', 'expense', _filterType, (v) => setState(() => _filterType = v)),
+                            const SizedBox(width: 16),
+                            _buildFilterChip('Tudo', 'all', _filterStatus, (v) => setState(() => _filterStatus = v)),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('Pago', 'paid', _filterStatus, (v) => setState(() => _filterStatus = v)),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('Pendente', 'pending', _filterStatus, (v) => setState(() => _filterStatus = v)),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('Atrasado', 'overdue', _filterStatus, (v) => setState(() => _filterStatus = v)),
                           ],
                         ),
-                        onTap: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTransactionScreen(transaction: transaction)));
-                        },
-                      );
-                    },
-                    childCount: filtered.length,
+                      ),
+                      if (allCategories.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              ChoiceChip(label: const Text('Todas as Categorias'), selected: _filterCategory == null, onSelected: (_) => setState(() => _filterCategory = null)),
+                              const SizedBox(width: 8),
+                              ...allCategories.map((c) => Padding(padding: const EdgeInsets.only(right: 8.0), child: ChoiceChip(label: Text(c.name), selected: _filterCategory == c.id, onSelected: (selected) => setState(() => _filterCategory = selected ? c.id : null)))),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      const Text('Movimentações', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    ],
                   ),
                 ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateTransactionScreen()));
+              ),
+              filtered.isEmpty
+                  ? SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(32.0), child: Center(child: Text('Nenhuma movimentação para o período e filtros atuais.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600)))))
+                  : SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final transaction = filtered[index];
+                          final isPaid = transaction.status == 'paid';
+                          final isCanceled = transaction.status == 'canceled';
+                          final cat = _findCategory(allCategories, transaction.categoryId);
+                          final color = _safeCategoryColor(cat, transaction);
+                          final expected = _expectedDate(transaction);
+
+                          return ListTile(
+                            leading: CircleAvatar(backgroundColor: isCanceled ? Colors.grey.withOpacity(0.2) : color.withOpacity(0.2), child: Icon(transaction.type == 'income' ? Icons.arrow_upward : Icons.arrow_downward, color: isCanceled ? Colors.grey : color)),
+                            title: Text(transaction.title, style: TextStyle(decoration: isCanceled ? TextDecoration.lineThrough : null, color: isCanceled ? Colors.grey : Colors.black87)),
+                            subtitle: Text('${expected == null ? 'Sem data' : 'Venc./Prev.: ${DateFormat('dd/MM/yyyy').format(expected)}'}${cat != null ? ' • ${cat.name}' : ''}'),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text('R\$ ${transaction.amount.toStringAsFixed(2)}', style: TextStyle(color: isCanceled ? Colors.grey : (transaction.type == 'income' ? Colors.green : Colors.red), fontWeight: FontWeight.bold, decoration: isCanceled ? TextDecoration.lineThrough : null)),
+                                    Text(isCanceled ? 'Cancelado' : (transaction.status == 'paid' ? 'Efetuado' : (transaction.status == 'overdue' ? 'Atrasado' : 'Pendente')), style: TextStyle(color: isCanceled ? Colors.grey : (transaction.status == 'paid' ? Colors.green : (transaction.status == 'overdue' ? Colors.red : Colors.orange)), fontSize: 12)),
+                                  ],
+                                ),
+                                Checkbox(value: isPaid, onChanged: isCanceled ? null : (val) { if (val != null) _togglePaid(transaction, val); }),
+                              ],
+                            ),
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTransactionScreen(transaction: transaction))),
+                          );
+                        },
+                        childCount: filtered.length,
+                      ),
+                    ),
+            ],
+          );
         },
-        child: const Icon(Icons.add),
       ),
+      floatingActionButton: FloatingActionButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateTransactionScreen())), child: const Icon(Icons.add)),
     );
   }
 
   Widget _buildFilterChip(String label, String value, String groupValue, Function(String) onSelect) {
-    return ChoiceChip(
-      label: Text(label),
-      selected: groupValue == value,
-      onSelected: (selected) {
-        if (selected) onSelect(value);
-      },
-    );
+    return ChoiceChip(label: Text(label), selected: groupValue == value, onSelected: (selected) { if (selected) onSelect(value); });
   }
 
-  Widget _buildSummaryCard(double saldoPrevisto, double saldoRealizado, double receitas, double despesas, int despesasVencidas) {
+  Widget _buildSummaryCard(double realBalance, double saldoPrevisto, double resultadoRealizado, double receitas, double despesas, int despesasVencidas) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -461,34 +412,19 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Saldo Realizado', style: TextStyle(fontSize: 14, color: Colors.grey)),
-                    Text(
-                      'R\$ ${saldoRealizado.toStringAsFixed(2)}',
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: saldoRealizado >= 0 ? Colors.green : Colors.red),
-                    ),
-                  ],
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    const Text('Saldo Previsto', style: TextStyle(fontSize: 14, color: Colors.grey)),
-                    Text(
-                      'R\$ ${saldoPrevisto.toStringAsFixed(2)}',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: saldoPrevisto >= 0 ? Colors.green : Colors.red),
-                    ),
-                  ],
-                ),
+                Expanded(child: _summaryValue('Saldo real em contas', realBalance, realBalance >= 0 ? Colors.green : Colors.red, big: true)),
+                const SizedBox(width: 12),
+                Expanded(child: _summaryValue('Resultado do mês', resultadoRealizado, resultadoRealizado >= 0 ? Colors.green : Colors.red)),
               ],
             ),
             const SizedBox(height: 16),
             const Divider(),
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              spacing: 16,
+              runSpacing: 12,
               children: [
+                _buildStat('Previsto mês', saldoPrevisto, saldoPrevisto >= 0 ? Colors.green : Colors.red),
                 _buildStat('Receitas previstas', receitas, Colors.green),
                 _buildStat('Despesas previstas', despesas, Colors.red),
               ],
@@ -498,13 +434,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
-                child: Row(
-                  children: [
-                    const Icon(Icons.warning, color: Colors.red, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text('$despesasVencidas despesa(s) vencida(s)!', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
-                  ],
-                ),
+                child: Row(children: [const Icon(Icons.warning, color: Colors.red, size: 20), const SizedBox(width: 8), Expanded(child: Text('$despesasVencidas despesa(s) vencida(s)!', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)))]),
               )
             ]
           ],
@@ -513,14 +443,75 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     );
   }
 
-  Widget _buildStat(String label, double amount, Color color) {
+  Widget _summaryValue(String label, double amount, Color color, {bool big = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey), maxLines: 2, overflow: TextOverflow.ellipsis),
         const SizedBox(height: 4),
-        Text('R\$ ${amount.toStringAsFixed(2)}', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+        Text('R\$ ${amount.toStringAsFixed(2)}', style: TextStyle(fontSize: big ? 21 : 17, fontWeight: FontWeight.bold, color: color), maxLines: 1, overflow: TextOverflow.ellipsis),
       ],
+    );
+  }
+
+  Widget _buildAnalysisSection({required double previousResult, required double resultDiff, required double expenseDiff, required double paidExpenseRatio, required String topCategoryName, required double topCategoryAmount, required double paidExpenses, required double paidIncomes}) {
+    final economyRate = paidIncomes <= 0 ? 0.0 : ((paidIncomes - paidExpenses) / paidIncomes) * 100;
+    final resultLabel = resultDiff >= 0 ? 'Melhor que mês anterior' : 'Pior que mês anterior';
+    final expenseLabel = expenseDiff <= 0 ? 'Gastos menores' : 'Gastos maiores';
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Análise de gastos', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            LinearProgressIndicator(value: paidExpenseRatio),
+            const SizedBox(height: 6),
+            Text('Despesas pagas representam ${(paidExpenseRatio * 100).toStringAsFixed(0)}% das despesas previstas.'),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _analysisChip(Icons.compare_arrows, '$resultLabel: R\$ ${resultDiff.abs().toStringAsFixed(2)}', resultDiff >= 0 ? Colors.green : Colors.red),
+                _analysisChip(Icons.trending_up, '$expenseLabel: R\$ ${expenseDiff.abs().toStringAsFixed(2)}', expenseDiff <= 0 ? Colors.green : Colors.orange),
+                _analysisChip(Icons.pie_chart, 'Maior gasto: $topCategoryName — R\$ ${topCategoryAmount.toStringAsFixed(2)}', Colors.blue),
+                _analysisChip(Icons.savings, 'Taxa de sobra: ${economyRate.toStringAsFixed(1)}%', economyRate >= 0 ? Colors.green : Colors.red),
+              ],
+            ),
+            if (previousResult != 0) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Resultado mês anterior: R\$ ${previousResult.toStringAsFixed(2)}', style: TextStyle(color: Colors.grey.shade700))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _analysisChip(IconData icon, String label, Color color) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 320),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 6),
+          Flexible(child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontWeight: FontWeight.w600))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStat(String label, double amount, Color color) {
+    return SizedBox(
+      width: 140,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey), maxLines: 1, overflow: TextOverflow.ellipsis),
+        const SizedBox(height: 4),
+        Text('R\$ ${amount.toStringAsFixed(2)}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color), maxLines: 1, overflow: TextOverflow.ellipsis),
+      ]),
     );
   }
 }
