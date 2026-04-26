@@ -18,6 +18,11 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
   final _descriptionController = TextEditingController();
   final _notesController = TextEditingController();
 
+  static const _statusOptions = ['active', 'paused', 'completed', 'canceled'];
+  static const _priorityOptions = ['baixa', 'media', 'alta'];
+  static const _colorOptions = ['0xFF2196F3', '0xFF4CAF50', '0xFFFF9800', '0xFFE91E63', '0xFF9C27B0'];
+  static const _iconOptions = ['rocket_launch', 'work', 'school', 'build', 'lightbulb'];
+
   DateTime? _startDate;
   DateTime? _endDate;
   String _status = 'active';
@@ -26,6 +31,10 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
   String _icon = 'rocket_launch';
   bool _reminderEnabled = false;
 
+  String _safeOption(String value, List<String> options, String fallback) {
+    return options.contains(value) ? value : fallback;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -33,10 +42,10 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
       _nameController.text = widget.project!.name;
       _descriptionController.text = widget.project!.description ?? '';
       _notesController.text = widget.project!.notes ?? '';
-      _status = widget.project!.status;
-      _priority = widget.project!.priority;
-      _color = widget.project!.color;
-      _icon = widget.project!.icon;
+      _status = _safeOption(widget.project!.status, _statusOptions, 'active');
+      _priority = _safeOption(widget.project!.priority, _priorityOptions, 'media');
+      _color = _safeOption(widget.project!.color, _colorOptions, '0xFF2196F3');
+      _icon = _safeOption(widget.project!.icon, _iconOptions, 'rocket_launch');
       _reminderEnabled = widget.project!.reminderEnabled;
       if (widget.project!.startDate != null) _startDate = DateTime.tryParse(widget.project!.startDate!);
       if (widget.project!.endDate != null) _endDate = DateTime.tryParse(widget.project!.endDate!);
@@ -197,7 +206,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
             SwitchListTile(
               title: const Text('Ativar lembrete de prazo'),
               subtitle: const Text('Lembrete local para o prazo final do projeto'),
-              value: _reminderEnabled,
+              value: _endDate != null && _reminderEnabled,
               onChanged: _endDate != null ? (v) => setState(() => _reminderEnabled = v) : null,
             ),
             const SizedBox(height: 32),
@@ -227,7 +236,9 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
       return;
     }
 
+    final wasCompleted = widget.project?.status == 'completed';
     final completedAt = _status == 'completed' ? (widget.project?.completedAt ?? DateTime.now().toIso8601String()) : null;
+    final shouldRecalculateProgress = widget.project != null && wasCompleted && _status != 'completed';
     final project = Project(
       id: widget.project?.id,
       name: title,
@@ -237,7 +248,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
       status: _status,
       notes: notes.isNotEmpty ? notes : null,
       completedAt: completedAt,
-      progress: _status == 'completed' ? 100 : (widget.project?.progress ?? 0),
+      progress: _status == 'completed' ? 100 : (shouldRecalculateProgress ? 0 : (widget.project?.progress ?? 0)),
       reminderEnabled: _endDate != null && _reminderEnabled,
       priority: _priority,
       color: _color,
@@ -250,6 +261,9 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
       await ref.read(projectsProvider.notifier).addProject(project);
     } else {
       await ref.read(projectsProvider.notifier).updateProject(project);
+      if (shouldRecalculateProgress && project.id != null) {
+        await ref.read(projectsProvider.notifier).recalculateProgress(project.id!);
+      }
     }
 
     if (mounted) Navigator.pop(context);
