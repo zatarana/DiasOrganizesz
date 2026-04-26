@@ -20,6 +20,12 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   int? _filterCategory;
   final TextEditingController _searchController = TextEditingController();
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   void _nextMonth() {
     setState(() => _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1));
   }
@@ -28,61 +34,124 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     setState(() => _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1, 1));
   }
 
-  void _generateFixedTransactions() {
+  bool _isSameMonth(DateTime? date, DateTime month) {
+    return date != null && date.month == month.month && date.year == month.year;
+  }
+
+  DateTime? _expectedDate(FinancialTransaction transaction) {
+    return DateTime.tryParse(transaction.dueDate ?? transaction.transactionDate);
+  }
+
+  DateTime? _paidDate(FinancialTransaction transaction) {
+    return transaction.paidDate == null ? null : DateTime.tryParse(transaction.paidDate!);
+  }
+
+  DateTime _safeMonthlyDate(DateTime original, DateTime targetMonth) {
+    final daysInMonth = DateUtils.getDaysInMonth(targetMonth.year, targetMonth.month);
+    final day = original.day > daysInMonth ? daysInMonth : original.day;
+    return DateTime(targetMonth.year, targetMonth.month, day, original.hour, original.minute, original.second);
+  }
+
+  bool _belongsToSelectedMonth(FinancialTransaction transaction) {
+    final expected = _expectedDate(transaction);
+    final paid = _paidDate(transaction);
+    return _isSameMonth(expected, _selectedMonth) || _isSameMonth(paid, _selectedMonth);
+  }
+
+  bool _looksLikeDuplicateFixedTransaction(FinancialTransaction existing, FinancialTransaction source, DateTime targetExpectedDate) {
+    if (existing.status == 'canceled') return false;
+    if (!existing.isFixed) return false;
+    final existingExpected = _expectedDate(existing);
+    if (!_isSameMonth(existingExpected, targetExpectedDate)) return false;
+    return existing.title == source.title &&
+        existing.type == source.type &&
+        existing.categoryId == source.categoryId &&
+        existing.amount.toStringAsFixed(2) == source.amount.toStringAsFixed(2);
+  }
+
+  Future<void> _generateFixedTransactions() async {
     final allTransactions = ref.read(transactionsProvider);
     final previousMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1, 1);
 
-    final previousFixed = allTransactions.where((t) {
-      final d = DateTime.tryParse(t.transactionDate);
-      return d != null && d.month == previousMonth.month && d.year == previousMonth.year && t.isFixed && t.status != 'canceled';
+    final previousFixed = allTransactions.where((transaction) {
+      final expected = _expectedDate(transaction);
+      return expected != null &&
+          expected.month == previousMonth.month &&
+          expected.year == previousMonth.year &&
+          transaction.isFixed &&
+          transaction.recurrenceType == 'monthly' &&
+          transaction.status != 'canceled';
     }).toList();
 
     int added = 0;
-    for (final t in previousFixed) {
-      final oldDate = DateTime.tryParse(t.transactionDate) ?? DateTime.now();
-      var targetDay = oldDate.day;
-      final daysInMonth = DateUtils.getDaysInMonth(_selectedMonth.year, _selectedMonth.month);
-      if (targetDay > daysInMonth) targetDay = daysInMonth;
+    int skipped = 0;
 
-      final newDate = DateTime(_selectedMonth.year, _selectedMonth.month, targetDay);
+    for (final source in previousFixed) {
+      final oldTransactionDate = DateTime.tryParse(source.transactionDate) ?? previousMonth;
+      final newTransactionDate = _safeMonthlyDate(oldTransactionDate, _selectedMonth);
 
       DateTime? newDueDate;
-      if (t.dueDate != null) {
-        final oldDue = DateTime.tryParse(t.dueDate!);
-        if (oldDue != null) {
-          var targetDueDay = oldDue.day;
-          final daysInMonthDue = DateUtils.getDaysInMonth(_selectedMonth.year, _selectedMonth.month);
-          if (targetDueDay > daysInMonthDue) targetDueDay = daysInMonthDue;
-          newDueDate = DateTime(_selectedMonth.year, _selectedMonth.month, targetDueDay);
-        }
+      if (source.dueDate != null) {
+        final oldDue = DateTime.tryParse(source.dueDate!);
+        if (oldDue != null) newDueDate = _safeMonthlyDate(oldDue, _selectedMonth);
       }
 
+      final expectedTarget = newDueDate ?? newTransactionDate;
+      final duplicated = allTransactions.any((existing) => _looksLikeDuplicateFixedTransaction(existing, source, expectedTarget));
+      if (duplicated) {
+        skipped++;
+        continue;
+      }
+
+      final now = DateTime.now().toIso8601String();
       final newTransaction = FinancialTransaction(
-        title: t.title,
-        description: t.description,
-        amount: t.amount,
-        type: t.type,
-        transactionDate: newDate.toIso8601String(),
+        title: source.title,
+        description: source.description,
+        amount: source.amount,
+        type: source.type,
+        transactionDate: newTransactionDate.toIso8601String(),
         dueDate: newDueDate?.toIso8601String(),
         paidDate: null,
-        categoryId: t.categoryId,
-        paymentMethod: t.paymentMethod,
+        categoryId: source.categoryId,
+        paymentMethod: source.paymentMethod,
         status: 'pending',
+        reminderEnabled: source.reminderEnabled,
         isFixed: true,
         recurrenceType: 'monthly',
-        notes: t.notes,
-        createdAt: DateTime.now().toIso8601String(),
-        updatedAt: DateTime.now().toIso8601String(),
+        notes: source.notes,
+        createdAt: now,
+        updatedAt: now,
       );
-      ref.read(transactionsProvider.notifier).addTransaction(newTransaction);
+      await ref.read(transactionsProvider.notifier).addTransaction(newTransaction);
       added++;
     }
 
+    if (!mounted) return;
     if (added > 0) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$added lançamentos fixos gerados para este mês!')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$added lançamento(s) fixo(s) gerado(s). ${skipped > 0 ? '$skipped duplicado(s) ignorado(s).' : ''}')));
+    } else if (skipped > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Nenhum lançamento novo. $skipped recorrente(s) já existiam neste mês.')));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nenhum lançamento fixo encontrado no mês anterior.')));
     }
+  }
+
+  String _statusAfterUnpay(FinancialTransaction transaction) {
+    final expected = _expectedDate(transaction);
+    if (expected == null) return 'pending';
+    final due = DateTime(expected.year, expected.month, expected.day);
+    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    return due.isBefore(today) ? 'overdue' : 'pending';
+  }
+
+  Future<void> _togglePaid(FinancialTransaction transaction, bool isPaid) async {
+    final updated = transaction.copyWith(
+      status: isPaid ? 'paid' : _statusAfterUnpay(transaction),
+      paidDate: isPaid ? DateTime.now().toIso8601String() : null,
+      clearPaidDate: !isPaid,
+      updatedAt: DateTime.now().toIso8601String(),
+    );
+    await ref.read(transactionsProvider.notifier).updateTransaction(updated);
   }
 
   @override
@@ -90,59 +159,61 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     final allTransactions = ref.watch(transactionsProvider);
     final allCategories = ref.watch(financialCategoriesProvider);
 
-    final filtered = allTransactions.where((t) {
-      final tDate = DateTime.tryParse(t.transactionDate);
-      if (tDate == null) return false;
-      if (tDate.month != _selectedMonth.month || tDate.year != _selectedMonth.year) return false;
+    final filtered = allTransactions.where((transaction) {
+      if (transaction.status == 'canceled' && _filterStatus != 'all') return false;
+      if (!_belongsToSelectedMonth(transaction)) return false;
 
-      if (_filterType != 'all' && t.type != _filterType) return false;
-      if (_filterStatus == 'paid' && t.status != 'paid') return false;
-      if (_filterStatus == 'pending' && t.status != 'pending') return false;
-      if (_filterStatus == 'overdue' && t.status != 'overdue') return false;
-      if (_filterCategory != null && t.categoryId != _filterCategory) return false;
-      if (_searchController.text.isNotEmpty && !t.title.toLowerCase().contains(_searchController.text.toLowerCase())) return false;
+      if (_filterType != 'all' && transaction.type != _filterType) return false;
+      if (_filterStatus == 'paid' && transaction.status != 'paid') return false;
+      if (_filterStatus == 'pending' && transaction.status != 'pending') return false;
+      if (_filterStatus == 'overdue' && transaction.status != 'overdue') return false;
+      if (_filterCategory != null && transaction.categoryId != _filterCategory) return false;
+      if (_searchController.text.isNotEmpty && !transaction.title.toLowerCase().contains(_searchController.text.toLowerCase())) return false;
 
       return true;
-    }).toList();
+    }).toList()
+      ..sort((a, b) {
+        final ad = _expectedDate(a) ?? DateTime(2100);
+        final bd = _expectedDate(b) ?? DateTime(2100);
+        return ad.compareTo(bd);
+      });
 
+    double receitasPrevistas = 0;
+    double despesasPrevistas = 0;
     double receitasPagas = 0;
-    double receitasPendentes = 0;
     double despesasPagas = 0;
-    double despesasPendentes = 0;
     int qtdeDespesasVencidas = 0;
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    for (final t in allTransactions) {
-      final tDate = DateTime.tryParse(t.transactionDate);
-      if (tDate != null && tDate.month == _selectedMonth.month && tDate.year == _selectedMonth.year) {
-        if (t.status == 'canceled') continue;
+    for (final transaction in allTransactions) {
+      if (transaction.status == 'canceled') continue;
+      final expected = _expectedDate(transaction);
+      final paid = _paidDate(transaction);
+      final expectedInMonth = _isSameMonth(expected, _selectedMonth);
+      final paidInMonth = transaction.status == 'paid' && (_isSameMonth(paid, _selectedMonth) || (paid == null && expectedInMonth));
 
-        if (t.type == 'income') {
-          if (t.status == 'paid') {
-            receitasPagas += t.amount;
-          } else {
-            receitasPendentes += t.amount;
-          }
-        } else if (t.type == 'expense') {
-          if (t.status == 'paid') {
-            despesasPagas += t.amount;
-          } else {
-            despesasPendentes += t.amount;
-            final dueDateToUse = t.dueDate != null ? DateTime.tryParse(t.dueDate!) : tDate;
-            if (dueDateToUse != null) {
-              final dueDateMidnight = DateTime(dueDateToUse.year, dueDateToUse.month, dueDateToUse.day);
-              if (t.status == 'pending' && dueDateMidnight.isBefore(today)) qtdeDespesasVencidas++;
-            }
-          }
+      if (expectedInMonth) {
+        if (transaction.type == 'income') {
+          receitasPrevistas += transaction.amount;
+        } else if (transaction.type == 'expense') {
+          despesasPrevistas += transaction.amount;
+          final dueDate = expected == null ? null : DateTime(expected.year, expected.month, expected.day);
+          if (transaction.status == 'pending' && dueDate != null && dueDate.isBefore(today)) qtdeDespesasVencidas++;
+        }
+      }
+
+      if (paidInMonth) {
+        if (transaction.type == 'income') {
+          receitasPagas += transaction.amount;
+        } else if (transaction.type == 'expense') {
+          despesasPagas += transaction.amount;
         }
       }
     }
 
-    final totalReceitas = receitasPagas + receitasPendentes;
-    final totalDespesas = despesasPagas + despesasPendentes;
-    final saldoPrevisto = totalReceitas - totalDespesas;
+    final saldoPrevisto = receitasPrevistas - despesasPrevistas;
     final saldoRealizado = receitasPagas - despesasPagas;
 
     return Scaffold(
@@ -180,7 +251,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  _buildSummaryCard(saldoPrevisto, saldoRealizado, totalReceitas, totalDespesas, qtdeDespesasVencidas),
+                  _buildSummaryCard(saldoPrevisto, saldoRealizado, receitasPrevistas, despesasPrevistas, qtdeDespesasVencidas),
                   const SizedBox(height: 16),
                   TextField(
                     controller: _searchController,
@@ -264,6 +335,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                       final isCanceled = transaction.status == 'canceled';
                       final cat = allCategories.where((c) => c.id == transaction.categoryId).firstOrNull;
                       final color = cat != null ? Color(int.parse(cat.color)) : (transaction.type == 'income' ? Colors.green : Colors.red);
+                      final expected = _expectedDate(transaction);
 
                       return ListTile(
                         leading: CircleAvatar(
@@ -280,7 +352,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                             color: isCanceled ? Colors.grey : Colors.black87,
                           ),
                         ),
-                        subtitle: Text('${DateFormat('dd/MM/yyyy').format(DateTime.parse(transaction.transactionDate))}${cat != null ? ' • ${cat.name}' : ''}'),
+                        subtitle: Text('${expected == null ? 'Sem data' : 'Venc./Prev.: ${DateFormat('dd/MM/yyyy').format(expected)}'}${cat != null ? ' • ${cat.name}' : ''}'),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -310,16 +382,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                               onChanged: isCanceled
                                   ? null
                                   : (val) {
-                                      if (val != null) {
-                                        final newStatus = val ? 'paid' : 'pending';
-                                        ref.read(transactionsProvider.notifier).updateTransaction(
-                                              transaction.copyWith(
-                                                status: newStatus,
-                                                paidDate: val ? DateTime.now().toIso8601String() : null,
-                                                updatedAt: DateTime.now().toIso8601String(),
-                                              ),
-                                            );
-                                      }
+                                      if (val != null) _togglePaid(transaction, val);
                                     },
                             ),
                           ],
@@ -392,8 +455,8 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildStat('Receitas', receitas, Colors.green),
-                _buildStat('Despesas', despesas, Colors.red),
+                _buildStat('Receitas previstas', receitas, Colors.green),
+                _buildStat('Despesas previstas', despesas, Colors.red),
               ],
             ),
             if (despesasVencidas > 0) ...[
