@@ -380,7 +380,6 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
                       dueDate: dueDate?.toIso8601String(),
                       reminderEnabled: dueDate != null && remind,
                     );
-                controller.dispose();
                 if (ctx.mounted) Navigator.pop(ctx);
               },
               child: const Text('Adicionar'),
