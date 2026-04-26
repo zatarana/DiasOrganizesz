@@ -8,6 +8,7 @@ class FinancialTransaction {
   final String? dueDate;
   final String? paidDate;
   final int? categoryId;
+  final int? accountId;
   final String? paymentMethod;
   final String status; // 'pending', 'paid', 'overdue', 'canceled'
   final bool reminderEnabled;
@@ -31,6 +32,7 @@ class FinancialTransaction {
     this.dueDate,
     this.paidDate,
     this.categoryId,
+    this.accountId,
     this.paymentMethod,
     required this.status,
     this.reminderEnabled = false,
@@ -58,6 +60,8 @@ class FinancialTransaction {
     bool clearPaidDate = false,
     int? categoryId,
     bool clearCategoryId = false,
+    int? accountId,
+    bool clearAccountId = false,
     String? paymentMethod,
     bool clearPaymentMethod = false,
     String? status,
@@ -87,6 +91,7 @@ class FinancialTransaction {
       dueDate: clearDueDate ? null : (dueDate ?? this.dueDate),
       paidDate: clearPaidDate ? null : (paidDate ?? this.paidDate),
       categoryId: clearCategoryId ? null : (categoryId ?? this.categoryId),
+      accountId: clearAccountId ? null : (accountId ?? this.accountId),
       paymentMethod: clearPaymentMethod ? null : (paymentMethod ?? this.paymentMethod),
       status: status ?? this.status,
       reminderEnabled: reminderEnabled ?? this.reminderEnabled,
@@ -113,6 +118,7 @@ class FinancialTransaction {
       'dueDate': dueDate,
       'paidDate': paidDate,
       'categoryId': categoryId,
+      'accountId': accountId,
       'paymentMethod': paymentMethod,
       'status': status,
       'reminderEnabled': reminderEnabled ? 1 : 0,
@@ -153,6 +159,7 @@ class FinancialTransaction {
       dueDate: map['dueDate'],
       paidDate: map['paidDate'],
       categoryId: map['categoryId'],
+      accountId: map['accountId'],
       paymentMethod: map['paymentMethod'],
       status: mappedStatus,
       reminderEnabled: map['reminderEnabled'] == 1,
