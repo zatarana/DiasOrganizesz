@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../domain/providers.dart';
+import '../../data/models/financial_category_model.dart';
 import '../../data/models/transaction_model.dart';
 import 'create_transaction_screen.dart';
 import 'finance_categories_screen.dart';
@@ -44,6 +45,19 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
 
   DateTime? _paidDate(FinancialTransaction transaction) {
     return transaction.paidDate == null ? null : DateTime.tryParse(transaction.paidDate!);
+  }
+
+  FinancialCategory? _findCategory(List<FinancialCategory> categories, int? categoryId) {
+    if (categoryId == null) return null;
+    for (final category in categories) {
+      if (category.id == categoryId) return category;
+    }
+    return null;
+  }
+
+  Color _safeCategoryColor(FinancialCategory? category, FinancialTransaction transaction) {
+    if (category == null) return transaction.type == 'income' ? Colors.green : Colors.red;
+    return Color(int.tryParse(category.color) ?? (transaction.type == 'income' ? 0xFF4CAF50 : 0xFFF44336));
   }
 
   DateTime _safeMonthlyDate(DateTime original, DateTime targetMonth) {
@@ -168,7 +182,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       if (_filterStatus == 'pending' && transaction.status != 'pending') return false;
       if (_filterStatus == 'overdue' && transaction.status != 'overdue') return false;
       if (_filterCategory != null && transaction.categoryId != _filterCategory) return false;
-      if (_searchController.text.isNotEmpty && !transaction.title.toLowerCase().contains(_searchController.text.toLowerCase())) return false;
+      if (_searchController.text.trim().isNotEmpty && !transaction.title.toLowerCase().contains(_searchController.text.trim().toLowerCase())) return false;
 
       return true;
     }).toList()
@@ -200,7 +214,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
         } else if (transaction.type == 'expense') {
           despesasPrevistas += transaction.amount;
           final dueDate = expected == null ? null : DateTime(expected.year, expected.month, expected.day);
-          if (transaction.status == 'pending' && dueDate != null && dueDate.isBefore(today)) qtdeDespesasVencidas++;
+          if ((transaction.status == 'pending' || transaction.status == 'overdue') && dueDate != null && dueDate.isBefore(today)) qtdeDespesasVencidas++;
         }
       }
 
@@ -333,8 +347,8 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                       final transaction = filtered[index];
                       final isPaid = transaction.status == 'paid';
                       final isCanceled = transaction.status == 'canceled';
-                      final cat = allCategories.where((c) => c.id == transaction.categoryId).firstOrNull;
-                      final color = cat != null ? Color(int.parse(cat.color)) : (transaction.type == 'income' ? Colors.green : Colors.red);
+                      final cat = _findCategory(allCategories, transaction.categoryId);
+                      final color = _safeCategoryColor(cat, transaction);
                       final expected = _expectedDate(transaction);
 
                       return ListTile(
