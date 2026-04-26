@@ -6,6 +6,7 @@ import '../../data/models/financial_category_model.dart';
 import '../../data/models/transaction_model.dart';
 import 'create_transaction_screen.dart';
 import 'finance_categories_screen.dart';
+import 'finance_planning_screen.dart';
 
 class FinanceScreen extends ConsumerStatefulWidget {
   const FinanceScreen({super.key});
@@ -235,6 +236,11 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
         title: const Text('Finanças'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.savings_outlined),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinancePlanningScreen())),
+            tooltip: 'Contas, orçamentos e metas',
+          ),
+          IconButton(
             icon: const Icon(Icons.auto_mode),
             onPressed: _generateFixedTransactions,
             tooltip: 'Gerar Recorrentes do Mês Anterior',
@@ -256,6 +262,12 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  ElevatedButton.icon(
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinancePlanningScreen())),
+                    icon: const Icon(Icons.savings_outlined),
+                    label: const Text('Contas, Orçamentos e Metas'),
+                  ),
+                  const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
