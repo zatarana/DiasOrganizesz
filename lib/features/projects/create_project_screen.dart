@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../domain/providers.dart';
 import '../../data/models/project_model.dart';
-import '../../data/database/db_helper.dart';
-
 class CreateProjectScreen extends ConsumerStatefulWidget {
   final Project? project;
 
@@ -17,10 +15,96 @@ class CreateProjectScreen extends ConsumerStatefulWidget {
 class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
-  
-  DateTime? _startDate;
-  DateTime? _endDate;
-  String _status = 'active';
+  final _notesController = TextEditingController();
+  String _priority = 'media';
+  String _color = '0xFF2196F3';
+  String _icon = 'rocket_launch';
+  bool _reminderEnabled = false;
+      _notesController.text = widget.project!.notes ?? '';
+      _priority = widget.project!.priority;
+      _color = widget.project!.color;
+      _icon = widget.project!.icon;
+      _reminderEnabled = widget.project!.reminderEnabled;
+              decoration: const InputDecoration(labelText: 'Título *', border: OutlineInputBorder()),
+            TextField(
+              controller: _notesController,
+              decoration: const InputDecoration(labelText: 'Observações (Opcional)', border: OutlineInputBorder()),
+              maxLines: 3,
+            ),
+            const SizedBox(height: 16),
+               decoration: const InputDecoration(labelText: 'Status *', border: OutlineInputBorder()),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+               decoration: const InputDecoration(labelText: 'Prioridade *', border: OutlineInputBorder()),
+               value: _priority,
+               items: const [
+                 DropdownMenuItem(value: 'baixa', child: Text('Baixa')),
+                 DropdownMenuItem(value: 'media', child: Text('Média')),
+                 DropdownMenuItem(value: 'alta', child: Text('Alta')),
+               ],
+               onChanged: (val) {
+                 if (val != null) setState(() => _priority = val);
+               },
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              decoration: const InputDecoration(labelText: 'Cor', border: OutlineInputBorder()),
+              value: _color,
+              items: const [
+                DropdownMenuItem(value: '0xFF2196F3', child: Text('Azul')),
+                DropdownMenuItem(value: '0xFF4CAF50', child: Text('Verde')),
+                DropdownMenuItem(value: '0xFFFF9800', child: Text('Laranja')),
+                DropdownMenuItem(value: '0xFFE91E63', child: Text('Rosa')),
+                DropdownMenuItem(value: '0xFF9C27B0', child: Text('Roxo')),
+              ],
+              onChanged: (val) {
+                if (val != null) setState(() => _color = val);
+              },
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              decoration: const InputDecoration(labelText: 'Ícone', border: OutlineInputBorder()),
+              value: _icon,
+              items: const [
+                DropdownMenuItem(value: 'rocket_launch', child: Text('Foguete')),
+                DropdownMenuItem(value: 'work', child: Text('Trabalho')),
+                DropdownMenuItem(value: 'school', child: Text('Estudo')),
+                DropdownMenuItem(value: 'build', child: Text('Construção')),
+                DropdownMenuItem(value: 'lightbulb', child: Text('Ideia')),
+              ],
+              onChanged: (val) {
+                if (val != null) setState(() => _icon = val);
+              },
+            ),
+            SwitchListTile(
+              title: const Text('Ativar lembrete de prazo'),
+              subtitle: const Text('Lembrete local para o prazo final do projeto'),
+              value: _reminderEnabled,
+              onChanged: _endDate != null ? (v) => setState(() => _reminderEnabled = v) : null,
+            ),
+     final title = _nameController.text.trim();
+     if (title.isEmpty) {
+       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Título é obrigatório.')));
+       return;
+     }
+
+     if (_startDate != null && _endDate != null && _endDate!.isBefore(_startDate!)) {
+       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Prazo final não pode ser anterior à data de início.')));
+     final String? completedAt = _status == 'completed'
+        ? (widget.project?.completedAt ?? DateTime.now().toIso8601String())
+        : null;
+
+        name: title,
+        notes: _notesController.text.isNotEmpty ? _notesController.text : null,
+        completedAt: completedAt,
+        progress: _status == 'completed' ? 100 : (widget.project?.progress ?? 0),
+        reminderEnabled: _reminderEnabled,
+        priority: _priority,
+        color: _color,
+        icon: _icon,
+  String _color = '0xFF2196F3';
+  String _icon = 'rocket_launch';
+  bool _reminderEnabled = false;
 
   @override
   void initState() {
@@ -28,7 +112,12 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
     if (widget.project != null) {
       _nameController.text = widget.project!.name;
       _descriptionController.text = widget.project!.description ?? '';
+      _notesController.text = widget.project!.notes ?? '';
       _status = widget.project!.status;
+      _priority = widget.project!.priority;
+      _color = widget.project!.color;
+      _icon = widget.project!.icon;
+      _reminderEnabled = widget.project!.reminderEnabled;
       if (widget.project!.startDate != null) {
         _startDate = DateTime.parse(widget.project!.startDate!);
       }
@@ -53,12 +142,18 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
           children: [
             TextField(
               controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Nome do Projeto', border: OutlineInputBorder()),
+              decoration: const InputDecoration(labelText: 'Título *', border: OutlineInputBorder()),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _descriptionController,
               decoration: const InputDecoration(labelText: 'Descrição (Opcional)', border: OutlineInputBorder()),
+              maxLines: 3,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _notesController,
+              decoration: const InputDecoration(labelText: 'Observações (Opcional)', border: OutlineInputBorder()),
               maxLines: 3,
             ),
             const SizedBox(height: 16),
@@ -99,7 +194,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-               decoration: const InputDecoration(labelText: 'Status', border: OutlineInputBorder()),
+               decoration: const InputDecoration(labelText: 'Status *', border: OutlineInputBorder()),
                value: _status,
                items: const [
                  DropdownMenuItem(value: 'active', child: Text('Ativo')),
@@ -110,6 +205,55 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                onChanged: (val) {
                  if (val != null) setState(() => _status = val);
                },
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+               decoration: const InputDecoration(labelText: 'Prioridade *', border: OutlineInputBorder()),
+               value: _priority,
+               items: const [
+                 DropdownMenuItem(value: 'baixa', child: Text('Baixa')),
+                 DropdownMenuItem(value: 'media', child: Text('Média')),
+                 DropdownMenuItem(value: 'alta', child: Text('Alta')),
+               ],
+               onChanged: (val) {
+                 if (val != null) setState(() => _priority = val);
+               },
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              decoration: const InputDecoration(labelText: 'Cor', border: OutlineInputBorder()),
+              value: _color,
+              items: const [
+                DropdownMenuItem(value: '0xFF2196F3', child: Text('Azul')),
+                DropdownMenuItem(value: '0xFF4CAF50', child: Text('Verde')),
+                DropdownMenuItem(value: '0xFFFF9800', child: Text('Laranja')),
+                DropdownMenuItem(value: '0xFFE91E63', child: Text('Rosa')),
+                DropdownMenuItem(value: '0xFF9C27B0', child: Text('Roxo')),
+              ],
+              onChanged: (val) {
+                if (val != null) setState(() => _color = val);
+              },
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              decoration: const InputDecoration(labelText: 'Ícone', border: OutlineInputBorder()),
+              value: _icon,
+              items: const [
+                DropdownMenuItem(value: 'rocket_launch', child: Text('Foguete')),
+                DropdownMenuItem(value: 'work', child: Text('Trabalho')),
+                DropdownMenuItem(value: 'school', child: Text('Estudo')),
+                DropdownMenuItem(value: 'build', child: Text('Construção')),
+                DropdownMenuItem(value: 'lightbulb', child: Text('Ideia')),
+              ],
+              onChanged: (val) {
+                if (val != null) setState(() => _icon = val);
+              },
+            ),
+            SwitchListTile(
+              title: const Text('Ativar lembrete de prazo'),
+              subtitle: const Text('Lembrete local para o prazo final do projeto'),
+              value: _reminderEnabled,
+              onChanged: _endDate != null ? (v) => setState(() => _reminderEnabled = v) : null,
             ),
             const SizedBox(height: 32),
             ElevatedButton(
@@ -124,19 +268,35 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
   }
 
   void _saveProject() {
-     final name = _nameController.text.trim();
-     if (name.isEmpty) {
-       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Por favor, informe o nome do projeto.')));
+     final title = _nameController.text.trim();
+     if (title.isEmpty) {
+       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Título é obrigatório.')));
        return;
      }
 
+     if (_startDate != null && _endDate != null && _endDate!.isBefore(_startDate!)) {
+       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Prazo final não pode ser anterior à data de início.')));
+       return;
+     }
+
+     final String? completedAt = _status == 'completed'
+        ? (widget.project?.completedAt ?? DateTime.now().toIso8601String())
+        : null;
+
      final project = Project(
         id: widget.project?.id,
-        name: name,
+        name: title,
         description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
         startDate: _startDate?.toIso8601String(),
         endDate: _endDate?.toIso8601String(),
         status: _status,
+        notes: _notesController.text.isNotEmpty ? _notesController.text : null,
+        completedAt: completedAt,
+        progress: _status == 'completed' ? 100 : (widget.project?.progress ?? 0),
+        reminderEnabled: _reminderEnabled,
+        priority: _priority,
+        color: _color,
+        icon: _icon,
         createdAt: widget.project?.createdAt ?? DateTime.now().toIso8601String(),
         updatedAt: DateTime.now().toIso8601String(),
      );

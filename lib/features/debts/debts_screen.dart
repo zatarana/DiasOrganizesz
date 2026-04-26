@@ -20,6 +20,10 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
   Widget build(BuildContext context) {
     final debts = ref.watch(debtsProvider);
     final transactions = ref.watch(transactionsProvider);
+    final appSettings = ref.watch(appSettingsProvider);
+    final showPaidDebts = (appSettings[AppSettingKeys.debtsShowPaid] ?? 'true') == 'true';
+    final appSettings = ref.watch(appSettingsProvider);
+    final showPaidDebts = (appSettings[AppSettingKeys.debtsShowPaid] ?? 'true') == 'true';
 
     double totalDividas = 0;
     double totalPago = 0;
@@ -74,7 +78,11 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
                if (nextDueDate == null) nextDueDate = due;
             } else {
                if (nextDueDate == null) nextDueDate = due;
-            }
+
+       if (!showPaidDebts && (d.status == 'paid' || isPaidOut) && _currentFilter != 'quitadas') {
+         return false;
+       }
+                         if (showPaidDebts) _buildFilterChip('Quitadas', 'quitadas'),
           }
         }
       }
@@ -101,6 +109,10 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
        final Debt d = ds['debt'];
        final remaining = ds['remainingAmount'] as double;
        final isPaidOut = remaining <= 0;
+
+       if (!showPaidDebts && (d.status == 'paid' || isPaidOut) && _currentFilter != 'quitadas') {
+         return false;
+       }
        
        if (_currentFilter == 'todas') return true;
        if (_currentFilter == 'ativas') return d.status == 'active' && !isPaidOut;
@@ -133,7 +145,7 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
                          _buildFilterChip('Todas', 'todas'),
                          _buildFilterChip('Ativas', 'ativas'),
                          _buildFilterChip('Atrasadas', 'atrasadas'),
-                         _buildFilterChip('Quitadas', 'quitadas'),
+                         if (showPaidDebts) _buildFilterChip('Quitadas', 'quitadas'),
                          _buildFilterChip('Pausadas', 'pausadas'),
                        ],
                      ),

@@ -10,6 +10,13 @@ class FinancialTransaction {
   final int? categoryId;
   final String? paymentMethod;
   final String status; // 'pending', 'paid', 'overdue', 'canceled'
+  final bool reminderEnabled;
+    this.reminderEnabled = false,
+    bool? reminderEnabled,
+      reminderEnabled: reminderEnabled ?? this.reminderEnabled,
+      'reminderEnabled': reminderEnabled ? 1 : 0,
+      reminderEnabled: map['reminderEnabled'] == 1,
+  final bool reminderEnabled;
   final bool isFixed;
   final String recurrenceType; // 'none', 'monthly'
   final String? notes;
@@ -32,6 +39,7 @@ class FinancialTransaction {
     this.categoryId,
     this.paymentMethod,
     required this.status,
+    this.reminderEnabled = false,
     required this.isFixed,
     required this.recurrenceType,
     this.notes,
@@ -55,6 +63,7 @@ class FinancialTransaction {
     int? categoryId,
     String? paymentMethod,
     String? status,
+    bool? reminderEnabled,
     bool? isFixed,
     String? recurrenceType,
     String? notes,
@@ -77,6 +86,7 @@ class FinancialTransaction {
       categoryId: categoryId ?? this.categoryId,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       status: status ?? this.status,
+      reminderEnabled: reminderEnabled ?? this.reminderEnabled,
       isFixed: isFixed ?? this.isFixed,
       recurrenceType: recurrenceType ?? this.recurrenceType,
       notes: notes ?? this.notes,
@@ -102,6 +112,7 @@ class FinancialTransaction {
       'categoryId': categoryId,
       'paymentMethod': paymentMethod,
       'status': status,
+      'reminderEnabled': reminderEnabled ? 1 : 0,
       'isFixed': isFixed ? 1 : 0,
       'recurrenceType': recurrenceType,
       'notes': notes,
@@ -137,6 +148,7 @@ class FinancialTransaction {
       categoryId: map['categoryId'],
       paymentMethod: map['paymentMethod'],
       status: mappedStatus,
+      reminderEnabled: map['reminderEnabled'] == 1,
       isFixed: map['isFixed'] == 1,
       recurrenceType: map['recurrenceType'] ?? 'none',
       notes: map['notes'],

@@ -44,6 +44,14 @@ class NotificationService {
     );
   }
 
+  int transactionReminderId(int transactionId) => 100000 + transactionId;
+  int projectReminderId(int projectId) => 200000 + projectId;
+  int projectStepReminderId(int stepId) => 300000 + stepId;
+
+  int transactionReminderId(int transactionId) => 100000 + transactionId;
+  int projectReminderId(int projectId) => 200000 + projectId;
+  int projectStepReminderId(int stepId) => 300000 + stepId;
+
   Future<void> cancelNotification(int id) async {
     await flutterLocalNotificationsPlugin.cancel(id);
   }

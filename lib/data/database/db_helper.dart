@@ -4,8 +4,10 @@ import '../models/task_model.dart';
 import '../models/category_model.dart';
 import '../models/setting_model.dart';
 import '../models/transaction_model.dart';
+import '../models/project_step_model.dart';
+    _database = await _initDB('diasorganize_v14.db');
 
-class DatabaseHelper {
+      version: 14,
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
 
@@ -13,7 +15,7 @@ class DatabaseHelper {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDB('diasorganize_v7.db');
+    _database = await _initDB('diasorganize_v14.db');
     return _database!;
   }
 
@@ -23,7 +25,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path, 
-      version: 8, 
+      version: 14,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -110,7 +112,93 @@ class DatabaseHelper {
         ''');
         await db.execute('ALTER TABLE transactions ADD COLUMN debtId INTEGER');
         await db.execute('ALTER TABLE transactions ADD COLUMN installmentNumber INTEGER');
-        await db.execute('ALTER TABLE transactions ADD COLUMN totalInstallments INTEGER');
+    if (oldVersion < 9) {
+      await db.execute('ALTER TABLE projects ADD COLUMN priority TEXT NOT NULL DEFAULT "media"');
+      await db.execute('ALTER TABLE projects ADD COLUMN color TEXT NOT NULL DEFAULT "0xFF2196F3"');
+      await db.execute('ALTER TABLE projects ADD COLUMN icon TEXT NOT NULL DEFAULT "rocket_launch"');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS project_stages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          projectId INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          stageOrder INTEGER NOT NULL DEFAULT 0,
+          createdAt TEXT NOT NULL
+        )
+      ''');
+    }
+    if (oldVersion < 10) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS project_steps (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          projectId INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT,
+          orderIndex INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'pending',
+          dueDate TEXT,
+          completedAt TEXT,
+          createdAt TEXT NOT NULL,
+          updatedAt TEXT NOT NULL
+        )
+      ''');
+      try {
+        final oldRows = await db.query('project_stages', orderBy: 'stageOrder ASC, id ASC');
+        for (final row in oldRows) {
+          await db.insert('project_steps', {
+            'projectId': row['projectId'],
+            'title': row['title'],
+            'description': null,
+            'orderIndex': row['stageOrder'] ?? 0,
+            'status': 'pending',
+            'dueDate': null,
+            'completedAt': null,
+            'createdAt': row['createdAt'],
+            'updatedAt': row['createdAt'],
+          });
+        }
+      } catch (_) {}
+    }
+    if (oldVersion < 11) {
+      await db.execute('ALTER TABLE tasks ADD COLUMN projectStepId INTEGER');
+    }
+    if (oldVersion < 12) {
+      await db.execute('ALTER TABLE projects ADD COLUMN notes TEXT');
+      await db.execute('ALTER TABLE projects ADD COLUMN completedAt TEXT');
+    }
+    if (oldVersion < 13) {
+      await db.execute('ALTER TABLE projects ADD COLUMN progress REAL NOT NULL DEFAULT 0');
+    }
+    if (oldVersion < 14) {
+      await db.execute('ALTER TABLE transactions ADD COLUMN reminderEnabled INTEGER NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE projects ADD COLUMN reminderEnabled INTEGER NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE project_steps ADD COLUMN reminderEnabled INTEGER NOT NULL DEFAULT 0');
+    }
+        projectStepId INTEGER,
+        FOREIGN KEY (projectId) REFERENCES projects (id),
+        FOREIGN KEY (projectStepId) REFERENCES project_steps (id)
+        notes TEXT,
+        completedAt TEXT,
+        progress REAL NOT NULL DEFAULT 0,
+        reminderEnabled INTEGER NOT NULL DEFAULT 0,
+        priority TEXT NOT NULL DEFAULT 'media',
+        color TEXT NOT NULL DEFAULT '0xFF2196F3',
+        icon TEXT NOT NULL DEFAULT 'rocket_launch',
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE project_steps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        projectId INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        orderIndex INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'pending',
+        dueDate TEXT,
+        completedAt TEXT,
+        reminderEnabled INTEGER NOT NULL DEFAULT 0,
+        reminderEnabled INTEGER NOT NULL DEFAULT 0,
       }
       if (oldVersion < 7) {
         // v7 migrations
@@ -136,6 +224,67 @@ class DatabaseHelper {
         await db.execute('ALTER TABLE tasks ADD COLUMN projectId INTEGER');
       }
     }
+    if (oldVersion < 9) {
+      await db.execute('ALTER TABLE projects ADD COLUMN priority TEXT NOT NULL DEFAULT "media"');
+      await db.execute('ALTER TABLE projects ADD COLUMN color TEXT NOT NULL DEFAULT "0xFF2196F3"');
+      await db.execute('ALTER TABLE projects ADD COLUMN icon TEXT NOT NULL DEFAULT "rocket_launch"');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS project_stages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          projectId INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          stageOrder INTEGER NOT NULL DEFAULT 0,
+          createdAt TEXT NOT NULL
+        )
+      ''');
+    }
+    if (oldVersion < 10) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS project_steps (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          projectId INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT,
+          orderIndex INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'pending',
+          dueDate TEXT,
+          completedAt TEXT,
+          createdAt TEXT NOT NULL,
+          updatedAt TEXT NOT NULL
+        )
+      ''');
+      try {
+        final oldRows = await db.query('project_stages', orderBy: 'stageOrder ASC, id ASC');
+        for (final row in oldRows) {
+          await db.insert('project_steps', {
+            'projectId': row['projectId'],
+            'title': row['title'],
+            'description': null,
+            'orderIndex': row['stageOrder'] ?? 0,
+            'status': 'pending',
+            'dueDate': null,
+            'completedAt': null,
+            'createdAt': row['createdAt'],
+            'updatedAt': row['createdAt'],
+          });
+        }
+      } catch (_) {}
+    }
+    if (oldVersion < 11) {
+      await db.execute('ALTER TABLE tasks ADD COLUMN projectStepId INTEGER');
+    }
+    if (oldVersion < 12) {
+      await db.execute('ALTER TABLE projects ADD COLUMN notes TEXT');
+      await db.execute('ALTER TABLE projects ADD COLUMN completedAt TEXT');
+    }
+    if (oldVersion < 13) {
+      await db.execute('ALTER TABLE projects ADD COLUMN progress REAL NOT NULL DEFAULT 0');
+    }
+    if (oldVersion < 14) {
+      await db.execute('ALTER TABLE transactions ADD COLUMN reminderEnabled INTEGER NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE projects ADD COLUMN reminderEnabled INTEGER NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE project_steps ADD COLUMN reminderEnabled INTEGER NOT NULL DEFAULT 0');
+    }
   }
 
   Future _createDB(Database db, int version) async {
@@ -156,6 +305,7 @@ class DatabaseHelper {
         description TEXT,
         categoryId INTEGER,
         projectId INTEGER,
+        projectStepId INTEGER,
         priority TEXT NOT NULL,
         date TEXT,
         time TEXT,
@@ -164,7 +314,8 @@ class DatabaseHelper {
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         FOREIGN KEY (categoryId) REFERENCES categories (id),
-        FOREIGN KEY (projectId) REFERENCES projects (id)
+        FOREIGN KEY (projectId) REFERENCES projects (id),
+        FOREIGN KEY (projectStepId) REFERENCES project_steps (id)
       )
     ''');
 
@@ -176,6 +327,28 @@ class DatabaseHelper {
         startDate TEXT,
         endDate TEXT,
         status TEXT NOT NULL,
+        notes TEXT,
+        completedAt TEXT,
+        progress REAL NOT NULL DEFAULT 0,
+        reminderEnabled INTEGER NOT NULL DEFAULT 0,
+        priority TEXT NOT NULL DEFAULT 'media',
+        color TEXT NOT NULL DEFAULT '0xFF2196F3',
+        icon TEXT NOT NULL DEFAULT 'rocket_launch',
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE project_steps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        projectId INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        orderIndex INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'pending',
+        dueDate TEXT,
+        completedAt TEXT,
+        reminderEnabled INTEGER NOT NULL DEFAULT 0,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       )
@@ -202,6 +375,7 @@ class DatabaseHelper {
         categoryId INTEGER,
         paymentMethod TEXT,
         status TEXT NOT NULL,
+        reminderEnabled INTEGER NOT NULL DEFAULT 0,
         isFixed INTEGER NOT NULL DEFAULT 0,
         recurrenceType TEXT NOT NULL,
         notes TEXT,
@@ -309,9 +483,53 @@ class DatabaseHelper {
   Future<void> saveSetting(AppSetting setting) async {
     final db = await instance.database;
     final existing = await getSetting(setting.key);
-    if (existing != null) {
-      await db.update('settings', setting.toMap(), where: 'key = ?', whereArgs: [setting.key]);
+  Future<int> deleteProject(int id, {bool deleteLinkedTasks = false}) async {
+    if (deleteLinkedTasks) {
+      await db.delete('tasks', where: 'projectId = ?', whereArgs: [id]);
     } else {
+      await db.update('tasks', {'projectId': null, 'projectStepId': null}, where: 'projectId = ?', whereArgs: [id]);
+    }
+    await db.delete('project_steps', where: 'projectId = ?', whereArgs: [id]);
+    await db.delete('project_stages', where: 'projectId = ?', whereArgs: [id]);
+  Future<List<ProjectStep>> getProjectSteps(int projectId) async {
+    final db = await instance.database;
+    final result = await db.query('project_steps', where: 'projectId = ?', whereArgs: [projectId], orderBy: 'orderIndex ASC, id ASC');
+    return result.map((e) => ProjectStep.fromMap(e)).toList();
+  }
+
+  Future<List<ProjectStep>> getAllProjectSteps() async {
+    final db = await instance.database;
+    final result = await db.query('project_steps', orderBy: 'projectId ASC, orderIndex ASC, id ASC');
+    return result.map((e) => ProjectStep.fromMap(e)).toList();
+  }
+
+  Future<ProjectStep> createProjectStep(ProjectStep step) async {
+    final db = await instance.database;
+    final id = await db.insert('project_steps', step.toMap());
+    return ProjectStep(
+      id: id,
+      projectId: step.projectId,
+      title: step.title,
+      description: step.description,
+      orderIndex: step.orderIndex,
+      status: step.status,
+      dueDate: step.dueDate,
+      completedAt: step.completedAt,
+      createdAt: step.createdAt,
+      updatedAt: step.updatedAt,
+    );
+  }
+
+  Future<int> updateProjectStep(ProjectStep step) async {
+    final db = await instance.database;
+    return db.update('project_steps', step.toMap(), where: 'id = ?', whereArgs: [step.id]);
+  }
+
+  Future<int> deleteProjectStep(int id) async {
+    final db = await instance.database;
+    return db.delete('project_steps', where: 'id = ?', whereArgs: [id]);
+  }
+}
       await db.insert('settings', setting.toMap());
     }
   }
@@ -421,10 +639,54 @@ class DatabaseHelper {
     );
   }
 
-  Future<int> deleteProject(int id) async {
+  Future<int> deleteProject(int id, {bool deleteLinkedTasks = false}) async {
     final db = await instance.database;
-    await db.update('tasks', {'projectId': null}, where: 'projectId = ?', whereArgs: [id]);
+    if (deleteLinkedTasks) {
+      await db.delete('tasks', where: 'projectId = ?', whereArgs: [id]);
+    } else {
+      await db.update('tasks', {'projectId': null, 'projectStepId': null}, where: 'projectId = ?', whereArgs: [id]);
+    }
+    await db.delete('project_steps', where: 'projectId = ?', whereArgs: [id]);
+    await db.delete('project_stages', where: 'projectId = ?', whereArgs: [id]);
     return await db.delete('projects', where: 'id = ?', whereArgs: [id]);
   }
-}
 
+  Future<List<ProjectStep>> getProjectSteps(int projectId) async {
+    final db = await instance.database;
+    final result = await db.query('project_steps', where: 'projectId = ?', whereArgs: [projectId], orderBy: 'orderIndex ASC, id ASC');
+    return result.map((e) => ProjectStep.fromMap(e)).toList();
+  }
+
+  Future<List<ProjectStep>> getAllProjectSteps() async {
+    final db = await instance.database;
+    final result = await db.query('project_steps', orderBy: 'projectId ASC, orderIndex ASC, id ASC');
+    return result.map((e) => ProjectStep.fromMap(e)).toList();
+  }
+
+  Future<ProjectStep> createProjectStep(ProjectStep step) async {
+    final db = await instance.database;
+    final id = await db.insert('project_steps', step.toMap());
+    return ProjectStep(
+      id: id,
+      projectId: step.projectId,
+      title: step.title,
+      description: step.description,
+      orderIndex: step.orderIndex,
+      status: step.status,
+      dueDate: step.dueDate,
+      completedAt: step.completedAt,
+      createdAt: step.createdAt,
+      updatedAt: step.updatedAt,
+    );
+  }
+
+  Future<int> updateProjectStep(ProjectStep step) async {
+    final db = await instance.database;
+    return db.update('project_steps', step.toMap(), where: 'id = ?', whereArgs: [step.id]);
+  }
+
+  Future<int> deleteProjectStep(int id) async {
+    final db = await instance.database;
+    return db.delete('project_steps', where: 'id = ?', whereArgs: [id]);
+  }
+}
