@@ -35,7 +35,7 @@ class BackupService {
     final payload = <String, dynamic>{
       'app': 'DiasOrganize',
       'backupFormatVersion': backupFormatVersion,
-      'databaseVersion': 14,
+      'databaseVersion': 15,
       'exportedAt': exportedAt.toIso8601String(),
       'warning': 'Arquivo de backup gerado automaticamente. Não edite se pretende restaurar futuramente.',
       'tables': tables,
