@@ -163,6 +163,51 @@ class TaskNotifier extends StateNotifier<List<Task>> {
     }
   }
 
+  DateTime? _nextRecurringDate(Task task) {
+    if (task.recurrenceType == 'none' || task.parentTaskId != null) return null;
+    final current = DateTime.tryParse(task.date ?? '');
+    if (current == null) return null;
+    switch (task.recurrenceType) {
+      case 'daily':
+        return current.add(const Duration(days: 1));
+      case 'weekly':
+        return current.add(const Duration(days: 7));
+      case 'monthly':
+        return DateTime(current.year, current.month + 1, current.day);
+      default:
+        return null;
+    }
+  }
+
+  bool _alreadyHasRecurringCopy(Task task, DateTime nextDate) {
+    final nextDateText = '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}-${nextDate.day.toString().padLeft(2, '0')}';
+    return state.any((candidate) =>
+        candidate.id != task.id &&
+        candidate.status != 'canceled' &&
+        candidate.title == task.title &&
+        candidate.date == nextDateText &&
+        candidate.recurrenceType == task.recurrenceType &&
+        candidate.projectId == task.projectId &&
+        candidate.projectStepId == task.projectStepId);
+  }
+
+  Future<void> _createNextRecurringTaskIfNeeded(Task task) async {
+    if (task.status != 'concluida') return;
+    final nextDate = _nextRecurringDate(task);
+    if (nextDate == null || _alreadyHasRecurringCopy(task, nextDate)) return;
+    final dateText = '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}-${nextDate.day.toString().padLeft(2, '0')}';
+    final now = DateTime.now().toIso8601String();
+    final next = task.copyWith(
+      id: null,
+      date: dateText,
+      status: 'pendente',
+      clearParentTaskId: true,
+      createdAt: now,
+      updatedAt: now,
+    );
+    await addTaskWithReturn(next);
+  }
+
   Future<void> loadTasks() async {
     final tasks = await db.getTasks();
     final updatedTasks = <Task>[];
@@ -206,6 +251,7 @@ class TaskNotifier extends StateNotifier<List<Task>> {
     }
 
     state = [for (final t in state) if (t.id == task.id) task else t];
+    await _createNextRecurringTaskIfNeeded(task);
 
     final affectedProjectIds = <int>{};
     if (previous?.projectId != null) affectedProjectIds.add(previous!.projectId!);
@@ -375,9 +421,7 @@ class TransactionNotifier extends StateNotifier<List<FinancialTransaction>> {
       return;
     }
 
-    final totalAbatido = debtTransactions
-        .where((t) => t.status == 'paid')
-        .fold<double>(0, (sum, transaction) => sum + transaction.amount + (transaction.discountAmount ?? 0));
+    final totalAbatido = debtTransactions.where((t) => t.status == 'paid').fold<double>(0, (sum, transaction) => sum + transaction.amount + (transaction.discountAmount ?? 0));
     final isFullyPaidByValue = totalAbatido + 0.01 >= debt.totalAmount;
     final hasOverdue = debtTransactions.any((t) => t.status == 'overdue');
 
@@ -509,21 +553,15 @@ class ProjectNotifier extends StateNotifier<List<Project>> {
     final notificationService = NotificationService();
     final linkedTasks = ref.read(tasksProvider).where((t) => t.projectId == id && t.id != null).toList();
     final linkedSteps = await db.getProjectSteps(id);
-
     await notificationService.cancelNotification(notificationService.projectReminderId(id));
-
     for (final step in linkedSteps) {
-      if (step.id != null) {
-        await notificationService.cancelNotification(notificationService.projectStepReminderId(step.id!));
-      }
+      if (step.id != null) await notificationService.cancelNotification(notificationService.projectStepReminderId(step.id!));
     }
-
     if (deleteLinkedTasks) {
       for (final task in linkedTasks) {
         await notificationService.cancelNotification(notificationService.taskReminderId(task.id!));
       }
     }
-
     await db.deleteProject(id, deleteLinkedTasks: deleteLinkedTasks);
     state = state.where((p) => p.id != id).toList();
     await ref.read(tasksProvider.notifier).loadTasks();
@@ -535,17 +573,14 @@ class ProjectNotifier extends StateNotifier<List<Project>> {
     final idx = state.indexWhere((p) => p.id == projectId);
     if (idx == -1) return;
     final project = state[idx];
-
     if (project.status == 'paused') return;
     if (project.status == 'completed') {
       final completedProject = project.copyWith(progress: 100, updatedAt: DateTime.now().toIso8601String());
       await updateProject(completedProject);
       return;
     }
-
     final tasks = ref.read(tasksProvider).where((t) => t.projectId == projectId && t.status != 'canceled').toList();
     double progress = 0;
-
     if (tasks.isNotEmpty) {
       final done = tasks.where((t) => t.status == 'concluida').length;
       progress = (done / tasks.length) * 100;
@@ -556,7 +591,6 @@ class ProjectNotifier extends StateNotifier<List<Project>> {
         progress = (done / steps.length) * 100;
       }
     }
-
     final updated = project.copyWith(progress: progress, updatedAt: DateTime.now().toIso8601String());
     await updateProject(updated);
   }
@@ -578,12 +612,7 @@ class ProjectNotifier extends StateNotifier<List<Project>> {
       NotificationService().cancelNotification(reminderId);
       return;
     }
-    NotificationService().scheduleNotification(
-      id: reminderId,
-      title: 'Prazo de projeto próximo',
-      body: p.name,
-      scheduledDate: reminderTime,
-    );
+    NotificationService().scheduleNotification(id: reminderId, title: 'Prazo de projeto próximo', body: p.name, scheduledDate: reminderTime);
   }
 }
 
@@ -609,18 +638,7 @@ class ProjectStepNotifier extends StateNotifier<List<ProjectStep>> {
 
   Future<void> addStep(String title, {String? description, String? dueDate, bool reminderEnabled = false}) async {
     final now = DateTime.now().toIso8601String();
-    final step = ProjectStep(
-      projectId: projectId,
-      title: title,
-      description: description,
-      orderIndex: state.length,
-      status: 'pending',
-      dueDate: dueDate,
-      completedAt: null,
-      reminderEnabled: reminderEnabled,
-      createdAt: now,
-      updatedAt: now,
-    );
+    final step = ProjectStep(projectId: projectId, title: title, description: description, orderIndex: state.length, status: 'pending', dueDate: dueDate, completedAt: null, reminderEnabled: reminderEnabled, createdAt: now, updatedAt: now);
     final newStep = await db.createProjectStep(step);
     state = [...state, newStep];
     _syncStepReminder(newStep);
@@ -661,11 +679,6 @@ class ProjectStepNotifier extends StateNotifier<List<ProjectStep>> {
       NotificationService().cancelNotification(reminderId);
       return;
     }
-    NotificationService().scheduleNotification(
-      id: reminderId,
-      title: 'Prazo de etapa próximo',
-      body: step.title,
-      scheduledDate: reminderTime,
-    );
+    NotificationService().scheduleNotification(id: reminderId, title: 'Prazo de etapa próximo', body: step.title, scheduledDate: reminderTime);
   }
 }
