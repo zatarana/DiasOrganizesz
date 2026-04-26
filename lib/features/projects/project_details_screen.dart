@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../domain/providers.dart';
+
 import '../../data/models/project_model.dart';
 import '../../data/models/project_step_model.dart';
 import '../../data/models/task_model.dart';
-import 'create_project_screen.dart';
+import '../../domain/providers.dart';
 import '../tasks/create_task_screen.dart';
+import 'create_project_screen.dart';
 
 class ProjectDetailsScreen extends ConsumerStatefulWidget {
   final Project project;
@@ -17,11 +18,11 @@ class ProjectDetailsScreen extends ConsumerStatefulWidget {
 }
 
 class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
-  bool _isTaskOverdue(Task task) {
-    if (task.date == null) return false;
-    final date = DateTime.tryParse(task.date!);
-    if (date == null) return false;
+  final Set<int> _expandedSessionIds = <int>{};
 
+  bool _isTaskOverdue(Task task) {
+    final date = DateTime.tryParse(task.date ?? '');
+    if (date == null) return false;
     if (task.time != null) {
       final parts = task.time!.split(':');
       if (parts.length == 2) {
@@ -30,7 +31,6 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
         return DateTime(date.year, date.month, date.day, hour, minute).isBefore(DateTime.now());
       }
     }
-
     return DateTime(date.year, date.month, date.day, 23, 59, 59).isBefore(DateTime.now());
   }
 
@@ -39,176 +39,103 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final projects = ref.watch(projectsProvider);
-    final pIndex = projects.indexWhere((p) => p.id == widget.project.id);
+    final projectIndex = projects.indexWhere((p) => p.id == widget.project.id);
 
-    if (pIndex == -1) {
+    if (projectIndex == -1) {
       return Scaffold(
         appBar: AppBar(title: const Text('Projeto não encontrado')),
         body: const Center(child: Text('Este projeto foi excluído.')),
       );
     }
 
-    final project = projects[pIndex];
+    final project = projects[projectIndex];
+    final projectId = project.id;
     final allTasks = ref.watch(tasksProvider);
-    final projectTasks = allTasks.where((t) => t.projectId == project.id && t.status != 'canceled').toList();
-    final steps = project.id == null ? <ProjectStep>[] : ref.watch(projectStepsProvider(project.id!));
-    final activeSteps = steps.where((s) => s.status != 'canceled').toList();
+    final projectTasks = allTasks.where((task) => task.projectId == projectId && task.status != 'canceled').toList();
+    final parentProjectTasks = projectTasks.where((task) => task.parentTaskId == null).toList();
+    final looseTasks = parentProjectTasks.where((task) => task.projectStepId == null).toList();
+    final sessions = projectId == null
+        ? <ProjectStep>[]
+        : ref.watch(projectStepsProvider(projectId)).where((session) => session.status != 'canceled').toList()
+      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
 
-    final doneTasks = projectTasks.where((t) => t.status == 'concluida').length;
-    final doneSteps = activeSteps.where((s) => s.status == 'completed').length;
+    final doneTasks = parentProjectTasks.where((task) => task.status == 'concluida').length;
     final progress = (project.progress / 100).clamp(0.0, 1.0);
-    final daysRemaining = _daysRemaining(project.endDate);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Detalhes do Projeto')),
-      body: SingleChildScrollView(
+      appBar: AppBar(
+        title: Text(project.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        actions: [
+          IconButton(
+            tooltip: 'Editar projeto',
+            icon: const Icon(Icons.edit),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CreateProjectScreen(project: project))),
+          ),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'complete') _updateStatus(project, 'completed');
+              if (value == 'pause') _updateStatus(project, project.status == 'paused' ? 'active' : 'paused');
+              if (value == 'delete') _confirmDelete(project);
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'complete', child: Text('Concluir projeto')),
+              PopupMenuItem(value: 'pause', child: Text(project.status == 'paused' ? 'Retomar projeto' : 'Pausar projeto')),
+              const PopupMenuItem(value: 'delete', child: Text('Excluir projeto', style: TextStyle(color: Colors.red))),
+            ],
+          ),
+        ],
+      ),
+      body: ListView(
         padding: const EdgeInsets.all(16),
+        children: [
+          _summaryCard(project, doneTasks, parentProjectTasks.length, progress),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              const Expanded(child: Text('Sessões', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+              TextButton.icon(
+                onPressed: projectId == null || project.status == 'canceled' ? null : () => _showSessionDialog(projectId),
+                icon: const Icon(Icons.add),
+                label: const Text('Nova sessão'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (sessions.isEmpty)
+            _emptyCard('Nenhuma sessão criada. Crie sessões como: Ideias, Fazer, Em andamento, Revisão, Concluído — ou os nomes que preferir.')
+          else
+            ...sessions.map((session) {
+              final tasks = parentProjectTasks.where((task) => task.projectStepId == session.id).toList();
+              return _sessionCard(project, session, tasks);
+            }),
+          const SizedBox(height: 12),
+          _looseTasksCard(project, looseTasks),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryCard(Project project, int doneTasks, int totalTasks, double progress) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _sectionTitle('Seção 1: Resumo do projeto'),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(project.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Text(project.description?.isNotEmpty == true ? project.description! : 'Sem descrição.'),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _infoChip('Status: ${_statusLabel(project.status)}'),
-                        _infoChip('Prioridade: ${_priorityLabel(project.priority)}'),
-                        _infoChip('Início: ${_dateLabel(project.startDate)}'),
-                        _infoChip('Prazo: ${_dateLabel(project.endDate)}'),
-                        _infoChip(daysRemaining == null ? 'Dias restantes: —' : 'Dias restantes: $daysRemaining'),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _sectionTitle('Seção 2: Progresso'),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Progresso geral: ${project.progress.toInt()}%'),
-                    const SizedBox(height: 8),
-                    LinearProgressIndicator(value: progress, minHeight: 8),
-                    const SizedBox(height: 8),
-                    Text('Tarefas concluídas: $doneTasks/${projectTasks.length}'),
-                    Text('Etapas concluídas: $doneSteps/${activeSteps.length}'),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _sectionTitle('Seção 3: Etapas'),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: project.id == null || project.status == 'canceled' ? null : () => _showAddStepDialog(project.id!),
-                      icon: const Icon(Icons.playlist_add),
-                      label: const Text('Adicionar etapa'),
-                    ),
-                    const SizedBox(height: 8),
-                    if (activeSteps.isEmpty)
-                      const Text('Nenhuma etapa criada.')
-                    else
-                      ...activeSteps.map((step) => _buildStepTile(step, project)),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _sectionTitle('Seção 4: Tarefas'),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: project.status == 'canceled'
-                          ? null
-                          : () {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTaskScreen(projectId: project.id)));
-                            },
-                      icon: const Icon(Icons.add_task),
-                      label: const Text('Adicionar tarefa'),
-                    ),
-                    const SizedBox(height: 8),
-                    if (projectTasks.isEmpty)
-                      const Text('Nenhuma tarefa vinculada.')
-                    else
-                      ...projectTasks.map((t) {
-                        final isCompleted = t.status == 'concluida';
-                        return CheckboxListTile(
-                          contentPadding: EdgeInsets.zero,
-                          value: isCompleted,
-                          title: Text(
-                            t.title,
-                            style: TextStyle(decoration: isCompleted ? TextDecoration.lineThrough : null),
-                          ),
-                          subtitle: Text(t.date ?? 'Sem data'),
-                          onChanged: project.status == 'canceled'
-                              ? null
-                              : (val) async {
-                                  if (val == null) return;
-                                  final updated = t.copyWith(status: val ? 'concluida' : _statusWhenTaskReopened(t), updatedAt: DateTime.now().toIso8601String());
-                                  await ref.read(tasksProvider.notifier).updateTask(updated);
-                                  if (val) _maybeSuggestCompleteProject(project.id, project.status);
-                                },
-                        );
-                      }),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _sectionTitle('Seção 5: Ações'),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CreateProjectScreen(project: project))),
-                      icon: const Icon(Icons.edit),
-                      label: const Text('Editar projeto'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: project.status == 'completed' || project.status == 'canceled' ? null : () => _updateStatus(project, 'completed'),
-                      icon: const Icon(Icons.check_circle_outline),
-                      label: const Text('Concluir projeto'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: project.status == 'paused' || project.status == 'canceled' ? null : () => _updateStatus(project, 'paused'),
-                      icon: const Icon(Icons.pause_circle_outline),
-                      label: const Text('Pausar projeto'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _confirmDelete,
-                      icon: const Icon(Icons.delete_outline, color: Colors.red),
-                      label: const Text('Excluir projeto', style: TextStyle(color: Colors.red)),
-                    ),
-                  ],
-                ),
-              ),
+            Text(project.description?.isNotEmpty == true ? project.description! : 'Sem descrição.'),
+            const SizedBox(height: 12),
+            LinearProgressIndicator(value: progress, minHeight: 8),
+            const SizedBox(height: 8),
+            Text('Progresso: ${project.progress.toInt()}% • Tarefas: $doneTasks/$totalTasks'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                _chip('Status: ${_projectStatus(project.status)}'),
+                _chip('Prioridade: ${_priorityLabel(project.priority)}'),
+                _chip('Prazo: ${_dateLabel(project.endDate)}'),
+              ],
             ),
           ],
         ),
@@ -216,54 +143,267 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
     );
   }
 
-  Widget _buildStepTile(ProjectStep step, Project project) {
-    final isCompleted = step.status == 'completed';
-    final subtitleParts = <String>[
-      'Status: ${_stepStatusLabel(step.status)}',
-      if (step.dueDate != null) 'Prazo: ${_dateLabel(step.dueDate)}',
-    ];
+  Widget _sessionCard(Project project, ProjectStep session, List<Task> tasks) {
+    final sessionId = session.id;
+    final expanded = sessionId != null && _expandedSessionIds.contains(sessionId);
+    final done = tasks.where((task) => task.status == 'concluida').length;
 
-    return CheckboxListTile(
-      contentPadding: EdgeInsets.zero,
-      value: isCompleted,
-      title: Text(
-        step.title,
-        style: TextStyle(decoration: isCompleted ? TextDecoration.lineThrough : null),
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        children: [
+          ListTile(
+            leading: Icon(expanded ? Icons.keyboard_arrow_down : Icons.chevron_right),
+            title: Text(session.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text('${tasks.length} tarefa(s) • $done concluída(s)', maxLines: 1, overflow: TextOverflow.ellipsis),
+            trailing: PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'task') _openNewTask(project, session.id);
+                if (value == 'edit') _showSessionDialog(session.projectId, session: session);
+                if (value == 'delete') _confirmDeleteSession(session);
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'task', child: Text('Adicionar tarefa')),
+                PopupMenuItem(value: 'edit', child: Text('Editar sessão')),
+                PopupMenuItem(value: 'delete', child: Text('Excluir sessão', style: TextStyle(color: Colors.red))),
+              ],
+            ),
+            onTap: sessionId == null
+                ? null
+                : () => setState(() {
+                      expanded ? _expandedSessionIds.remove(sessionId) : _expandedSessionIds.add(sessionId);
+                    }),
+          ),
+          if (expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (session.description?.isNotEmpty == true)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(session.description!, style: TextStyle(color: Colors.grey.shade700)),
+                    ),
+                  if (tasks.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text('Nenhuma tarefa nesta sessão.', style: TextStyle(color: Colors.grey)),
+                    )
+                  else
+                    ...tasks.map((task) => _taskTile(project, task)),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: project.status == 'canceled' ? null : () => _openNewTask(project, session.id),
+                      icon: const Icon(Icons.add_task),
+                      label: const Text('Adicionar tarefa'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
-      subtitle: Text(subtitleParts.join(' • ')),
+    );
+  }
+
+  Widget _looseTasksCard(Project project, List<Task> tasks) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Expanded(child: Text('Tarefas sem sessão', style: TextStyle(fontWeight: FontWeight.bold))),
+                TextButton.icon(
+                  onPressed: project.status == 'canceled' ? null : () => _openNewTask(project, null),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Tarefa'),
+                ),
+              ],
+            ),
+            if (tasks.isEmpty)
+              const Text('Nenhuma tarefa solta neste projeto.', style: TextStyle(color: Colors.grey))
+            else
+              ...tasks.map((task) => _taskTile(project, task)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _taskTile(Project project, Task task) {
+    final isDone = task.status == 'concluida';
+    final subtasks = ref.watch(tasksProvider).where((sub) => sub.parentTaskId == task.id && sub.status != 'canceled').toList();
+    final doneSubtasks = subtasks.where((sub) => sub.status == 'concluida').length;
+    return CheckboxListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      value: isDone,
+      title: Text(task.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(decoration: isDone ? TextDecoration.lineThrough : null)),
+      subtitle: Text('${_compactDate(task)}${subtasks.isEmpty ? '' : ' • Subtarefas $doneSubtasks/${subtasks.length}'}', maxLines: 1, overflow: TextOverflow.ellipsis),
       secondary: IconButton(
-        icon: const Icon(Icons.delete_outline, color: Colors.red),
-        onPressed: step.id == null ? null : () => _confirmDeleteStep(step),
+        tooltip: 'Editar tarefa',
+        icon: const Icon(Icons.edit_outlined),
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTaskScreen(task: task))),
       ),
       onChanged: project.status == 'canceled'
           ? null
-          : (val) async {
-              if (val == null) return;
-              final now = DateTime.now().toIso8601String();
-              final updated = step.copyWith(
-                status: val ? 'completed' : 'pending',
-                completedAt: val ? now : null,
-                clearCompletedAt: !val,
-                updatedAt: now,
-              );
-              await ref.read(projectStepsProvider(step.projectId).notifier).updateStep(updated);
-              if (val) _maybeSuggestCompleteProject(project.id, project.status);
+          : (value) async {
+              if (value == null) return;
+              await ref.read(tasksProvider.notifier).updateTask(task.copyWith(status: value ? 'concluida' : _statusWhenTaskReopened(task), updatedAt: DateTime.now().toIso8601String()));
+              if (value) _maybeSuggestCompleteProject(project.id, project.status);
             },
     );
   }
 
-  Widget _sectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+  Widget _emptyCard(String text) => Card(child: Padding(padding: const EdgeInsets.all(16), child: Text(text, style: const TextStyle(color: Colors.grey))));
+  Widget _chip(String text) => Chip(label: Text(text), visualDensity: VisualDensity.compact);
+
+  void _openNewTask(Project project, int? sessionId) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTaskScreen(projectId: project.id, projectStepId: sessionId)));
+  }
+
+  Future<void> _showSessionDialog(int projectId, {ProjectStep? session}) async {
+    final titleController = TextEditingController(text: session?.title ?? '');
+    final descriptionController = TextEditingController(text: session?.description ?? '');
+    final result = await showDialog<Map<String, String>?>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(session == null ? 'Nova sessão' : 'Editar sessão'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Nome da sessão')),
+              TextField(controller: descriptionController, decoration: const InputDecoration(labelText: 'Descrição opcional')),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () {
+              final title = titleController.text.trim();
+              if (title.isEmpty) return;
+              Navigator.pop(ctx, {'title': title, 'description': descriptionController.text.trim()});
+            },
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+    titleController.dispose();
+    descriptionController.dispose();
+    if (result == null || !mounted) return;
+    final description = result['description']?.trim();
+    if (session == null) {
+      await ref.read(projectStepsProvider(projectId).notifier).addStep(result['title']!, description: description?.isEmpty == true ? null : description);
+    } else {
+      await ref.read(projectStepsProvider(projectId).notifier).updateStep(session.copyWith(title: result['title'], description: description?.isEmpty == true ? null : description, clearDescription: description?.isEmpty == true, updatedAt: DateTime.now().toIso8601String()));
+    }
+  }
+
+  void _confirmDeleteSession(ProjectStep session) {
+    final linkedTasks = ref.read(tasksProvider).where((task) => task.projectStepId == session.id).toList();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir sessão'),
+        content: Text(linkedTasks.isEmpty ? 'Deseja excluir esta sessão?' : 'Esta sessão possui ${linkedTasks.length} tarefa(s). Elas serão mantidas no projeto, mas ficarão sem sessão.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () async {
+              if (session.id != null) await ref.read(projectStepsProvider(session.projectId).notifier).removeStep(session.id!);
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _infoChip(String text) {
-    return Chip(label: Text(text));
+  Future<void> _updateStatus(Project project, String status) async {
+    await ref.read(projectsProvider.notifier).updateProject(project.copyWith(status: status, completedAt: status == 'completed' ? DateTime.now().toIso8601String() : null, clearCompletedAt: status != 'completed', progress: status == 'completed' ? 100 : project.progress, updatedAt: DateTime.now().toIso8601String()));
   }
 
-  String _statusLabel(String status) {
+  void _confirmDelete(Project project) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir projeto'),
+        content: const Text('Deseja manter as tarefas vinculadas ou excluir tudo junto?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () async {
+              if (project.id != null) await ref.read(projectsProvider.notifier).removeProject(project.id!, deleteLinkedTasks: false);
+              if (mounted) {
+                Navigator.pop(ctx);
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Manter tarefas'),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (project.id != null) await ref.read(projectsProvider.notifier).removeProject(project.id!, deleteLinkedTasks: true);
+              if (mounted) {
+                Navigator.pop(ctx);
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Excluir tudo', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _maybeSuggestCompleteProject(int? projectId, String currentProjectStatus) {
+    if (projectId == null || currentProjectStatus == 'completed' || currentProjectStatus == 'canceled') return;
+    final tasks = ref.read(tasksProvider).where((task) => task.projectId == projectId && task.status != 'canceled').toList();
+    if (tasks.isEmpty || tasks.any((task) => task.status != 'concluida')) return;
+    final projects = ref.read(projectsProvider);
+    final index = projects.indexWhere((project) => project.id == projectId);
+    if (index == -1) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Projeto concluído?'),
+        content: const Text('Todas as tarefas foram concluídas. Deseja concluir o projeto?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Agora não')),
+          TextButton(
+            onPressed: () {
+              _updateStatus(projects[index], 'completed');
+              Navigator.pop(ctx);
+            },
+            child: const Text('Concluir'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _compactDate(Task task) {
+    final date = DateTime.tryParse(task.date ?? '');
+    final formatted = date == null ? 'Sem data' : '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}';
+    return task.time == null ? formatted : '$formatted ${task.time}';
+  }
+
+  String _dateLabel(String? isoDate) {
+    final date = DateTime.tryParse(isoDate ?? '');
+    if (date == null) return '—';
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+
+  String _projectStatus(String status) {
     switch (status) {
       case 'active':
         return 'Em andamento';
@@ -278,19 +418,6 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
     }
   }
 
-  String _stepStatusLabel(String status) {
-    switch (status) {
-      case 'completed':
-        return 'Concluída';
-      case 'in_progress':
-        return 'Em andamento';
-      case 'canceled':
-        return 'Cancelada';
-      default:
-        return 'Pendente';
-    }
-  }
-
   String _priorityLabel(String priority) {
     switch (priority) {
       case 'alta':
@@ -300,182 +427,5 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
       default:
         return 'Média';
     }
-  }
-
-  String _dateLabel(String? isoDate) {
-    if (isoDate == null) return '—';
-    final dt = DateTime.tryParse(isoDate);
-    if (dt == null) return '—';
-    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
-  }
-
-  int? _daysRemaining(String? endDate) {
-    if (endDate == null) return null;
-    final end = DateTime.tryParse(endDate);
-    if (end == null) return null;
-    return end.difference(DateTime.now()).inDays;
-  }
-
-  Future<void> _updateStatus(Project project, String status) async {
-    final completedAt = status == 'completed' ? (project.completedAt ?? DateTime.now().toIso8601String()) : null;
-    await ref.read(projectsProvider.notifier).updateProject(
-          project.copyWith(
-            status: status,
-            completedAt: completedAt,
-            clearCompletedAt: status != 'completed',
-            progress: status == 'completed' ? 100 : project.progress,
-            updatedAt: DateTime.now().toIso8601String(),
-          ),
-        );
-    if (project.id != null && status != 'paused' && status != 'completed') {
-      await ref.read(projectsProvider.notifier).recalculateProgress(project.id!);
-    }
-  }
-
-  void _showAddStepDialog(int projectId) {
-    final controller = TextEditingController();
-    DateTime? dueDate;
-    bool remind = false;
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocalState) => AlertDialog(
-          title: const Text('Adicionar etapa'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: controller,
-                decoration: const InputDecoration(hintText: 'Título da etapa'),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: () async {
-                  final dt = await showDatePicker(
-                    context: context,
-                    initialDate: dueDate ?? DateTime.now(),
-                    firstDate: DateTime(2000),
-                    lastDate: DateTime(2100),
-                  );
-                  if (dt != null) setLocalState(() => dueDate = dt);
-                },
-                icon: const Icon(Icons.event),
-                label: Text(dueDate == null ? 'Definir prazo (opcional)' : 'Prazo: ${_dateLabel(dueDate!.toIso8601String())}'),
-              ),
-              SwitchListTile(
-                title: const Text('Lembrete de prazo'),
-                value: dueDate != null && remind,
-                onChanged: dueDate != null ? (v) => setLocalState(() => remind = v) : null,
-              )
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-            TextButton(
-              onPressed: () async {
-                final title = controller.text.trim();
-                if (title.isEmpty) return;
-                await ref.read(projectStepsProvider(projectId).notifier).addStep(
-                      title,
-                      dueDate: dueDate?.toIso8601String(),
-                      reminderEnabled: dueDate != null && remind,
-                    );
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
-              child: const Text('Adicionar'),
-            ),
-          ],
-        ),
-      ),
-    ).whenComplete(controller.dispose);
-  }
-
-  void _confirmDeleteStep(ProjectStep step) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Excluir etapa'),
-        content: Text('Deseja excluir a etapa "${step.title}"?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-          TextButton(
-            onPressed: () async {
-              await ref.read(projectStepsProvider(step.projectId).notifier).removeStep(step.id!);
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _confirmDelete() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Excluir Projeto'),
-        content: const Text('O que deseja fazer com as tarefas vinculadas a este projeto?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-          TextButton(
-            onPressed: () async {
-              if (widget.project.id != null) {
-                await ref.read(projectsProvider.notifier).removeProject(widget.project.id!, deleteLinkedTasks: false);
-              }
-              if (mounted) {
-                Navigator.pop(ctx);
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Manter tarefas (desvincular)'),
-          ),
-          TextButton(
-            onPressed: () async {
-              if (widget.project.id != null) {
-                await ref.read(projectsProvider.notifier).removeProject(widget.project.id!, deleteLinkedTasks: true);
-              }
-              if (mounted) {
-                Navigator.pop(ctx);
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Excluir tarefas vinculadas', style: TextStyle(color: Colors.red)),
-          )
-        ],
-      ),
-    );
-  }
-
-  void _maybeSuggestCompleteProject(int? projectId, String currentProjectStatus) {
-    if (projectId == null || currentProjectStatus == 'completed' || currentProjectStatus == 'canceled') return;
-
-    final allTasks = ref.read(tasksProvider).where((t) => t.projectId == projectId && t.status != 'canceled').toList();
-    final allSteps = ref.read(projectStepsProvider(projectId)).where((s) => s.status != 'canceled').toList();
-    final hasWork = allTasks.isNotEmpty || allSteps.isNotEmpty;
-    final tasksDone = allTasks.isEmpty || allTasks.every((t) => t.status == 'concluida');
-    final stepsDone = allSteps.isEmpty || allSteps.every((s) => s.status == 'completed');
-
-    if (!hasWork || !tasksDone || !stepsDone) return;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Projeto pronto para conclusão'),
-        content: const Text('Todas as tarefas e etapas deste projeto foram concluídas. Deseja marcar o projeto como concluído?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Agora não')),
-          TextButton(
-            onPressed: () {
-              final projects = ref.read(projectsProvider);
-              final idx = projects.indexWhere((p) => p.id == projectId);
-              if (idx != -1) _updateStatus(projects[idx], 'completed');
-              Navigator.pop(ctx);
-            },
-            child: const Text('Marcar como concluído'),
-          ),
-        ],
-      ),
-    );
   }
 }
