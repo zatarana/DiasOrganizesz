@@ -102,6 +102,10 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
 
   bool _canUseReminder() => _status != 'paid' && _status != 'canceled' && (_dueDate != null || _type == 'income');
 
+  List<FinancialAccount> _selectableAccounts() {
+    return _accounts.where((account) => !account.isArchived || account.id == widget.transaction?.accountId).toList();
+  }
+
   void _setType(String value) {
     setState(() {
       _type = value;
@@ -147,8 +151,9 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   @override
   Widget build(BuildContext context) {
     final categories = ref.watch(financialCategoriesProvider).where((c) => c.type == _type || c.type == 'both').toList();
+    final selectableAccounts = _selectableAccounts();
     final safeCategoryId = categories.any((category) => category.id == _categoryId) ? _categoryId : null;
-    final safeAccountId = _accounts.any((account) => account.id == _accountId) ? _accountId : null;
+    final safeAccountId = selectableAccounts.any((account) => account.id == _accountId) ? _accountId : null;
 
     return Scaffold(
       appBar: AppBar(
@@ -258,7 +263,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                 value: safeAccountId,
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Sem conta')),
-                  ..._accounts.map((account) => DropdownMenuItem(value: account.id, child: Text('${account.name}${account.isArchived ? ' (arquivada)' : ''}'))),
+                  ...selectableAccounts.map((account) => DropdownMenuItem(value: account.id, child: Text('${account.name}${account.isArchived ? ' (arquivada)' : ''}'))),
                 ],
                 onChanged: _loadingAccounts ? null : (v) => setState(() => _accountId = v),
                 decoration: InputDecoration(
@@ -335,6 +340,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
     final amount = double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0;
     final discount = double.tryParse(_discountController.text.replaceAll(',', '.')) ?? 0.0;
     final template = widget.transaction;
+    final selectableAccounts = _selectableAccounts();
 
     if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O título é obrigatório.')));
@@ -355,12 +361,12 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
 
     final categories = ref.read(financialCategoriesProvider).where((c) => c.type == _type || c.type == 'both').toList();
     final safeCategoryId = categories.any((category) => category.id == _categoryId) ? _categoryId : null;
-    final safeAccountId = _accounts.any((account) => account.id == _accountId) ? _accountId : null;
+    final safeAccountId = selectableAccounts.any((account) => account.id == _accountId) ? _accountId : null;
     final normalizedStatus = _statusAfterSave(_status);
     final canReminder = normalizedStatus != 'paid' && normalizedStatus != 'canceled' && (_dueDate != null || _type == 'income');
 
     if (normalizedStatus == 'paid' && safeAccountId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A conta selecionada não existe mais. Escolha uma conta válida.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A conta selecionada não está disponível. Escolha uma conta ativa.')));
       return;
     }
 
