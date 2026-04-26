@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
@@ -16,15 +18,46 @@ class DatabaseHelper {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDB('diasorganize_v14.db');
+    _database = await _initDB('diasorganize.db');
     return _database!;
   }
 
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
+    await _copyLegacyDatabaseIfNeeded(dbPath, path);
 
     return openDatabase(path, version: 14, onCreate: _createDB, onUpgrade: _onUpgrade);
+  }
+
+  Future<void> _copyLegacyDatabaseIfNeeded(String dbPath, String targetPath) async {
+    final target = File(targetPath);
+    if (await target.exists()) return;
+
+    const legacyNames = [
+      'diasorganize_v14.db',
+      'diasorganize_v13.db',
+      'diasorganize_v12.db',
+      'diasorganize_v11.db',
+      'diasorganize_v10.db',
+      'diasorganize_v9.db',
+      'diasorganize_v8.db',
+      'diasorganize_v7.db',
+      'diasorganize_v6.db',
+      'diasorganize_v5.db',
+      'diasorganize_v4.db',
+      'diasorganize_v3.db',
+      'diasorganize_v2.db',
+      'diasorganize_v1.db',
+    ];
+
+    for (final legacyName in legacyNames) {
+      final legacyFile = File(join(dbPath, legacyName));
+      if (await legacyFile.exists()) {
+        await legacyFile.copy(targetPath);
+        return;
+      }
+    }
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
