@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/notifications/notification_service.dart';
 import '../../domain/providers.dart';
 import 'categories_screen.dart';
 import '../finance/finance_categories_screen.dart';
@@ -15,79 +16,55 @@ class SettingsScreen extends ConsumerWidget {
     return int.tryParse(settings[key] ?? '$fallback') ?? fallback;
   }
 
+  Future<void> _resetCoreData(BuildContext context, WidgetRef ref) async {
+    await NotificationService().cancelAllNotifications();
+    await ref.read(dbProvider).resetCoreData();
+    await ref.read(tasksProvider.notifier).loadTasks();
+    await ref.read(transactionsProvider.notifier).loadTransactions();
+    await ref.read(debtsProvider.notifier).loadDebts();
+    await ref.read(projectsProvider.notifier).loadProjects();
+    ref.invalidate(allProjectStepsProvider);
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Dados principais resetados. Categorias e configurações foram mantidas.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appSettings = ref.watch(appSettingsProvider);
     final currency = appSettings[AppSettingKeys.defaultCurrency] ?? 'BRL';
     final projectSort = appSettings[AppSettingKeys.projectsDefaultSort] ?? 'created_desc';
+    final themeMode = ref.watch(themeModeProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Configurações')),
       body: ListView(
         children: [
-          const Padding(padding: EdgeInsets.all(16), child: Text('Geral', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
+          _section('Geral'),
           ListTile(
             leading: const Icon(Icons.category),
             title: const Text('Categorias'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen()));
-            },
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen())),
           ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.dark_mode),
             title: const Text('Tema'),
-            subtitle: Text(
-              ref.watch(themeModeProvider) == ThemeMode.system 
-                  ? 'Sistema' 
-                  : (ref.watch(themeModeProvider) == ThemeMode.dark ? 'Escuro' : 'Claro')
-            ),
+            subtitle: Text(themeMode == ThemeMode.system ? 'Sistema' : (themeMode == ThemeMode.dark ? 'Escuro' : 'Claro')),
             trailing: const Icon(Icons.expand_more),
-            onTap: () {
-              showModalBottomSheet(
-                context: context,
-                builder: (ctx) => Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ListTile(
-                      title: const Text('Sistema'),
-                      trailing: ref.watch(themeModeProvider) == ThemeMode.system ? const Icon(Icons.check, color: Colors.blue) : null,
-                      onTap: () {
-                        ref.read(themeModeProvider.notifier).setTheme(ThemeMode.system);
-                        Navigator.pop(ctx);
-                      },
-                    ),
-                    ListTile(
-                      title: const Text('Claro'),
-                      trailing: ref.watch(themeModeProvider) == ThemeMode.light ? const Icon(Icons.check, color: Colors.blue) : null,
-                      onTap: () {
-                        ref.read(themeModeProvider.notifier).setTheme(ThemeMode.light);
-                        Navigator.pop(ctx);
-                      },
-                    ),
-                    ListTile(
-                      title: const Text('Escuro'),
-                      trailing: ref.watch(themeModeProvider) == ThemeMode.dark ? const Icon(Icons.check, color: Colors.blue) : null,
-                      onTap: () {
-                        ref.read(themeModeProvider.notifier).setTheme(ThemeMode.dark);
-                        Navigator.pop(ctx);
-                      },
-                    ),
-                  ],
-                )
-              );
-            },
+            onTap: () => _showThemeSheet(context, ref, themeMode),
           ),
           const Divider(),
-          const Padding(padding: EdgeInsets.all(16), child: Text('Finanças', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
+          _section('Finanças'),
           ListTile(
             leading: const Icon(Icons.category_outlined),
             title: const Text('Gerenciar categorias financeiras'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceCategoriesScreen()));
-            },
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceCategoriesScreen())),
           ),
           const Divider(),
           ListTile(
@@ -95,32 +72,7 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Moeda padrão'),
             subtitle: Text(currency == 'USD' ? 'Dólar (USD)' : 'Real (BRL)'),
             trailing: const Icon(Icons.expand_more),
-            onTap: () {
-              showModalBottomSheet(
-                context: context,
-                builder: (ctx) => Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ListTile(
-                      title: const Text('Real (BRL)'),
-                      trailing: currency == 'BRL' ? const Icon(Icons.check, color: Colors.blue) : null,
-                      onTap: () async {
-                        await ref.read(appSettingsProvider.notifier).setValue(AppSettingKeys.defaultCurrency, 'BRL');
-                        Navigator.pop(ctx);
-                      },
-                    ),
-                    ListTile(
-                      title: const Text('Dólar (USD)'),
-                      trailing: currency == 'USD' ? const Icon(Icons.check, color: Colors.blue) : null,
-                      onTap: () async {
-                        await ref.read(appSettingsProvider.notifier).setValue(AppSettingKeys.defaultCurrency, 'USD');
-                        Navigator.pop(ctx);
-                      },
-                    ),
-                  ],
-                ),
-              );
-            },
+            onTap: () => _showCurrencySheet(context, ref, currency),
           ),
           const Divider(),
           SwitchListTile(
@@ -136,11 +88,13 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: const Text('Remove transações com status cancelado'),
             onTap: () async {
               await ref.read(transactionsProvider.notifier).clearCanceledTransactions();
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Movimentações canceladas removidas.')));
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Movimentações canceladas removidas.')));
+              }
             },
           ),
           const Divider(),
-          const Padding(padding: EdgeInsets.all(16), child: Text('Dívidas', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
+          _section('Dívidas'),
           SwitchListTile(
             secondary: const Icon(Icons.payments_outlined),
             title: const Text('Exibir dívidas quitadas'),
@@ -160,31 +114,7 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Avisar vencimento com antecedência'),
             subtitle: Text('${_settingInt(appSettings, AppSettingKeys.debtsReminderDaysBefore)} dia(s) antes'),
             trailing: const Icon(Icons.edit),
-            onTap: () async {
-              final controller = TextEditingController(text: (appSettings[AppSettingKeys.debtsReminderDaysBefore] ?? '0'));
-              await showDialog(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Dias de antecedência'),
-                  content: TextField(
-                    controller: controller,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(hintText: 'Ex: 2'),
-                  ),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-                    TextButton(
-                      onPressed: () async {
-                        final value = int.tryParse(controller.text.trim()) ?? 0;
-                        await ref.read(appSettingsProvider.notifier).setValue(AppSettingKeys.debtsReminderDaysBefore, '${value < 0 ? 0 : value}');
-                        Navigator.pop(ctx);
-                      },
-                      child: const Text('Salvar'),
-                    ),
-                  ],
-                ),
-              );
-            },
+            onTap: () => _showDaysBeforeDialog(context, ref, appSettings),
           ),
           const Divider(),
           ListTile(
@@ -192,11 +122,13 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Limpar dívidas canceladas'),
             onTap: () async {
               await ref.read(debtsProvider.notifier).clearCanceledDebts();
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dívidas canceladas removidas.')));
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dívidas canceladas removidas.')));
+              }
             },
           ),
           const Divider(),
-          const Padding(padding: EdgeInsets.all(16), child: Text('Projetos', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
+          _section('Projetos'),
           SwitchListTile(
             secondary: const Icon(Icons.check_circle_outline),
             title: const Text('Exibir projetos concluídos'),
@@ -214,30 +146,9 @@ class SettingsScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.sort),
             title: const Text('Ordenação padrão dos projetos'),
-            subtitle: Text(
-              projectSort == 'deadline_asc'
-                  ? 'Prazo mais próximo'
-                  : projectSort == 'progress_desc'
-                      ? 'Maior progresso'
-                      : projectSort == 'name_asc'
-                          ? 'Nome (A-Z)'
-                          : 'Mais recentes',
-            ),
+            subtitle: Text(_projectSortLabel(projectSort)),
             trailing: const Icon(Icons.expand_more),
-            onTap: () {
-              showModalBottomSheet(
-                context: context,
-                builder: (ctx) => Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _projectSortOption(ctx, ref, projectSort, 'created_desc', 'Mais recentes'),
-                    _projectSortOption(ctx, ref, projectSort, 'deadline_asc', 'Prazo mais próximo'),
-                    _projectSortOption(ctx, ref, projectSort, 'progress_desc', 'Maior progresso'),
-                    _projectSortOption(ctx, ref, projectSort, 'name_asc', 'Nome (A-Z)'),
-                  ],
-                ),
-              );
-            },
+            onTap: () => _showProjectSortSheet(context, ref, projectSort),
           ),
           const Divider(),
           SwitchListTile(
@@ -247,7 +158,7 @@ class SettingsScreen extends ConsumerWidget {
             onChanged: (val) => ref.read(appSettingsProvider.notifier).setValue(AppSettingKeys.homeShowProjectsCard, '$val'),
           ),
           const Divider(),
-          const Padding(padding: EdgeInsets.all(16), child: Text('Privacidade', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
+          _section('Privacidade'),
           SwitchListTile(
             secondary: const Icon(Icons.visibility_off),
             title: const Text('Ocultar valores financeiros na tela inicial'),
@@ -271,75 +182,144 @@ class SettingsScreen extends ConsumerWidget {
             onChanged: (val) => ref.read(appSettingsProvider.notifier).setValue(AppSettingKeys.financeVisualLock, '$val'),
           ),
           const Divider(),
-          const Padding(padding: EdgeInsets.all(16), child: Text('Gerenciamento', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
+          _section('Gerenciamento'),
           ListTile(
             leading: const Icon(Icons.delete_sweep),
-            title: const Text('Limpar Concluídas'),
-            subtitle: const Text('Remove todas as tarefas já marcadas como concluídas'),
-            onTap: () {
-              showDialog(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Confirmar Exclusão'),
-                  content: const Text('Deseja realmente remover todas as tarefas concluídas? Esta ação não pode ser desfeita.'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-                    TextButton(
-                      onPressed: () {
-                        ref.read(tasksProvider.notifier).clearCompletedTasks();
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tarefas limpas com sucesso!')));
-                      }, 
-                      child: const Text('Excluir', style: TextStyle(color: Colors.red)),
-                    ),
-                  ],
-                ),
-              );
-            },
+            title: const Text('Limpar tarefas concluídas'),
+            subtitle: const Text('Remove somente tarefas marcadas como concluídas'),
+            onTap: () => _confirmClearCompletedTasks(context, ref),
           ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.warning, color: Colors.red),
-            title: const Text('Resetar Aplicativo', style: TextStyle(color: Colors.red)),
-            subtitle: const Text('Apaga todas as tarefas e dados.'),
-            onTap: () {
-              showDialog(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Resetar Tudo?'),
-                  content: const Text('Deseja apagar todas as tarefas? As categorias padrões serão mantidas.'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-                    TextButton(
-                      onPressed: () async {
-                        final tasks = ref.read(tasksProvider);
-                        for (var t in tasks) {
-                           if (t.id != null) await ref.read(tasksProvider.notifier).removeTask(t.id!);
-                        }
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Aplicativo resetado.')));
-                      },
-                      child: const Text('Apagar Tudo', style: TextStyle(color: Colors.red)),
-                    ),
-                  ],
-                ),
-              );
+            title: const Text('Resetar dados principais', style: TextStyle(color: Colors.red)),
+            subtitle: const Text('Apaga tarefas, finanças, dívidas, projetos e etapas. Mantém categorias e configurações.'),
+            onTap: () => _confirmResetCoreData(context, ref),
+          ),
+          const Divider(),
+          _section('Sistema'),
+          const ListTile(
+            leading: Icon(Icons.data_usage),
+            title: Text('Uso de Dados'),
+            subtitle: Text('Offline-first habilitado. Tudo salvo localmente no SQLite.'),
+          ),
+          const Divider(),
+          const ListTile(
+            leading: Icon(Icons.info),
+            title: Text('Sobre'),
+            subtitle: Text('DiasOrganize v1.0.0\nCompilado offline via GitHub Actions'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _section(String title) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Text(title, style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  void _showThemeSheet(BuildContext context, WidgetRef ref, ThemeMode selected) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _themeOption(ctx, ref, selected, ThemeMode.system, 'Sistema'),
+          _themeOption(ctx, ref, selected, ThemeMode.light, 'Claro'),
+          _themeOption(ctx, ref, selected, ThemeMode.dark, 'Escuro'),
+        ],
+      ),
+    );
+  }
+
+  Widget _themeOption(BuildContext ctx, WidgetRef ref, ThemeMode selected, ThemeMode value, String label) {
+    return ListTile(
+      title: Text(label),
+      trailing: selected == value ? const Icon(Icons.check, color: Colors.blue) : null,
+      onTap: () async {
+        await ref.read(themeModeProvider.notifier).setTheme(value);
+        if (ctx.mounted) Navigator.pop(ctx);
+      },
+    );
+  }
+
+  void _showCurrencySheet(BuildContext context, WidgetRef ref, String selected) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _settingOption(ctx, ref, selected, 'BRL', 'Real (BRL)', AppSettingKeys.defaultCurrency),
+          _settingOption(ctx, ref, selected, 'USD', 'Dólar (USD)', AppSettingKeys.defaultCurrency),
+        ],
+      ),
+    );
+  }
+
+  Widget _settingOption(BuildContext ctx, WidgetRef ref, String selected, String value, String label, String key) {
+    return ListTile(
+      title: Text(label),
+      trailing: selected == value ? const Icon(Icons.check, color: Colors.blue) : null,
+      onTap: () async {
+        await ref.read(appSettingsProvider.notifier).setValue(key, value);
+        if (ctx.mounted) Navigator.pop(ctx);
+      },
+    );
+  }
+
+  Future<void> _showDaysBeforeDialog(BuildContext context, WidgetRef ref, Map<String, String> settings) async {
+    final controller = TextEditingController(text: settings[AppSettingKeys.debtsReminderDaysBefore] ?? '0');
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Dias de antecedência'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(hintText: 'Ex: 2'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () async {
+              final value = int.tryParse(controller.text.trim()) ?? 0;
+              await ref.read(appSettingsProvider.notifier).setValue(AppSettingKeys.debtsReminderDaysBefore, '${value < 0 ? 0 : value}');
+              if (ctx.mounted) Navigator.pop(ctx);
             },
+            child: const Text('Salvar'),
           ),
-          const Divider(),
-          const Padding(padding: EdgeInsets.all(16), child: Text('Sistema', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
-          ListTile(
-            leading: const Icon(Icons.data_usage),
-            title: const Text('Uso de Dados'),
-            subtitle: const Text('Offline-first habilitado. Tudo salvo localmente no SQLite.'),
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.info),
-            title: const Text('Sobre'),
-            subtitle: const Text('DiasOrganize v1.0.0\nCompilado offline via GitHub Actions'),
-            onTap: () {},
-          ),
+        ],
+      ),
+    );
+    controller.dispose();
+  }
+
+  String _projectSortLabel(String sort) {
+    switch (sort) {
+      case 'deadline_asc':
+        return 'Prazo mais próximo';
+      case 'progress_desc':
+        return 'Maior progresso';
+      case 'name_asc':
+        return 'Nome (A-Z)';
+      default:
+        return 'Mais recentes';
+    }
+  }
+
+  void _showProjectSortSheet(BuildContext context, WidgetRef ref, String selected) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _projectSortOption(ctx, ref, selected, 'created_desc', 'Mais recentes'),
+          _projectSortOption(ctx, ref, selected, 'deadline_asc', 'Prazo mais próximo'),
+          _projectSortOption(ctx, ref, selected, 'progress_desc', 'Maior progresso'),
+          _projectSortOption(ctx, ref, selected, 'name_asc', 'Nome (A-Z)'),
         ],
       ),
     );
@@ -351,8 +331,51 @@ class SettingsScreen extends ConsumerWidget {
       trailing: selected == value ? const Icon(Icons.check, color: Colors.blue) : null,
       onTap: () async {
         await ref.read(appSettingsProvider.notifier).setValue(AppSettingKeys.projectsDefaultSort, value);
-        Navigator.pop(ctx);
+        if (ctx.mounted) Navigator.pop(ctx);
       },
+    );
+  }
+
+  void _confirmClearCompletedTasks(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirmar exclusão'),
+        content: const Text('Deseja remover todas as tarefas concluídas? Esta ação não pode ser desfeita.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () async {
+              await ref.read(tasksProvider.notifier).clearCompletedTasks();
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tarefas concluídas removidas.')));
+              }
+            },
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmResetCoreData(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Resetar dados principais?'),
+        content: const Text('Isto apagará tarefas, movimentações financeiras, dívidas, projetos e etapas. Categorias e configurações serão mantidas.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () async {
+              await _resetCoreData(context, ref);
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('Resetar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
   }
 }
