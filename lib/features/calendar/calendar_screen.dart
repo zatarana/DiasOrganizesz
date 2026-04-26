@@ -110,6 +110,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             ),
           ),
           const Divider(),
+          if (allStepsAsync.hasError)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber, color: Colors.orange, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('Não foi possível carregar etapas de projetos no calendário.', style: TextStyle(color: Colors.orange.shade800, fontSize: 12))),
+                ],
+              ),
+            ),
           Expanded(
             child: selectedEvents.isEmpty
                 ? const Center(child: Text('Nenhum evento para esta data.'))
@@ -130,12 +141,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   List<CalendarEventItem> _buildEvents(List<Task> tasks, List<FinancialTransaction> transactions, List<Project> projects, List<ProjectStep> steps) {
     final events = <CalendarEventItem>[];
+    final activeProjectIds = projects.where((p) => p.status != 'completed' && p.status != 'canceled').map((p) => p.id).whereType<int>().toSet();
 
     for (final task in tasks) {
       if (task.date == null || task.status == 'canceled') continue;
       final date = DateTime.tryParse(task.date!);
       if (date == null) continue;
-      events.add(CalendarEventItem(type: CalendarEventType.task, title: task.title, date: date, data: task));
+      events.add(CalendarEventItem(type: CalendarEventType.task, title: task.title, date: date, data: task, projectId: task.projectId));
     }
 
     for (final transaction in transactions) {
@@ -172,6 +184,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
     for (final step in steps) {
       if (step.dueDate == null || step.status == 'canceled' || step.status == 'completed') continue;
+      if (!activeProjectIds.contains(step.projectId)) continue;
       final date = DateTime.tryParse(step.dueDate!);
       if (date == null) continue;
       events.add(CalendarEventItem(type: CalendarEventType.projectStepDeadline, title: step.title, date: date, data: step, projectId: step.projectId));
@@ -196,7 +209,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.circle, size: 12, color: _colorForType(event.type, projects, event.projectId)),
                   title: Text(event.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  subtitle: Text(_subtitleForEvent(event)),
+                  subtitle: Text(_subtitleForEvent(event, debts)),
                   onTap: () => _openEventDetails(event, debts, projects),
                 )),
           ],
@@ -205,15 +218,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
-  String _subtitleForEvent(CalendarEventItem event) {
+  String _subtitleForEvent(CalendarEventItem event, List<Debt> debts) {
     final base = _labelForType(event.type);
     if (event.data is FinancialTransaction) {
       final transaction = event.data as FinancialTransaction;
-      return '$base • R\$ ${transaction.amount.toStringAsFixed(2)} • ${_statusLabel(transaction.status)}';
+      final debtMissing = transaction.debtId != null && !debts.any((debt) => debt.id == transaction.debtId);
+      final debtNote = debtMissing ? ' • dívida removida' : '';
+      return '$base • R\$ ${transaction.amount.toStringAsFixed(2)} • ${_statusLabel(transaction.status)}$debtNote';
     }
     if (event.data is Task) {
       final task = event.data as Task;
-      return '$base • ${task.status} • ${task.time ?? 'sem horário'}';
+      return '$base • ${_statusLabel(task.status)} • ${task.time ?? 'sem horário'}';
     }
     if (event.data is ProjectStep) {
       final step = event.data as ProjectStep;
@@ -254,7 +269,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     }
 
     if (event.type == CalendarEventType.projectStepDeadline) {
-      final index = projects.indexWhere((project) => project.id == event.projectId);
+      final index = projects.indexWhere((project) => project.id == event.projectId && project.status != 'canceled');
       if (index != -1) Navigator.push(context, MaterialPageRoute(builder: (_) => ProjectDetailsScreen(project: projects[index])));
     }
   }
@@ -275,7 +290,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         if (projectId == null) return Colors.indigo;
         final index = projects.indexWhere((project) => project.id == projectId);
         if (index == -1) return Colors.indigo;
-        return Color(int.parse(projects[index].color));
+        return Color(int.tryParse(projects[index].color) ?? 0xFF3F51B5);
     }
   }
 
@@ -301,15 +316,20 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       case 'paid':
         return 'pago';
       case 'pending':
+      case 'pendente':
         return 'pendente';
       case 'overdue':
+      case 'atrasada':
         return 'atrasado';
       case 'completed':
+      case 'concluida':
         return 'concluído';
       case 'active':
         return 'ativo';
       case 'paused':
         return 'pausado';
+      case 'canceled':
+        return 'cancelado';
       default:
         return status;
     }
