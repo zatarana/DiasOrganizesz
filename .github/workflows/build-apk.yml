@@ -25,14 +25,14 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Criar projeto Flutter base
-        run: flutter create .
-
       - name: Instalar dependências
         run: flutter pub get
 
       - name: Analisar projeto
         run: flutter analyze
+
+      - name: Executar testes
+        run: flutter test
 
       - name: Construir APK (Debug)
         run: flutter build apk --debug
@@ -40,5 +40,5 @@ jobs:
       - name: Fazer upload do APK
         uses: actions/upload-artifact@v4
         with:
-          name: DiasOrganize-debug-apk
+          name: DiasOrganize-v2-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk

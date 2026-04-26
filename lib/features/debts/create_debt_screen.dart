@@ -28,10 +28,15 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
   int? _selectedCategoryId;
 
    bool _generateInstallments = false;
+   bool _remindInstallments = false;
 
   @override
   void initState() {
     super.initState();
+    if (widget.debt == null) {
+      final settings = ref.read(appSettingsProvider);
+      _remindInstallments = (settings[AppSettingKeys.debtsRemindersDefault] ?? 'false') == 'true';
+    }
     if (widget.debt != null) {
       _nameController.text = widget.debt!.name;
       _descriptionController.text = widget.debt!.description ?? '';
@@ -170,6 +175,12 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
                    value: _generateInstallments,
                    onChanged: (v) => setState(() => _generateInstallments = v),
                  ),
+                 SwitchListTile(
+                   title: const Text('Lembrar parcelas automaticamente?'),
+                   subtitle: const Text('Agenda lembrete local para vencimento de cada parcela'),
+                   value: _remindInstallments,
+                   onChanged: (v) => setState(() => _remindInstallments = v),
+                 ),
                  const SizedBox(height: 16),
                ],
                OutlinedButton.icon(
@@ -297,6 +308,7 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
               transactionDate: due.toIso8601String(),
               dueDate: due.toIso8601String(),
               status: 'pending',
+              reminderEnabled: _remindInstallments,
               isFixed: false,
               recurrenceType: 'none',
               debtId: id,
@@ -316,4 +328,3 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
     if (mounted) Navigator.pop(context);
   }
 }
-
