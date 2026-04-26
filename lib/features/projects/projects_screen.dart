@@ -15,6 +15,10 @@ class ProjectsScreen extends ConsumerStatefulWidget {
 class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
   String _quickFilter = 'all';
 
+  Color _safeProjectColor(Project project) {
+    return Color(int.tryParse(project.color) ?? 0xFF2196F3);
+  }
+
   @override
   Widget build(BuildContext context) {
     final projects = ref.watch(projectsProvider);
@@ -24,11 +28,12 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
     final showPaused = (appSettings[AppSettingKeys.projectsShowPaused] ?? 'true') == 'true';
     final defaultSort = appSettings[AppSettingKeys.projectsDefaultSort] ?? 'created_desc';
 
-    final filteredProjects = projects.where((p) => _matchesQuickFilter(p, showCompleted: showCompleted, showPaused: showPaused)).toList();
+    final validProjects = projects.where((p) => p.status != 'canceled').toList();
+    final filteredProjects = validProjects.where((p) => _matchesQuickFilter(p, showCompleted: showCompleted, showPaused: showPaused)).toList();
     _applySort(filteredProjects, defaultSort);
-    final inProgressCount = projects.where((p) => _matchesQuickFilter(p, forcedFilter: 'in_progress')).length;
-    final completedCount = projects.where((p) => p.status == 'completed').length;
-    final overdueCount = projects.where((p) => _matchesQuickFilter(p, forcedFilter: 'overdue')).length;
+    final inProgressCount = validProjects.where((p) => _matchesQuickFilter(p, forcedFilter: 'in_progress')).length;
+    final completedCount = validProjects.where((p) => p.status == 'completed').length;
+    final overdueCount = validProjects.where((p) => _matchesQuickFilter(p, forcedFilter: 'overdue')).length;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Projetos')),
@@ -50,7 +55,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
             children: [
-              _buildSummaryCard('Total de Projetos', projects.length.toString(), Icons.folder_copy, Colors.blue),
+              _buildSummaryCard('Total de Projetos', validProjects.length.toString(), Icons.folder_copy, Colors.blue),
               _buildSummaryCard('Em andamento', inProgressCount.toString(), Icons.play_circle_fill, Colors.orange),
               _buildSummaryCard('Concluídos', completedCount.toString(), Icons.check_circle, Colors.green),
               _buildSummaryCard('Atrasados', overdueCount.toString(), Icons.warning_amber, Colors.red),
@@ -92,7 +97,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
               final projectTasks = tasks.where((t) => t.projectId == project.id && t.status != 'canceled').toList();
               final completedTasks = projectTasks.where((t) => t.status == 'concluida').length;
               final progress = (project.progress / 100).clamp(0.0, 1.0);
-              final color = Color(int.parse(project.color));
+              final color = _safeProjectColor(project);
               final daysRemaining = _getDaysRemaining(project.endDate);
               final dueDateLabel = _formatDueDate(project.endDate);
 
@@ -207,6 +212,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
   }
 
   bool _matchesQuickFilter(Project project, {String? forcedFilter, bool showCompleted = true, bool showPaused = true}) {
+    if (project.status == 'canceled') return false;
     final filter = forcedFilter ?? _quickFilter;
     if (!showCompleted && project.status == 'completed' && filter != 'completed') return false;
     if (!showPaused && project.status == 'paused' && filter != 'paused') return false;
