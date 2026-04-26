@@ -442,6 +442,7 @@ class DatabaseHelper {
   Future<int> deleteFinancialCategory(int id) async {
     final db = await instance.database;
     await db.update('transactions', {'categoryId': null}, where: 'categoryId = ?', whereArgs: [id]);
+    await db.update('debts', {'categoryId': null}, where: 'categoryId = ?', whereArgs: [id]);
     return db.delete('financial_categories', where: 'id = ?', whereArgs: [id]);
   }
 
