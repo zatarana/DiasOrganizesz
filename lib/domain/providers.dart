@@ -423,6 +423,7 @@ class FinancialCategoryNotifier extends StateNotifier<List<FinancialCategory>> {
     await db.deleteFinancialCategory(id);
     state = state.where((t) => t.id != id).toList();
     await ref.read(transactionsProvider.notifier).loadTransactions();
+    await ref.read(debtsProvider.notifier).loadDebts();
   }
 }
 
