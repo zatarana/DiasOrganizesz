@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../../domain/providers.dart';
 import '../../data/models/debt_model.dart';
 import '../../data/models/transaction_model.dart';
-import '../../data/models/financial_category_model.dart';
 
 class CreateDebtScreen extends ConsumerStatefulWidget {
   final Debt? debt;

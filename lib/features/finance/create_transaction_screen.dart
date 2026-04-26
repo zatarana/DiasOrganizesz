@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../domain/providers.dart';
 import '../../data/models/transaction_model.dart';
-import '../../data/models/financial_category_model.dart';
 
 class CreateTransactionScreen extends ConsumerStatefulWidget {
   final FinancialTransaction? transaction;
