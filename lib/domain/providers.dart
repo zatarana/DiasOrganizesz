@@ -291,10 +291,17 @@ class TransactionNotifier extends StateNotifier<List<FinancialTransaction>> {
   }
 
   Future<void> updateTransaction(FinancialTransaction transaction) async {
+    final previous = state.where((t) => t.id == transaction.id).cast<FinancialTransaction?>().firstOrNull;
     await db.updateTransaction(transaction);
     state = [for (final t in state) if (t.id == transaction.id) transaction else t];
     _syncTransactionReminder(transaction);
-    await _checkDebtStatus(transaction.debtId);
+
+    final affectedDebtIds = <int>{};
+    if (previous?.debtId != null) affectedDebtIds.add(previous!.debtId!);
+    if (transaction.debtId != null) affectedDebtIds.add(transaction.debtId!);
+    for (final debtId in affectedDebtIds) {
+      await _checkDebtStatus(debtId);
+    }
   }
 
   Future<void> removeTransaction(int id) async {
@@ -359,7 +366,12 @@ class TransactionNotifier extends StateNotifier<List<FinancialTransaction>> {
     if (debt.status == 'canceled' || debt.status == 'paused') return;
 
     final debtTransactions = state.where((t) => t.debtId == debtId && t.status != 'canceled').toList();
-    if (debtTransactions.isEmpty) return;
+    if (debtTransactions.isEmpty) {
+      if (debt.status == 'paid' || debt.status == 'overdue') {
+        await ref.read(debtsProvider.notifier).updateDebt(debt.copyWith(status: 'active', updatedAt: DateTime.now().toIso8601String()));
+      }
+      return;
+    }
 
     final totalAbatido = debtTransactions
         .where((t) => t.status == 'paid')
