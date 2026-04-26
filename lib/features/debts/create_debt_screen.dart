@@ -47,8 +47,8 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
       _amountController.text = widget.debt!.totalAmount.toStringAsFixed(2);
       if (widget.debt!.installmentCount != null) _installmentsController.text = widget.debt!.installmentCount!.toString();
       if (widget.debt!.installmentAmount != null) _installmentAmountController.text = widget.debt!.installmentAmount!.toStringAsFixed(2);
-      if (widget.debt!.startDate != null) _startDate = DateTime.parse(widget.debt!.startDate!);
-      if (widget.debt!.firstDueDate != null) _firstDueDate = DateTime.parse(widget.debt!.firstDueDate!);
+      if (widget.debt!.startDate != null) _startDate = DateTime.tryParse(widget.debt!.startDate!) ?? DateTime.now();
+      if (widget.debt!.firstDueDate != null) _firstDueDate = DateTime.tryParse(widget.debt!.firstDueDate!) ?? DateTime.now().add(const Duration(days: 30));
       _installmentWasAutoCalculated = false;
     }
 
@@ -112,9 +112,34 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
     return amounts;
   }
 
+  Future<void> _confirmDeleteDebt() async {
+    final debt = widget.debt;
+    if (debt?.id == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir dívida?'),
+        content: const Text('As parcelas vinculadas serão desvinculadas no financeiro. Esta ação não pode ser desfeita.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    await ref.read(debtsProvider.notifier).removeDebt(debt!.id!);
+    if (mounted) Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final categories = ref.watch(financialCategoriesProvider).where((c) => c.type == 'expense' || c.type == 'both').toList();
+    final safeCategoryId = categories.any((category) => category.id == _selectedCategoryId) ? _selectedCategoryId : null;
 
     return Scaffold(
       appBar: AppBar(
@@ -123,10 +148,7 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
           if (widget.debt != null)
             IconButton(
               icon: const Icon(Icons.delete),
-              onPressed: () async {
-                await ref.read(debtsProvider.notifier).removeDebt(widget.debt!.id!);
-                if (context.mounted) Navigator.pop(context);
-              },
+              onPressed: _confirmDeleteDebt,
             )
         ],
       ),
@@ -171,7 +193,7 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
               const SizedBox(height: 16),
               DropdownButtonFormField<int>(
                 decoration: const InputDecoration(labelText: 'Categoria Financeira', border: OutlineInputBorder()),
-                initialValue: _selectedCategoryId,
+                initialValue: safeCategoryId,
                 items: [
                   const DropdownMenuItem<int>(value: null, child: Text('Selecione uma categoria (Obrigatório)')),
                   ...categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
@@ -205,8 +227,8 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
                 SwitchListTile(
                   title: const Text('Lembrar parcelas automaticamente?'),
                   subtitle: const Text('Agenda lembrete local para vencimento de cada parcela'),
-                  value: _remindInstallments,
-                  onChanged: (v) => setState(() => _remindInstallments = v),
+                  value: _generateInstallments && _remindInstallments,
+                  onChanged: _generateInstallments ? (v) => setState(() => _remindInstallments = v) : null,
                 ),
                 const SizedBox(height: 16),
               ],
@@ -258,6 +280,8 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
     final amount = _roundCents(_parseMoney(_amountController.text));
     final installments = int.tryParse(_installmentsController.text) ?? 0;
     final instAmount = _roundCents(_parseMoney(_installmentAmountController.text));
+    final categories = ref.read(financialCategoriesProvider).where((c) => c.type == 'expense' || c.type == 'both').toList();
+    final safeCategoryId = categories.any((category) => category.id == _selectedCategoryId) ? _selectedCategoryId : null;
 
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O nome é obrigatório.')));
@@ -267,7 +291,7 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O valor total deve ser maior que zero.')));
       return;
     }
-    if (_selectedCategoryId == null) {
+    if (safeCategoryId == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A categoria financeira é obrigatória.')));
       return;
     }
@@ -308,10 +332,10 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
       installmentAmount: instAmount > 0 ? instAmount : null,
       startDate: _startDate.toIso8601String(),
       firstDueDate: _firstDueDate.toIso8601String(),
-      categoryId: _selectedCategoryId,
-      description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
-      notes: _notesController.text.isNotEmpty ? _notesController.text : null,
-      creditorName: _creditorController.text.isNotEmpty ? _creditorController.text : null,
+      categoryId: safeCategoryId,
+      description: _descriptionController.text.trim().isNotEmpty ? _descriptionController.text.trim() : null,
+      notes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
+      creditorName: _creditorController.text.trim().isNotEmpty ? _creditorController.text.trim() : null,
       status: widget.debt?.status ?? 'active',
       createdAt: widget.debt?.createdAt ?? DateTime.now().toIso8601String(),
       updatedAt: DateTime.now().toIso8601String(),
@@ -330,11 +354,11 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
             title: '$name (Parcela ${i + 1}/$installments)',
             amount: amounts[i],
             type: 'expense',
-            categoryId: _selectedCategoryId,
+            categoryId: safeCategoryId,
             transactionDate: due.toIso8601String(),
             dueDate: due.toIso8601String(),
             status: 'pending',
-            reminderEnabled: _remindInstallments,
+            reminderEnabled: _generateInstallments && _remindInstallments,
             isFixed: false,
             recurrenceType: 'none',
             debtId: createdDebt.id,
