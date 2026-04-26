@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/backup/backup_service.dart';
 import '../../core/notifications/notification_service.dart';
 import '../../domain/providers.dart';
 import 'categories_screen.dart';
@@ -29,6 +30,28 @@ class SettingsScreen extends ConsumerWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Dados principais resetados. Categorias e configurações foram mantidas.')),
       );
+    }
+  }
+
+  Future<void> _exportBackup(BuildContext context, WidgetRef ref) async {
+    try {
+      final path = await BackupService().exportJson(ref.read(dbProvider));
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Backup exportado'),
+            content: SelectableText('Arquivo salvo em:\n$path'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+            ],
+          ),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao exportar backup: $error')));
+      }
     }
   }
 
@@ -183,6 +206,13 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const Divider(),
           _section('Gerenciamento'),
+          ListTile(
+            leading: const Icon(Icons.backup_outlined),
+            title: const Text('Exportar backup JSON'),
+            subtitle: const Text('Cria uma cópia local dos dados principais antes de testes ou reset'),
+            onTap: () => _exportBackup(context, ref),
+          ),
+          const Divider(),
           ListTile(
             leading: const Icon(Icons.delete_sweep),
             title: const Text('Limpar tarefas concluídas'),
