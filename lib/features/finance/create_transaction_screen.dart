@@ -73,8 +73,63 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   }
 
   @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _amountController.dispose();
+    _notesController.dispose();
+    _discountController.dispose();
+    super.dispose();
+  }
+
+  bool _canUseReminder() => _status != 'paid' && _status != 'canceled' && (_dueDate != null || _type == 'income');
+
+  void _setType(String value) {
+    setState(() {
+      _type = value;
+      final validCategories = ref.read(financialCategoriesProvider).where((c) => c.type == _type || c.type == 'both').toList();
+      if (_categoryId != null && !validCategories.any((category) => category.id == _categoryId)) {
+        _categoryId = null;
+      }
+      if (!_canUseReminder()) _reminderEnabled = false;
+    });
+  }
+
+  String _statusAfterSave(String currentStatus) {
+    if (currentStatus == 'paid' || currentStatus == 'canceled') return currentStatus;
+    final expected = _dueDate ?? _transactionDate;
+    final due = DateTime(expected.year, expected.month, expected.day);
+    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    return due.isBefore(today) ? 'overdue' : 'pending';
+  }
+
+  Future<void> _confirmDelete() async {
+    if (!_isEditing || widget.transaction?.id == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir movimentação?'),
+        content: Text('Deseja excluir "${widget.transaction!.title}"? Esta ação não pode ser desfeita.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    await ref.read(transactionsProvider.notifier).removeTransaction(widget.transaction!.id!);
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final categories = ref.watch(financialCategoriesProvider).where((c) => c.type == _type || c.type == 'both').toList();
+    final safeCategoryId = categories.any((category) => category.id == _categoryId) ? _categoryId : null;
 
     return Scaffold(
       appBar: AppBar(
@@ -83,28 +138,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
           if (_isEditing)
             IconButton(
               icon: const Icon(Icons.delete),
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('Excluir?'),
-                    content: const Text('Deseja realmente excluir esta movimentação?'),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-                      TextButton(
-                        onPressed: () async {
-                          await ref.read(transactionsProvider.notifier).removeTransaction(widget.transaction!.id!);
-                          if (context.mounted) {
-                            Navigator.pop(ctx);
-                            Navigator.pop(context);
-                          }
-                        },
-                        child: const Text('Excluir', style: TextStyle(color: Colors.red)),
-                      ),
-                    ],
-                  ),
-                );
-              },
+              onPressed: _confirmDelete,
             ),
         ],
       ),
@@ -120,7 +154,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                   ButtonSegment(value: 'expense', label: Text('Despesa', style: TextStyle(color: Colors.red))),
                 ],
                 selected: {_type},
-                onSelectionChanged: (set) => setState(() => _type = set.first),
+                onSelectionChanged: (set) => _setType(set.first),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -173,17 +207,26 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                       child: Text(_dueDate == null ? 'Vencimento: -' : 'Venc. ${DateFormat('dd/MM/yyyy').format(_dueDate!)}'),
                     ),
                   ),
+                  if (_dueDate != null)
+                    IconButton(
+                      tooltip: 'Limpar vencimento',
+                      icon: const Icon(Icons.clear),
+                      onPressed: () => setState(() {
+                        _dueDate = null;
+                        if (!_canUseReminder()) _reminderEnabled = false;
+                      }),
+                    ),
                 ],
               ),
               SwitchListTile(
                 title: const Text('Ativar lembrete local'),
                 subtitle: const Text('Para vencimento/receita prevista'),
-                value: _reminderEnabled,
-                onChanged: (_dueDate != null || _type == 'income') ? (v) => setState(() => _reminderEnabled = v) : null,
+                value: _canUseReminder() && _reminderEnabled,
+                onChanged: _canUseReminder() ? (v) => setState(() => _reminderEnabled = v) : null,
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<int>(
-                initialValue: _categoryId,
+                initialValue: safeCategoryId,
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Sem Categoria')),
                   ...categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
@@ -217,7 +260,9 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                       _paidDate ??= DateTime.now();
                     } else {
                       _paidDate = null;
+                      _discountController.clear();
                     }
+                    if (!_canUseReminder()) _reminderEnabled = false;
                   });
                 },
                 decoration: const InputDecoration(labelText: 'Status Atual', border: OutlineInputBorder()),
@@ -253,7 +298,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
     );
   }
 
-  void _save() {
+  Future<void> _save() async {
     final amount = double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0;
     final discount = double.tryParse(_discountController.text.replaceAll(',', '.')) ?? 0.0;
     final template = widget.transaction;
@@ -266,36 +311,45 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O valor deve ser maior que zero.')));
       return;
     }
+    if (discount < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O desconto não pode ser negativo.')));
+      return;
+    }
+
+    final categories = ref.read(financialCategoriesProvider).where((c) => c.type == _type || c.type == 'both').toList();
+    final safeCategoryId = categories.any((category) => category.id == _categoryId) ? _categoryId : null;
+    final normalizedStatus = _statusAfterSave(_status);
+    final canReminder = normalizedStatus != 'paid' && normalizedStatus != 'canceled' && (_dueDate != null || _type == 'income');
 
     final transaction = FinancialTransaction(
       id: _isEditing ? template?.id : null,
-      title: _titleController.text,
-      description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
+      title: _titleController.text.trim(),
+      description: _descriptionController.text.trim().isNotEmpty ? _descriptionController.text.trim() : null,
       amount: amount,
       type: _type,
       transactionDate: _transactionDate.toIso8601String(),
       dueDate: _dueDate?.toIso8601String(),
-      paidDate: _paidDate?.toIso8601String(),
-      categoryId: _categoryId,
+      paidDate: normalizedStatus == 'paid' ? (_paidDate ?? DateTime.now()).toIso8601String() : null,
+      categoryId: safeCategoryId,
       paymentMethod: _selectedPaymentMethod,
-      status: _status,
-      reminderEnabled: _reminderEnabled,
+      status: normalizedStatus,
+      reminderEnabled: canReminder && _reminderEnabled,
       isFixed: _isFixed,
       recurrenceType: _recurrenceType,
-      notes: _notesController.text.isNotEmpty ? _notesController.text : null,
+      notes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
       debtId: template?.debtId,
       installmentNumber: template?.installmentNumber,
       totalInstallments: template?.totalInstallments,
-      discountAmount: discount > 0 ? discount : null,
+      discountAmount: normalizedStatus == 'paid' && discount > 0 ? discount : null,
       createdAt: _isEditing ? template!.createdAt : DateTime.now().toIso8601String(),
       updatedAt: DateTime.now().toIso8601String(),
     );
 
     if (_isEditing) {
-      ref.read(transactionsProvider.notifier).updateTransaction(transaction);
+      await ref.read(transactionsProvider.notifier).updateTransaction(transaction);
     } else {
-      ref.read(transactionsProvider.notifier).addTransaction(transaction);
+      await ref.read(transactionsProvider.notifier).addTransaction(transaction);
     }
-    Navigator.pop(context);
+    if (mounted) Navigator.pop(context);
   }
 }
