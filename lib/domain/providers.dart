@@ -120,7 +120,11 @@ class CategoryNotifier extends StateNotifier<List<TaskCategory>> {
   }
 
   Future<void> removeCategory(int id) async {
-    final fallbackId = state.firstWhere((c) => c.id != id, orElse: () => TaskCategory(id: 1, name: 'Pessoal', color: '0xFF2196F3')).id;
+    final fallbackCategory = state.firstWhere(
+      (c) => c.id != id,
+      orElse: () => TaskCategory(id: 1, name: 'Pessoal', color: '0xFF2196F3'),
+    );
+    final fallbackId = fallbackCategory.id ?? 1;
     final affectedTasks = ref.read(tasksProvider).where((t) => t.categoryId == id).toList();
     for (final task in affectedTasks) {
       await ref.read(tasksProvider.notifier).updateTask(task.copyWith(categoryId: fallbackId));
@@ -194,9 +198,11 @@ class TaskNotifier extends StateNotifier<List<Task>> {
   Future<void> updateTask(Task task) async {
     final previous = state.where((t) => t.id == task.id).cast<Task?>().firstOrNull;
     await db.updateTask(task);
-    if (task.status == 'concluida' && task.id != null) {
-      NotificationService().cancelNotification(task.id!);
+
+    if (task.id != null && (task.status == 'concluida' || task.status == 'canceled' || !task.reminderEnabled || task.time == null || task.date == null)) {
+      await NotificationService().cancelNotification(NotificationService().taskReminderId(task.id!));
     }
+
     state = [for (final t in state) if (t.id == task.id) task else t];
 
     final affectedProjectIds = <int>{};
@@ -210,7 +216,7 @@ class TaskNotifier extends StateNotifier<List<Task>> {
   Future<void> removeTask(int id) async {
     final task = state.where((t) => t.id == id).cast<Task?>().firstOrNull;
     await db.deleteTask(id);
-    NotificationService().cancelNotification(id);
+    await NotificationService().cancelNotification(NotificationService().taskReminderId(id));
     state = state.where((t) => t.id != id).toList();
     if (task?.projectId != null) {
       await ref.read(projectsProvider.notifier).recalculateProgress(task!.projectId!);
@@ -223,7 +229,7 @@ class TaskNotifier extends StateNotifier<List<Task>> {
     for (final t in completed) {
       if (t.id != null) {
         await db.deleteTask(t.id!);
-        NotificationService().cancelNotification(t.id!);
+        await NotificationService().cancelNotification(NotificationService().taskReminderId(t.id!));
       }
     }
     state = state.where((t) => t.status != 'concluida').toList();
@@ -295,7 +301,7 @@ class TransactionNotifier extends StateNotifier<List<FinancialTransaction>> {
     final transaction = state.where((t) => t.id == id).cast<FinancialTransaction?>().firstOrNull;
     await db.deleteTransaction(id);
     state = state.where((t) => t.id != id).toList();
-    NotificationService().cancelNotification(NotificationService().transactionReminderId(id));
+    await NotificationService().cancelNotification(NotificationService().transactionReminderId(id));
     await _checkDebtStatus(transaction?.debtId);
   }
 
@@ -305,7 +311,7 @@ class TransactionNotifier extends StateNotifier<List<FinancialTransaction>> {
     for (final t in canceled) {
       if (t.id == null) continue;
       await db.deleteTransaction(t.id!);
-      NotificationService().cancelNotification(NotificationService().transactionReminderId(t.id!));
+      await NotificationService().cancelNotification(NotificationService().transactionReminderId(t.id!));
     }
     state = state.where((t) => t.status != 'canceled').toList();
     for (final debtId in affectedDebtIds) {
@@ -329,7 +335,10 @@ class TransactionNotifier extends StateNotifier<List<FinancialTransaction>> {
     final daysBefore = t.debtId != null ? int.tryParse(settings[AppSettingKeys.debtsReminderDaysBefore] ?? '0') ?? 0 : 0;
     final reminderBase = targetDate.subtract(Duration(days: daysBefore));
     final reminderTime = DateTime(reminderBase.year, reminderBase.month, reminderBase.day, 9, 0);
-    if (reminderTime.isBefore(DateTime.now())) return;
+    if (reminderTime.isBefore(DateTime.now())) {
+      NotificationService().cancelNotification(reminderId);
+      return;
+    }
 
     NotificationService().scheduleNotification(
       id: reminderId,
@@ -352,11 +361,14 @@ class TransactionNotifier extends StateNotifier<List<FinancialTransaction>> {
     final debtTransactions = state.where((t) => t.debtId == debtId && t.status != 'canceled').toList();
     if (debtTransactions.isEmpty) return;
 
-    final allPaid = debtTransactions.every((t) => t.status == 'paid');
+    final totalAbatido = debtTransactions
+        .where((t) => t.status == 'paid')
+        .fold<double>(0, (sum, transaction) => sum + transaction.amount + (transaction.discountAmount ?? 0));
+    final isFullyPaidByValue = totalAbatido + 0.01 >= debt.totalAmount;
     final hasOverdue = debtTransactions.any((t) => t.status == 'overdue');
 
-    String newStatus = debt.status;
-    if (allPaid) {
+    String newStatus;
+    if (isFullyPaidByValue) {
       newStatus = 'paid';
     } else if (hasOverdue) {
       newStatus = 'overdue';
@@ -432,7 +444,7 @@ class DebtNotifier extends StateNotifier<List<Debt>> {
     final installments = ref.read(transactionsProvider).where((t) => t.debtId == id).toList();
     for (final i in installments) {
       if (i.id != null) {
-        NotificationService().cancelNotification(NotificationService().transactionReminderId(i.id!));
+        await NotificationService().cancelNotification(NotificationService().transactionReminderId(i.id!));
       }
     }
     await db.deleteDebt(id);
@@ -478,7 +490,7 @@ class ProjectNotifier extends StateNotifier<List<Project>> {
   }
 
   Future<void> removeProject(int id, {bool deleteLinkedTasks = false}) async {
-    NotificationService().cancelNotification(NotificationService().projectReminderId(id));
+    await NotificationService().cancelNotification(NotificationService().projectReminderId(id));
     await db.deleteProject(id, deleteLinkedTasks: deleteLinkedTasks);
     state = state.where((p) => p.id != id).toList();
     await ref.read(tasksProvider.notifier).loadTasks();
@@ -524,9 +536,15 @@ class ProjectNotifier extends StateNotifier<List<Project>> {
       return;
     }
     final end = p.endDate == null ? null : DateTime.tryParse(p.endDate!);
-    if (end == null) return;
+    if (end == null) {
+      NotificationService().cancelNotification(reminderId);
+      return;
+    }
     final reminderTime = DateTime(end.year, end.month, end.day, 9, 0);
-    if (reminderTime.isBefore(DateTime.now())) return;
+    if (reminderTime.isBefore(DateTime.now())) {
+      NotificationService().cancelNotification(reminderId);
+      return;
+    }
     NotificationService().scheduleNotification(
       id: reminderId,
       title: 'Prazo de projeto próximo',
@@ -586,7 +604,7 @@ class ProjectStepNotifier extends StateNotifier<List<ProjectStep>> {
   }
 
   Future<void> removeStep(int stepId) async {
-    NotificationService().cancelNotification(NotificationService().projectStepReminderId(stepId));
+    await NotificationService().cancelNotification(NotificationService().projectStepReminderId(stepId));
     await db.deleteProjectStep(stepId);
     state = state.where((s) => s.id != stepId).toList();
     ref.invalidate(allProjectStepsProvider);
@@ -601,9 +619,15 @@ class ProjectStepNotifier extends StateNotifier<List<ProjectStep>> {
       return;
     }
     final due = step.dueDate == null ? null : DateTime.tryParse(step.dueDate!);
-    if (due == null) return;
+    if (due == null) {
+      NotificationService().cancelNotification(reminderId);
+      return;
+    }
     final reminderTime = DateTime(due.year, due.month, due.day, 9, 0);
-    if (reminderTime.isBefore(DateTime.now())) return;
+    if (reminderTime.isBefore(DateTime.now())) {
+      NotificationService().cancelNotification(reminderId);
+      return;
+    }
     NotificationService().scheduleNotification(
       id: reminderId,
       title: 'Prazo de etapa próximo',
