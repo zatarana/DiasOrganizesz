@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../domain/providers.dart';
+import '../../data/models/task_model.dart';
 import '../calendar/calendar_screen.dart';
 import '../categories/categories_screen.dart';
 import '../debts/debts_screen.dart';
@@ -112,6 +113,25 @@ class TaskDashboard extends ConsumerStatefulWidget {
 
 class _TaskDashboardState extends ConsumerState<TaskDashboard> {
   bool _valuesRevealed = false;
+
+  bool _isTaskOverdue(Task task) {
+    if (task.date == null) return false;
+    final date = DateTime.tryParse(task.date!);
+    if (date == null) return false;
+
+    if (task.time != null) {
+      final parts = task.time!.split(':');
+      if (parts.length == 2) {
+        final hour = int.tryParse(parts[0]) ?? 23;
+        final minute = int.tryParse(parts[1]) ?? 59;
+        return DateTime(date.year, date.month, date.day, hour, minute).isBefore(DateTime.now());
+      }
+    }
+
+    return DateTime(date.year, date.month, date.day, 23, 59, 59).isBefore(DateTime.now());
+  }
+
+  String _statusWhenReopened(Task task) => _isTaskOverdue(task) ? 'atrasada' : 'pendente';
 
   @override
   Widget build(BuildContext context) {
@@ -279,7 +299,11 @@ class _TaskDashboardState extends ConsumerState<TaskDashboard> {
                       color: task.status == 'concluida' ? Colors.green : Colors.grey,
                     ),
                     onTap: () {
-                      ref.read(tasksProvider.notifier).updateTask(task.copyWith(status: task.status == 'concluida' ? 'pendente' : 'concluida', updatedAt: DateTime.now().toIso8601String()));
+                      final updated = task.copyWith(
+                        status: task.status == 'concluida' ? _statusWhenReopened(task) : 'concluida',
+                        updatedAt: DateTime.now().toIso8601String(),
+                      );
+                      ref.read(tasksProvider.notifier).updateTask(updated);
                     },
                   ),
                 )),
