@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../data/database/finance_planning_store.dart';
 import '../../domain/providers.dart';
 import '../../data/models/task_model.dart';
 import '../calendar/calendar_screen.dart';
@@ -114,6 +115,12 @@ class TaskDashboard extends ConsumerStatefulWidget {
 class _TaskDashboardState extends ConsumerState<TaskDashboard> {
   bool _valuesRevealed = false;
 
+  Future<double> _loadRealAccountBalance() async {
+    final db = await ref.read(dbProvider).database;
+    final accounts = await FinancePlanningStore.getAccounts(db);
+    return accounts.where((account) => !account.isArchived).fold<double>(0, (sum, account) => sum + account.currentBalance);
+  }
+
   bool _isTaskOverdue(Task task) {
     if (task.date == null) return false;
     final date = DateTime.tryParse(task.date!);
@@ -193,7 +200,7 @@ class _TaskDashboardState extends ConsumerState<TaskDashboard> {
       }
     }
 
-    final saldoRealizado = receitasPagas - despesasPagas;
+    final resultadoRealizadoMes = receitasPagas - despesasPagas;
     final saldoPrevisto = receitasPrevistas - despesasPrevistas;
 
     final activeDebts = debts.where((debt) => debt.status != 'paid' && debt.status != 'canceled').toList();
@@ -218,98 +225,98 @@ class _TaskDashboardState extends ConsumerState<TaskDashboard> {
       return '$prefix ${value.toDouble().toStringAsFixed(2)}';
     }
 
-    final cards = <Widget>[
-      _DashboardSummaryCard(
-        title: 'Financeiro do mês',
-        icon: Icons.account_balance_wallet,
-        color: Colors.blue,
-        lines: ['Previsto: ${money(saldoPrevisto)}', 'Receitas: ${money(receitasPrevistas)}', 'Realizado: ${money(saldoRealizado)}'],
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceScreen())),
-      ),
-      _DashboardSummaryCard(
-        title: 'Tarefas',
-        icon: Icons.checklist,
-        color: Colors.green,
-        lines: ['Hoje: ${todayTasks.length}', 'Pendentes: $pendingTasks', 'Atrasadas: $overdueTasks'],
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskListScreen())),
-      ),
-      _DashboardSummaryCard(
-        title: 'Dívidas',
-        icon: Icons.money_off,
-        color: Colors.deepOrange,
-        lines: ['Em aberto: $openDebts', 'Restante: ${money(remainingDebts)}', 'Parcelas atraso: $overdueDebtInstallments'],
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtsScreen())),
-      ),
-      if (showProjectsCard)
-        _DashboardSummaryCard(
-          title: 'Projetos',
-          icon: Icons.rocket_launch,
-          color: Colors.purple,
-          lines: ['Ativos: $activeProjects', 'Atrasados: $overdueProjects', 'Total: ${validProjects.length}'],
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProjectsScreen())),
-        ),
-    ];
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('DiasOrganize', style: TextStyle(fontWeight: FontWeight.bold)),
-        actions: [
-          if (canTemporarilyRevealValues)
-            IconButton(
-              tooltip: _valuesRevealed ? 'Ocultar valores' : 'Revelar valores',
-              icon: Icon(_valuesRevealed ? Icons.visibility_off : Icons.visibility),
-              onPressed: () => setState(() => _valuesRevealed = !_valuesRevealed),
-            ),
-        ],
-      ),
-      drawer: const AppDrawer(),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.15,
-            children: cards,
+    return FutureBuilder<double>(
+      future: _loadRealAccountBalance(),
+      builder: (context, accountSnapshot) {
+        final realAccountBalance = accountSnapshot.data ?? 0;
+        final cards = <Widget>[
+          _DashboardSummaryCard(
+            title: 'Financeiro',
+            icon: Icons.account_balance_wallet,
+            color: Colors.blue,
+            lines: ['Saldo real: ${money(realAccountBalance)}', 'Resultado mês: ${money(resultadoRealizadoMes)}', 'Previsto mês: ${money(saldoPrevisto)}'],
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceScreen())),
           ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Tarefas de hoje', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              Text('${todayTasks.length}'),
+          _DashboardSummaryCard(
+            title: 'Tarefas',
+            icon: Icons.checklist,
+            color: Colors.green,
+            lines: ['Hoje: ${todayTasks.length}', 'Pendentes: $pendingTasks', 'Atrasadas: $overdueTasks'],
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskListScreen())),
+          ),
+          _DashboardSummaryCard(
+            title: 'Dívidas',
+            icon: Icons.money_off,
+            color: Colors.deepOrange,
+            lines: ['Em aberto: $openDebts', 'Restante: ${money(remainingDebts)}', 'Parcelas atraso: $overdueDebtInstallments'],
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtsScreen())),
+          ),
+          if (showProjectsCard)
+            _DashboardSummaryCard(
+              title: 'Projetos',
+              icon: Icons.rocket_launch,
+              color: Colors.purple,
+              lines: ['Ativos: $activeProjects', 'Atrasados: $overdueProjects', 'Total: ${validProjects.length}'],
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProjectsScreen())),
+            ),
+        ];
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('DiasOrganize', style: TextStyle(fontWeight: FontWeight.bold)),
+            actions: [
+              if (canTemporarilyRevealValues)
+                IconButton(
+                  tooltip: _valuesRevealed ? 'Ocultar valores' : 'Revelar valores',
+                  icon: Icon(_valuesRevealed ? Icons.visibility_off : Icons.visibility),
+                  onPressed: () => setState(() => _valuesRevealed = !_valuesRevealed),
+                ),
             ],
           ),
-          const SizedBox(height: 8),
-          if (todayTasks.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: Text('Nenhuma tarefa para hoje! 🎉')),
-            )
-          else
-            ...todayTasks.map((task) => Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    title: Text(task.title, style: TextStyle(decoration: task.status == 'concluida' ? TextDecoration.lineThrough : null)),
-                    subtitle: Text('${task.priority.toUpperCase()} - ${task.status}'),
-                    trailing: Icon(
-                      task.status == 'concluida' ? Icons.check_circle : Icons.circle_outlined,
-                      color: task.status == 'concluida' ? Colors.green : Colors.grey,
-                    ),
-                    onTap: () {
-                      final updated = task.copyWith(
-                        status: task.status == 'concluida' ? _statusWhenReopened(task) : 'concluida',
-                        updatedAt: DateTime.now().toIso8601String(),
-                      );
-                      ref.read(tasksProvider.notifier).updateTask(updated);
-                    },
-                  ),
-                )),
-        ],
-      ),
+          drawer: const AppDrawer(),
+          body: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 1.15,
+                children: cards,
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Tarefas de hoje', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text('${todayTasks.length}'),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (todayTasks.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: Text('Nenhuma tarefa para hoje! 🎉')),
+                )
+              else
+                ...todayTasks.map((task) => Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        title: Text(task.title, style: TextStyle(decoration: task.status == 'concluida' ? TextDecoration.lineThrough : null)),
+                        subtitle: Text('${task.priority.toUpperCase()} - ${task.status}'),
+                        trailing: Icon(task.status == 'concluida' ? Icons.check_circle : Icons.circle_outlined, color: task.status == 'concluida' ? Colors.green : Colors.grey),
+                        onTap: () {
+                          final updated = task.copyWith(status: task.status == 'concluida' ? _statusWhenReopened(task) : 'concluida', updatedAt: DateTime.now().toIso8601String());
+                          ref.read(tasksProvider.notifier).updateTask(updated);
+                        },
+                      ),
+                    )),
+            ],
+          ),
+        );
+      },
     );
   }
 }
