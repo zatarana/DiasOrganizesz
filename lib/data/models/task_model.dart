@@ -8,7 +8,7 @@ class Task {
   final String priority; // 'baixa', 'media', 'alta'
   final String? date;
   final String? time;
-  final String status; // 'pendente', 'concluida', 'atrasada'
+  final String status; // 'pendente', 'concluida', 'atrasada', 'canceled'
   final bool reminderEnabled;
   final String createdAt;
   final String updatedAt;
@@ -50,18 +50,18 @@ class Task {
   factory Task.fromMap(Map<String, dynamic> map) {
     return Task(
       id: map['id'],
-      title: map['title'],
+      title: map['title'] ?? 'Tarefa sem título',
       description: map['description'],
       categoryId: map['categoryId'],
       projectId: map['projectId'],
       projectStepId: map['projectStepId'],
-      priority: map['priority'],
+      priority: map['priority'] ?? 'media',
       date: map['date'],
       time: map['time'],
-      status: map['status'],
+      status: map['status'] ?? 'pendente',
       reminderEnabled: map['reminderEnabled'] == 1,
-      createdAt: map['createdAt'],
-      updatedAt: map['updatedAt'],
+      createdAt: map['createdAt'] ?? DateTime.now().toIso8601String(),
+      updatedAt: map['updatedAt'] ?? DateTime.now().toIso8601String(),
     );
   }
 
@@ -69,14 +69,18 @@ class Task {
     int? id,
     String? title,
     String? description,
+    bool clearDescription = false,
     int? categoryId,
+    bool clearCategoryId = false,
     int? projectId,
-    int? projectStepId,
     bool clearProjectId = false,
+    int? projectStepId,
     bool clearProjectStepId = false,
     String? priority,
     String? date,
+    bool clearDate = false,
     String? time,
+    bool clearTime = false,
     String? status,
     bool? reminderEnabled,
     String? createdAt,
@@ -85,13 +89,13 @@ class Task {
     return Task(
       id: id ?? this.id,
       title: title ?? this.title,
-      description: description ?? this.description,
-      categoryId: categoryId ?? this.categoryId,
+      description: clearDescription ? null : (description ?? this.description),
+      categoryId: clearCategoryId ? null : (categoryId ?? this.categoryId),
       projectId: clearProjectId ? null : (projectId ?? this.projectId),
       projectStepId: clearProjectStepId ? null : (projectStepId ?? this.projectStepId),
       priority: priority ?? this.priority,
-      date: date ?? this.date,
-      time: time ?? this.time,
+      date: clearDate ? null : (date ?? this.date),
+      time: clearTime ? null : (time ?? this.time),
       status: status ?? this.status,
       reminderEnabled: reminderEnabled ?? this.reminderEnabled,
       createdAt: createdAt ?? this.createdAt,
