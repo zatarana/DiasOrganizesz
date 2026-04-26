@@ -5,9 +5,10 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../data/database/db_helper.dart';
+import '../../data/database/finance_planning_store.dart';
 
 class BackupService {
-  static const int backupFormatVersion = 1;
+  static const int backupFormatVersion = 2;
 
   Future<String> exportJson(DatabaseHelper dbHelper) async {
     final db = await dbHelper.database;
@@ -22,6 +23,7 @@ class BackupService {
       'projects': await db.query('projects', orderBy: 'id ASC'),
       'project_steps': await db.query('project_steps', orderBy: 'id ASC'),
       'settings': await db.query('settings', orderBy: 'key ASC'),
+      ...await FinancePlanningStore.exportTables(db),
     };
 
     try {
