@@ -243,7 +243,8 @@ class _StatsList extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 10),
           child: ListTile(
             title: Text(item.label),
-            trailing: Flexible(
+            trailing: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 170),
               child: Text(
                 item.value,
                 style: const TextStyle(fontWeight: FontWeight.bold),
