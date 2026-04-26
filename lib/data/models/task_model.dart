@@ -75,6 +75,7 @@ class Task {
 
   Task copyWith({
     int? id,
+    bool clearId = false,
     String? title,
     String? description,
     bool clearDescription = false,
@@ -98,7 +99,7 @@ class Task {
     String? updatedAt,
   }) {
     return Task(
-      id: id ?? this.id,
+      id: clearId ? null : (id ?? this.id),
       title: title ?? this.title,
       description: clearDescription ? null : (description ?? this.description),
       categoryId: clearCategoryId ? null : (categoryId ?? this.categoryId),
