@@ -144,10 +144,10 @@ class _TaskDashboardState extends ConsumerState<TaskDashboard> {
     final currency = appSettings[AppSettingKeys.defaultCurrency] ?? 'BRL';
     final homeShowsValues = (appSettings[AppSettingKeys.homeShowFinancialValues] ?? 'true') == 'true';
     final visualLockEnabled = (appSettings[AppSettingKeys.financeVisualLock] ?? 'false') == 'true';
-    final hideValues = (appSettings[AppSettingKeys.privacyHideHomeValues] ?? 'false') == 'true' ||
-        (appSettings[AppSettingKeys.financeDiscreteMode] ?? 'false') == 'true' ||
-        !homeShowsValues ||
-        (visualLockEnabled && !_valuesRevealed);
+    final privacyHideHomeValues = (appSettings[AppSettingKeys.privacyHideHomeValues] ?? 'false') == 'true';
+    final financeDiscreteMode = (appSettings[AppSettingKeys.financeDiscreteMode] ?? 'false') == 'true';
+    final canTemporarilyRevealValues = visualLockEnabled && homeShowsValues && !privacyHideHomeValues && !financeDiscreteMode;
+    final hideValues = privacyHideHomeValues || financeDiscreteMode || !homeShowsValues || (visualLockEnabled && !_valuesRevealed);
     final showProjectsCard = (appSettings[AppSettingKeys.homeShowProjectsCard] ?? 'true') == 'true';
 
     final now = DateTime.now();
@@ -204,9 +204,10 @@ class _TaskDashboardState extends ConsumerState<TaskDashboard> {
       remainingDebts += (debt.totalAmount - abatido).clamp(0, double.infinity).toDouble();
     }
 
-    final activeProjects = projects.where((project) => project.status == 'active').length;
-    final overdueProjects = projects.where((project) {
-      if (project.endDate == null || project.status == 'completed' || project.status == 'canceled') return false;
+    final validProjects = projects.where((project) => project.status != 'canceled').toList();
+    final activeProjects = validProjects.where((project) => project.status == 'active').length;
+    final overdueProjects = validProjects.where((project) {
+      if (project.endDate == null || project.status == 'completed') return false;
       final end = DateTime.tryParse(project.endDate!);
       return end != null && end.isBefore(now);
     }).length;
@@ -244,7 +245,7 @@ class _TaskDashboardState extends ConsumerState<TaskDashboard> {
           title: 'Projetos',
           icon: Icons.rocket_launch,
           color: Colors.purple,
-          lines: ['Ativos: $activeProjects', 'Atrasados: $overdueProjects', 'Total: ${projects.length}'],
+          lines: ['Ativos: $activeProjects', 'Atrasados: $overdueProjects', 'Total: ${validProjects.length}'],
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProjectsScreen())),
         ),
     ];
@@ -253,7 +254,7 @@ class _TaskDashboardState extends ConsumerState<TaskDashboard> {
       appBar: AppBar(
         title: const Text('DiasOrganize', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
-          if (visualLockEnabled && homeShowsValues)
+          if (canTemporarilyRevealValues)
             IconButton(
               tooltip: _valuesRevealed ? 'Ocultar valores' : 'Revelar valores',
               icon: Icon(_valuesRevealed ? Icons.visibility_off : Icons.visibility),
