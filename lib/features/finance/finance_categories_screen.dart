@@ -25,7 +25,7 @@ class FinanceCategoriesScreen extends ConsumerWidget {
 
                 return ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: color.withValues(alpha: 0.2),
+                    backgroundColor: color.withOpacity(0.2),
                     child: Icon(IconMapper.fromName(cat.icon), color: color),
                   ),
                   title: Text(cat.name),
@@ -183,7 +183,7 @@ class _CreateFinanceCategoryScreenState extends ConsumerState<CreateFinanceCateg
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              initialValue: _type,
+              value: _type,
               items: const [
                 DropdownMenuItem(value: 'income', child: Text('Apenas Receitas')),
                 DropdownMenuItem(value: 'expense', child: Text('Apenas Despesas')),
