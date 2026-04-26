@@ -19,63 +19,48 @@ class DebtDetailsScreen extends ConsumerStatefulWidget {
 class _DebtDetailsScreenState extends ConsumerState<DebtDetailsScreen> {
   @override
   Widget build(BuildContext context) {
-    // Watch debts to get latest updates if debt is modified
     final debts = ref.watch(debtsProvider);
     final debtIndex = debts.indexWhere((d) => d.id == widget.debt.id);
-    
-    // Fallback if debt was deleted
+
     if (debtIndex == -1) {
-       return Scaffold(
-         appBar: AppBar(title: const Text('Dívida Excluída')),
-         body: const Center(child: Text('Esta dívida não existe mais.')),
-       );
+      return Scaffold(
+        appBar: AppBar(title: const Text('Dívida Excluída')),
+        body: const Center(child: Text('Esta dívida não existe mais.')),
+      );
     }
-    
+
     final currentDebt = debts[debtIndex];
     final allTransactions = ref.watch(transactionsProvider);
-    final installments = allTransactions.where((t) => t.debtId == currentDebt.id && t.status != 'canceled').toList();
-    
-    installments.sort((a, b) {
-       if (a.installmentNumber != null && b.installmentNumber != null) {
-          return a.installmentNumber!.compareTo(b.installmentNumber!);
-       }
-       return 0;
-    });
+    final installments = allTransactions.where((t) => t.debtId == currentDebt.id && t.status != 'canceled').toList()
+      ..sort((a, b) {
+        if (a.installmentNumber != null && b.installmentNumber != null) return a.installmentNumber!.compareTo(b.installmentNumber!);
+        final ad = DateTime.tryParse(a.dueDate ?? a.transactionDate) ?? DateTime(2100);
+        final bd = DateTime.tryParse(b.dueDate ?? b.transactionDate) ?? DateTime(2100);
+        return ad.compareTo(bd);
+      });
 
-    double paidForThisDebt = 0;
-    double totalDiscounts = 0;
-    for (var t in installments) {
-      if (t.status == 'paid') {
-         paidForThisDebt += t.amount;
-         if (t.discountAmount != null) {
-           paidForThisDebt += t.discountAmount!;
-           totalDiscounts += t.discountAmount!;
-         }
-      }
-    }
-    
-    // Check for ad-hoc value differences (like user paid less/more without discount fields strictly matching)
-    final progress = currentDebt.totalAmount > 0 ? (paidForThisDebt / currentDebt.totalAmount) : 0.0;
-    
-    // Real extra or missing against total
-    final expectedAmount = currentDebt.totalAmount;
-    final valueDiff = paidForThisDebt - expectedAmount; // > 0 means paid more than debt (juros/multas), < 0 means paid less (discount)
+    final paidAmount = installments.where((t) => t.status == 'paid').fold<double>(0, (sum, t) => sum + t.amount);
+    final discounts = installments.where((t) => t.status == 'paid').fold<double>(0, (sum, t) => sum + (t.discountAmount ?? 0));
+    final abatido = paidAmount + discounts;
+    final remaining = (currentDebt.totalAmount - abatido).clamp(0, double.infinity).toDouble();
+    final progress = currentDebt.totalAmount > 0 ? (abatido / currentDebt.totalAmount).clamp(0.0, 1.0).toDouble() : 0.0;
+    final valueDiff = abatido - currentDebt.totalAmount;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(currentDebt.name),
         actions: [
           PopupMenuButton<String>(
-            onSelected: (value) {
-               if (value == 'edit') {
-                 Navigator.push(context, MaterialPageRoute(builder: (_) => CreateDebtScreen(debt: currentDebt)));
-               } else if (value == 'pause') {
-                 ref.read(debtsProvider.notifier).updateDebt(currentDebt.copyWith(status: currentDebt.status == 'paused' ? 'active' : 'paused'));
-               } else if (value == 'cancel') {
-                 ref.read(debtsProvider.notifier).updateDebt(currentDebt.copyWith(status: currentDebt.status == 'canceled' ? 'active' : 'canceled'));
-               } else if (value == 'delete') {
-                 _confirmDelete(currentDebt);
-               }
+            onSelected: (value) async {
+              if (value == 'edit') {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => CreateDebtScreen(debt: currentDebt)));
+              } else if (value == 'pause') {
+                await ref.read(debtsProvider.notifier).updateDebt(currentDebt.copyWith(status: currentDebt.status == 'paused' ? 'active' : 'paused', updatedAt: DateTime.now().toIso8601String()));
+              } else if (value == 'cancel') {
+                await ref.read(debtsProvider.notifier).updateDebt(currentDebt.copyWith(status: currentDebt.status == 'canceled' ? 'active' : 'canceled', updatedAt: DateTime.now().toIso8601String()));
+              } else if (value == 'delete') {
+                _confirmDelete(currentDebt);
+              }
             },
             itemBuilder: (context) => [
               const PopupMenuItem(value: 'edit', child: Text('Editar')),
@@ -87,28 +72,33 @@ class _DebtDetailsScreenState extends ConsumerState<DebtDetailsScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-         onPressed: () {
-            // New Ad-Hoc Transaction specifically for this debt
-            final newT = FinancialTransaction(
-              title: 'Pagamento - ${currentDebt.name}',
-              amount: currentDebt.totalAmount > 0 ? (currentDebt.totalAmount - paidForThisDebt).clamp(0, double.infinity).toDouble() : 0,
-              type: 'expense',
-              status: 'pending',
-              debtId: currentDebt.id,
-              categoryId: currentDebt.categoryId,
-              installmentNumber: installments.length + 1,
-              transactionDate: DateTime.now().toIso8601String(),
-              createdAt: DateTime.now().toIso8601String(),
-              updatedAt: DateTime.now().toIso8601String(),
-            );
-            Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTransactionScreen(transaction: newT)));
-         },
-         icon: const Icon(Icons.add),
-         label: const Text('Add Pagamento'),
+        onPressed: currentDebt.status == 'canceled'
+            ? null
+            : () {
+                final now = DateTime.now().toIso8601String();
+                final amount = remaining > 0 ? remaining : (currentDebt.installmentAmount ?? 0.0);
+                final newTransaction = FinancialTransaction(
+                  title: 'Pagamento - ${currentDebt.name}',
+                  amount: amount,
+                  type: 'expense',
+                  status: 'pending',
+                  debtId: currentDebt.id,
+                  categoryId: currentDebt.categoryId,
+                  installmentNumber: installments.length + 1,
+                  totalInstallments: currentDebt.installmentCount,
+                  transactionDate: now,
+                  dueDate: now,
+                  createdAt: now,
+                  updatedAt: now,
+                );
+                Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTransactionScreen(transaction: newTransaction)));
+              },
+        icon: const Icon(Icons.add),
+        label: const Text('Add Pagamento'),
       ),
       body: Column(
         children: [
-          _buildHeader(currentDebt, paidForThisDebt, progress, totalDiscounts, valueDiff),
+          _buildHeader(currentDebt, paidAmount, discounts, abatido, remaining, progress, valueDiff),
           const Divider(),
           const Padding(
             padding: EdgeInsets.all(16.0),
@@ -118,101 +108,85 @@ class _DebtDetailsScreenState extends ConsumerState<DebtDetailsScreen> {
             ),
           ),
           Expanded(
-            child: installments.isEmpty 
-              ? const Center(child: Text('Nenhuma parcela gerada para esta dívida.'))
-              : ListView.builder(
-                  itemCount: installments.length,
-                  itemBuilder: (context, index) {
-                    final t = installments[index];
-                    return _buildInstallmentTile(t);
-                  },
-                ),
+            child: installments.isEmpty
+                ? const Center(child: Text('Nenhuma parcela gerada para esta dívida.'))
+                : ListView.builder(
+                    itemCount: installments.length,
+                    itemBuilder: (context, index) => _buildInstallmentTile(installments[index]),
+                  ),
           )
         ],
       ),
     );
   }
 
-  Widget _buildHeader(Debt d, double paid, double progress, double totalDiscounts, double valueDiff) {
+  Widget _buildHeader(Debt debt, double paidAmount, double discounts, double abatido, double remaining, double progress, double valueDiff) {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
-         crossAxisAlignment: CrossAxisAlignment.stretch,
-         children: [
-           Row(
-             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-             children: [
-                Text('Valor Total Base:', style: TextStyle(fontSize: 16, color: Colors.grey.shade700)),
-                Text('R\$ ${d.totalAmount.toStringAsFixed(2)}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-             ],
-           ),
-           const SizedBox(height: 8),
-           Row(
-             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-             children: [
-                const Text('Pago / Abatido:', style: TextStyle(fontSize: 14, color: Colors.green)),
-                Text('R\$ ${paid.toStringAsFixed(2)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green)),
-             ],
-           ),
-           const SizedBox(height: 8),
-           Row(
-             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-             children: [
-                const Text('Falta Pagar:', style: TextStyle(fontSize: 14, color: Colors.orange)),
-                Text('R\$ ${(d.totalAmount - paid).clamp(0, double.infinity).toStringAsFixed(2)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.orange)),
-             ],
-           ),
-           if (d.status == 'paid') ...[
-             const SizedBox(height: 12),
-             if (valueDiff < 0)
-                Text('Quitada com Economia! (Desconto Extra: R\$ ${valueDiff.abs().toStringAsFixed(2)})', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold))
-             else if (valueDiff > 0)
-                Text('Quitada com Acréscimos (Juros/Multas: R\$ ${valueDiff.toStringAsFixed(2)})', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))
-             else
-                const Text('Quitada no valor exato!', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-           ],
-           const SizedBox(height: 16),
-           ClipRRect(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _headerRow('Valor Total Base:', 'R\$ ${debt.totalAmount.toStringAsFixed(2)}', Colors.black87, 20),
+          const SizedBox(height: 8),
+          _headerRow('Pago em dinheiro:', 'R\$ ${paidAmount.toStringAsFixed(2)}', Colors.green, 16),
+          const SizedBox(height: 8),
+          _headerRow('Descontos abatidos:', 'R\$ ${discounts.toStringAsFixed(2)}', Colors.teal, 16),
+          const SizedBox(height: 8),
+          _headerRow('Total abatido:', 'R\$ ${abatido.toStringAsFixed(2)}', Colors.blue, 16),
+          const SizedBox(height: 8),
+          _headerRow('Falta pagar:', 'R\$ ${remaining.toStringAsFixed(2)}', Colors.orange, 16),
+          if (debt.status == 'paid' || progress >= 1.0) ...[
+            const SizedBox(height: 12),
+            if (valueDiff < 0)
+              Text('Quitada com economia de R\$ ${valueDiff.abs().toStringAsFixed(2)}', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold))
+            else if (valueDiff > 0)
+              Text('Quitada com acréscimos de R\$ ${valueDiff.toStringAsFixed(2)}', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))
+            else
+              const Text('Quitada no valor exato!', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+          ],
+          const SizedBox(height: 16),
+          ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
-              value: progress.clamp(0.0, 1.0),
+              value: progress,
               minHeight: 12,
               backgroundColor: Colors.grey.shade200,
               color: progress >= 1.0 ? Colors.green : Colors.blue,
             ),
           ),
-         ],
+        ],
       ),
     );
   }
 
-  Widget _buildInstallmentTile(FinancialTransaction t) {
-    bool isPaid = t.status == 'paid';
-    bool isOverdue = false;
-    
-    if (!isPaid && t.dueDate != null) {
-      final due = DateTime.tryParse(t.dueDate!);
-      if (due != null && due.isBefore(DateTime.now()) && due.day < DateTime.now().day) {
-        isOverdue = true;
-      }
-    }
+  Widget _headerRow(String label, String value, Color color, double fontSize) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: TextStyle(fontSize: 14, color: Colors.grey.shade700)),
+        Text(value, style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.bold, color: color)),
+      ],
+    );
+  }
+
+  Widget _buildInstallmentTile(FinancialTransaction transaction) {
+    final isPaid = transaction.status == 'paid';
+    final isOverdue = _isInstallmentOverdue(transaction);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: ListTile(
         onTap: () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTransactionScreen(transaction: t)));
+          Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTransactionScreen(transaction: transaction)));
         },
         leading: Checkbox(
           value: isPaid,
           onChanged: (val) {
-             if (val != null) {
-               _toggleInstallment(t, val);
-             }
+            if (val != null) _toggleInstallment(transaction, val);
           },
         ),
         title: Text(
-          t.title,
+          transaction.title,
           style: TextStyle(
             decoration: isPaid ? TextDecoration.lineThrough : null,
             fontWeight: isPaid ? FontWeight.normal : FontWeight.bold,
@@ -221,87 +195,78 @@ class _DebtDetailsScreenState extends ConsumerState<DebtDetailsScreen> {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (t.dueDate != null)
+            if (transaction.dueDate != null)
               Text(
-                'Vencimento: ${DateFormat('dd/MM/yyyy').format(DateTime.parse(t.dueDate!))}',
+                'Vencimento: ${DateFormat('dd/MM/yyyy').format(DateTime.parse(transaction.dueDate!))}',
                 style: TextStyle(color: isOverdue ? Colors.red : null),
               ),
-            if (isPaid && t.paidDate != null)
+            if (isPaid && transaction.paidDate != null)
               Text(
-                'Pago em: ${DateFormat('dd/MM/yyyy').format(DateTime.parse(t.paidDate!))}',
+                'Pago em: ${DateFormat('dd/MM/yyyy').format(DateTime.parse(transaction.paidDate!))}',
                 style: const TextStyle(color: Colors.green, fontSize: 12),
               ),
-            if (t.discountAmount != null && t.discountAmount! > 0)
+            if (transaction.discountAmount != null && transaction.discountAmount! > 0)
               Text(
-                'Desconto: R\$ ${t.discountAmount!.toStringAsFixed(2)}',
+                'Desconto: R\$ ${transaction.discountAmount!.toStringAsFixed(2)}',
                 style: const TextStyle(color: Colors.teal, fontSize: 12),
-              )
+              ),
           ],
         ),
         trailing: Text(
-          'R\$ ${t.amount.toStringAsFixed(2)}',
+          'R\$ ${transaction.amount.toStringAsFixed(2)}',
           style: TextStyle(
-             color: isPaid ? Colors.grey : (isOverdue ? Colors.red : Colors.black),
-             fontWeight: FontWeight.bold,
+            color: isPaid ? Colors.grey : (isOverdue ? Colors.red : Colors.black),
+            fontWeight: FontWeight.bold,
           ),
         ),
       ),
     );
   }
 
-  void _toggleInstallment(FinancialTransaction t, bool isPaid) {
-     String newStatus = isPaid ? 'paid' : 'pending';
-     if (!isPaid && t.dueDate != null) {
-       final due = DateTime.tryParse(t.dueDate!);
-       final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
-       if (due != null) {
-          final dueDateOnly = DateTime(due.year, due.month, due.day);
-          if (dueDateOnly.isBefore(today)) {
-             newStatus = 'overdue';
-          }
-       }
-     }
-     
-     var updated = t.copyWith(
-       status: newStatus, 
-       paidDate: isPaid ? DateTime.now().toIso8601String() : null,
-     );
-     
-     // Allow users to specify payment method and discount later, 
-     // but typical checkbox just pays it immediately for the nominal amount with current date.
-     ref.read(transactionsProvider.notifier).updateTransaction(updated);
+  bool _isInstallmentOverdue(FinancialTransaction transaction) {
+    if (transaction.status == 'paid' || transaction.status == 'canceled') return false;
+    final rawDate = transaction.dueDate ?? transaction.transactionDate;
+    final due = DateTime.tryParse(rawDate);
+    if (due == null) return false;
+    final dueDate = DateTime(due.year, due.month, due.day);
+    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    return dueDate.isBefore(today);
   }
 
-  void _confirmDelete(Debt d) {
-     showDialog(
+  void _toggleInstallment(FinancialTransaction transaction, bool isPaid) {
+    String newStatus = isPaid ? 'paid' : 'pending';
+    if (!isPaid && _isInstallmentOverdue(transaction)) newStatus = 'overdue';
+
+    final updated = transaction.copyWith(
+      status: newStatus,
+      paidDate: isPaid ? DateTime.now().toIso8601String() : null,
+      clearPaidDate: !isPaid,
+      updatedAt: DateTime.now().toIso8601String(),
+    );
+
+    ref.read(transactionsProvider.notifier).updateTransaction(updated);
+  }
+
+  void _confirmDelete(Debt debt) {
+    showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Excluir Dívida'),
-        content: const Text('Deseja excluir esta dívida e apagar todas as parcelas atreladas a ela?'),
+        content: const Text('Deseja excluir esta dívida? As parcelas vinculadas serão desvinculadas no financeiro.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           TextButton(
             onPressed: () async {
-               if (d.id != null) {
-                 // Removendo a dívida automaticamente gerencia ou você pode remover as parcelas via provider.
-                 // We should remove all transactions related first:
-                 final allTransactions = ref.read(transactionsProvider);
-                 final installments = allTransactions.where((t) => t.debtId == d.id).toList();
-                 final transNotifier = ref.read(transactionsProvider.notifier);
-                 for (var inst in installments) {
-                    if (inst.id != null) await transNotifier.removeTransaction(inst.id!);
-                 }
-                 await ref.read(debtsProvider.notifier).removeDebt(d.id!);
-               }
-               if (mounted) {
-                 Navigator.pop(ctx);
-                 Navigator.pop(context);
-               }
+              if (debt.id != null) await ref.read(debtsProvider.notifier).removeDebt(debt.id!);
+              if (mounted) {
+                Navigator.pop(ctx);
+                Navigator.pop(context);
+              }
             },
             child: const Text('Excluir', style: TextStyle(color: Colors.red)),
           ),
         ],
-      )
-     );
+      ),
+    );
   }
 }
