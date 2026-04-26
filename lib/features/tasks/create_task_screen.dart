@@ -22,6 +22,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
   String _date = DateFormat('yyyy-MM-dd').format(DateTime.now());
   String? _time;
   String _priority = 'media';
+  String _recurrenceType = 'none';
   int? _categoryId;
   int? _projectId;
   int? _projectStepId;
@@ -40,6 +41,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
       if (widget.task!.date != null) _date = widget.task!.date!;
       _time = widget.task!.time;
       _priority = widget.task!.priority;
+      _recurrenceType = widget.task!.recurrenceType;
       _categoryId = widget.task!.categoryId;
       _projectId = widget.task!.projectId ?? widget.projectId;
       _projectStepId = widget.task!.projectStepId;
@@ -96,9 +98,11 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
       categoryId: catId!,
       projectId: _projectId,
       projectStepId: _projectId == null ? null : _projectStepId,
+      parentTaskId: widget.task?.parentTaskId,
       priority: _priority,
       status: _normalizedStatusForSave(),
       reminderEnabled: hasValidReminder,
+      recurrenceType: widget.task?.parentTaskId == null ? _recurrenceType : 'none',
       createdAt: widget.task?.createdAt ?? DateTime.now().toIso8601String(),
       updatedAt: DateTime.now().toIso8601String(),
     );
@@ -177,6 +181,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isSubtask = widget.task?.parentTaskId != null;
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.task == null ? 'Nova Tarefa' : 'Editar Tarefa'),
@@ -208,7 +213,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                 Expanded(
                   child: ListTile(
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: Colors.grey.shade400)),
-                    title: Text(_date),
+                    title: Text(_date, overflow: TextOverflow.ellipsis),
                     subtitle: const Text('Data'),
                     trailing: const Icon(Icons.calendar_today),
                     onTap: () async {
@@ -227,7 +232,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                   child: ListTile(
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: Colors.grey.shade400)),
                     title: Text(_time ?? '--:--'),
-                    subtitle: const Text('Horário (Opcional)'),
+                    subtitle: const Text('Horário'),
                     trailing: _time == null
                         ? const Icon(Icons.access_time)
                         : IconButton(
@@ -266,7 +271,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                 return DropdownButtonFormField<int>(
                   initialValue: safeCategoryId,
                   decoration: const InputDecoration(labelText: 'Categoria', border: OutlineInputBorder()),
-                  items: categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+                  items: categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis))).toList(),
                   onChanged: (val) {
                     if (val != null) setState(() => _categoryId = val);
                   },
@@ -277,20 +282,18 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
             Consumer(
               builder: (context, ref, child) {
                 final allProjects = ref.watch(projectsProvider);
-                final projectItems = allProjects
-                    .where((p) => p.status != 'completed' && p.status != 'canceled' || p.id == _projectId)
-                    .toList();
+                final projectItems = allProjects.where((p) => p.status != 'completed' && p.status != 'canceled' || p.id == _projectId).toList();
                 final safeProjectId = projectItems.any((project) => project.id == _projectId) ? _projectId : null;
                 if (safeProjectId != _projectId) _projectStepId = null;
 
                 return DropdownButtonFormField<int>(
                   initialValue: safeProjectId,
-                  decoration: const InputDecoration(labelText: 'Vincular ao Projeto (Opcional)', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(labelText: 'Vincular ao Projeto', border: OutlineInputBorder()),
                   items: [
                     const DropdownMenuItem<int>(value: null, child: Text('Nenhum projeto')),
                     ...projectItems.map((p) {
                       final inactive = p.status == 'completed' || p.status == 'canceled';
-                      return DropdownMenuItem(value: p.id, child: Text(inactive ? '${p.name} (${p.status})' : p.name));
+                      return DropdownMenuItem(value: p.id, child: Text(inactive ? '${p.name} (${p.status})' : p.name, overflow: TextOverflow.ellipsis));
                     }),
                   ],
                   onChanged: (val) {
@@ -311,12 +314,12 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                   final safeStepId = stepItems.any((step) => step.id == _projectStepId) ? _projectStepId : null;
                   return DropdownButtonFormField<int>(
                     initialValue: safeStepId,
-                    decoration: const InputDecoration(labelText: 'Etapa do Projeto (Opcional)', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(labelText: 'Sessão do Projeto', border: OutlineInputBorder()),
                     items: [
-                      const DropdownMenuItem<int>(value: null, child: Text('Sem etapa específica')),
+                      const DropdownMenuItem<int>(value: null, child: Text('Sem sessão específica')),
                       ...stepItems.map((s) {
                         final inactive = s.status == 'completed' || s.status == 'canceled';
-                        return DropdownMenuItem<int>(value: s.id, child: Text(inactive ? '${s.title} (${s.status})' : s.title));
+                        return DropdownMenuItem<int>(value: s.id, child: Text(inactive ? '${s.title} (${s.status})' : s.title, overflow: TextOverflow.ellipsis));
                       }),
                     ],
                     onChanged: (val) => setState(() => _projectStepId = val),
@@ -337,6 +340,22 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                 if (val != null) setState(() => _priority = val);
               },
             ),
+            if (!isSubtask) ...[
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: _recurrenceType,
+                decoration: const InputDecoration(labelText: 'Recorrência', border: OutlineInputBorder()),
+                items: const [
+                  DropdownMenuItem(value: 'none', child: Text('Não repetir')),
+                  DropdownMenuItem(value: 'daily', child: Text('Diariamente')),
+                  DropdownMenuItem(value: 'weekly', child: Text('Semanalmente')),
+                  DropdownMenuItem(value: 'monthly', child: Text('Mensalmente')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() => _recurrenceType = val);
+                },
+              ),
+            ],
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
