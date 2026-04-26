@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/providers.dart';
 import '../../data/models/project_model.dart';
 import '../../data/models/project_step_model.dart';
+import '../../data/models/task_model.dart';
 import 'create_project_screen.dart';
 import '../tasks/create_task_screen.dart';
 
@@ -16,6 +17,25 @@ class ProjectDetailsScreen extends ConsumerStatefulWidget {
 }
 
 class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
+  bool _isTaskOverdue(Task task) {
+    if (task.date == null) return false;
+    final date = DateTime.tryParse(task.date!);
+    if (date == null) return false;
+
+    if (task.time != null) {
+      final parts = task.time!.split(':');
+      if (parts.length == 2) {
+        final hour = int.tryParse(parts[0]) ?? 23;
+        final minute = int.tryParse(parts[1]) ?? 59;
+        return DateTime(date.year, date.month, date.day, hour, minute).isBefore(DateTime.now());
+      }
+    }
+
+    return DateTime(date.year, date.month, date.day, 23, 59, 59).isBefore(DateTime.now());
+  }
+
+  String _statusWhenTaskReopened(Task task) => _isTaskOverdue(task) ? 'atrasada' : 'pendente';
+
   @override
   Widget build(BuildContext context) {
     final projects = ref.watch(projectsProvider);
@@ -32,9 +52,10 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
     final allTasks = ref.watch(tasksProvider);
     final projectTasks = allTasks.where((t) => t.projectId == project.id && t.status != 'canceled').toList();
     final steps = project.id == null ? <ProjectStep>[] : ref.watch(projectStepsProvider(project.id!));
+    final activeSteps = steps.where((s) => s.status != 'canceled').toList();
 
     final doneTasks = projectTasks.where((t) => t.status == 'concluida').length;
-    final doneSteps = steps.where((s) => s.status == 'completed').length;
+    final doneSteps = activeSteps.where((s) => s.status == 'completed').length;
     final progress = (project.progress / 100).clamp(0.0, 1.0);
     final daysRemaining = _daysRemaining(project.endDate);
 
@@ -84,7 +105,7 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
                     LinearProgressIndicator(value: progress, minHeight: 8),
                     const SizedBox(height: 8),
                     Text('Tarefas concluídas: $doneTasks/${projectTasks.length}'),
-                    Text('Etapas concluídas: $doneSteps/${steps.length}'),
+                    Text('Etapas concluídas: $doneSteps/${activeSteps.length}'),
                   ],
                 ),
               ),
@@ -98,15 +119,15 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     ElevatedButton.icon(
-                      onPressed: project.id == null ? null : () => _showAddStepDialog(project.id!),
+                      onPressed: project.id == null || project.status == 'canceled' ? null : () => _showAddStepDialog(project.id!),
                       icon: const Icon(Icons.playlist_add),
                       label: const Text('Adicionar etapa'),
                     ),
                     const SizedBox(height: 8),
-                    if (steps.isEmpty)
+                    if (activeSteps.isEmpty)
                       const Text('Nenhuma etapa criada.')
                     else
-                      ...steps.map((step) => _buildStepTile(step, project)),
+                      ...activeSteps.map((step) => _buildStepTile(step, project)),
                   ],
                 ),
               ),
@@ -120,9 +141,11 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTaskScreen(projectId: project.id)));
-                      },
+                      onPressed: project.status == 'canceled'
+                          ? null
+                          : () {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTaskScreen(projectId: project.id)));
+                            },
                       icon: const Icon(Icons.add_task),
                       label: const Text('Adicionar tarefa'),
                     ),
@@ -140,12 +163,14 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
                             style: TextStyle(decoration: isCompleted ? TextDecoration.lineThrough : null),
                           ),
                           subtitle: Text(t.date ?? 'Sem data'),
-                          onChanged: (val) async {
-                            if (val == null) return;
-                            final updated = t.copyWith(status: val ? 'concluida' : 'pendente', updatedAt: DateTime.now().toIso8601String());
-                            await ref.read(tasksProvider.notifier).updateTask(updated);
-                            if (val) _maybeSuggestCompleteProject(project.id, project.status);
-                          },
+                          onChanged: project.status == 'canceled'
+                              ? null
+                              : (val) async {
+                                  if (val == null) return;
+                                  final updated = t.copyWith(status: val ? 'concluida' : _statusWhenTaskReopened(t), updatedAt: DateTime.now().toIso8601String());
+                                  await ref.read(tasksProvider.notifier).updateTask(updated);
+                                  if (val) _maybeSuggestCompleteProject(project.id, project.status);
+                                },
                         );
                       }),
                   ],
@@ -167,12 +192,12 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
                       label: const Text('Editar projeto'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: project.status == 'completed' ? null : () => _updateStatus(project, 'completed'),
+                      onPressed: project.status == 'completed' || project.status == 'canceled' ? null : () => _updateStatus(project, 'completed'),
                       icon: const Icon(Icons.check_circle_outline),
                       label: const Text('Concluir projeto'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: project.status == 'paused' ? null : () => _updateStatus(project, 'paused'),
+                      onPressed: project.status == 'paused' || project.status == 'canceled' ? null : () => _updateStatus(project, 'paused'),
                       icon: const Icon(Icons.pause_circle_outline),
                       label: const Text('Pausar projeto'),
                     ),
@@ -210,18 +235,20 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
         icon: const Icon(Icons.delete_outline, color: Colors.red),
         onPressed: step.id == null ? null : () => _confirmDeleteStep(step),
       ),
-      onChanged: (val) async {
-        if (val == null) return;
-        final now = DateTime.now().toIso8601String();
-        final updated = step.copyWith(
-          status: val ? 'completed' : 'pending',
-          completedAt: val ? now : null,
-          clearCompletedAt: !val,
-          updatedAt: now,
-        );
-        await ref.read(projectStepsProvider(step.projectId).notifier).updateStep(updated);
-        if (val) _maybeSuggestCompleteProject(project.id, project.status);
-      },
+      onChanged: project.status == 'canceled'
+          ? null
+          : (val) async {
+              if (val == null) return;
+              final now = DateTime.now().toIso8601String();
+              final updated = step.copyWith(
+                status: val ? 'completed' : 'pending',
+                completedAt: val ? now : null,
+                clearCompletedAt: !val,
+                updatedAt: now,
+              );
+              await ref.read(projectStepsProvider(step.projectId).notifier).updateStep(updated);
+              if (val) _maybeSuggestCompleteProject(project.id, project.status);
+            },
     );
   }
 
@@ -337,7 +364,7 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
               ),
               SwitchListTile(
                 title: const Text('Lembrete de prazo'),
-                value: remind,
+                value: dueDate != null && remind,
                 onChanged: dueDate != null ? (v) => setLocalState(() => remind = v) : null,
               )
             ],
@@ -351,16 +378,17 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
                 await ref.read(projectStepsProvider(projectId).notifier).addStep(
                       title,
                       dueDate: dueDate?.toIso8601String(),
-                      reminderEnabled: remind,
+                      reminderEnabled: dueDate != null && remind,
                     );
-                Navigator.pop(ctx);
+                controller.dispose();
+                if (ctx.mounted) Navigator.pop(ctx);
               },
               child: const Text('Adicionar'),
             ),
           ],
         ),
       ),
-    );
+    ).whenComplete(controller.dispose);
   }
 
   void _confirmDeleteStep(ProjectStep step) {
@@ -374,7 +402,7 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
           TextButton(
             onPressed: () async {
               await ref.read(projectStepsProvider(step.projectId).notifier).removeStep(step.id!);
-              Navigator.pop(ctx);
+              if (ctx.mounted) Navigator.pop(ctx);
             },
             child: const Text('Excluir', style: TextStyle(color: Colors.red)),
           ),
@@ -421,10 +449,10 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
   }
 
   void _maybeSuggestCompleteProject(int? projectId, String currentProjectStatus) {
-    if (projectId == null || currentProjectStatus == 'completed') return;
+    if (projectId == null || currentProjectStatus == 'completed' || currentProjectStatus == 'canceled') return;
 
-    final allTasks = ref.read(tasksProvider).where((t) => t.projectId == projectId).toList();
-    final allSteps = ref.read(projectStepsProvider(projectId));
+    final allTasks = ref.read(tasksProvider).where((t) => t.projectId == projectId && t.status != 'canceled').toList();
+    final allSteps = ref.read(projectStepsProvider(projectId)).where((s) => s.status != 'canceled').toList();
     final hasWork = allTasks.isNotEmpty || allSteps.isNotEmpty;
     final tasksDone = allTasks.isEmpty || allTasks.every((t) => t.status == 'concluida');
     final stepsDone = allSteps.isEmpty || allSteps.every((s) => s.status == 'completed');
