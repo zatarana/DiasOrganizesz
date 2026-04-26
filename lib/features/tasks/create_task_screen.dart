@@ -47,8 +47,15 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descController.dispose();
+    super.dispose();
+  }
+
   Future<void> _save() async {
-    if (_titleController.text.isEmpty) {
+    if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Título é obrigatório.')));
       return;
     }
@@ -58,8 +65,8 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
 
     final task = Task(
       id: widget.task?.id,
-      title: _titleController.text,
-      description: _descController.text.isEmpty ? null : _descController.text,
+      title: _titleController.text.trim(),
+      description: _descController.text.trim().isEmpty ? null : _descController.text.trim(),
       date: _date,
       time: _time,
       categoryId: catId!,
@@ -74,33 +81,48 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
 
     if (widget.task == null) {
       final insertedTask = await ref.read(tasksProvider.notifier).addTaskWithReturn(task);
-      _scheduleReminderIfNeeded(insertedTask);
+      await _syncReminder(insertedTask);
     } else {
       await ref.read(tasksProvider.notifier).updateTask(task);
-      _scheduleReminderIfNeeded(task);
+      await _syncReminder(task);
     }
-    Navigator.pop(context);
+    if (mounted) Navigator.pop(context);
   }
 
-  void _scheduleReminderIfNeeded(Task task) {
-    if (task.reminderEnabled && task.time != null && task.date != null) {
-      try {
-        final parts = task.time!.split(':');
-        final currentDt = DateTime.parse(task.date!);
-        final reminderTime = DateTime(currentDt.year, currentDt.month, currentDt.day, int.parse(parts[0]), int.parse(parts[1]));
-        if (reminderTime.isAfter(DateTime.now())) {
-          NotificationService().scheduleNotification(
-            id: task.id ?? 0,
-            title: 'Lembrete: ${task.title}',
-            body: 'Sua tarefa está programada para agora!',
-            scheduledDate: reminderTime,
-          );
-        }
-      } catch (e) {
-        debugPrint('Erro ao agendar notificacao: $e');
+  Future<void> _syncReminder(Task task) async {
+    if (task.id == null) return;
+    final reminderId = NotificationService().taskReminderId(task.id!);
+
+    if (!task.reminderEnabled || task.time == null || task.date == null || task.status == 'concluida' || task.status == 'canceled') {
+      await NotificationService().cancelNotification(reminderId);
+      return;
+    }
+
+    try {
+      final parts = task.time!.split(':');
+      final currentDate = DateTime.parse(task.date!);
+      final reminderTime = DateTime(
+        currentDate.year,
+        currentDate.month,
+        currentDate.day,
+        int.parse(parts[0]),
+        int.parse(parts[1]),
+      );
+
+      if (!reminderTime.isAfter(DateTime.now())) {
+        await NotificationService().cancelNotification(reminderId);
+        return;
       }
-    } else {
-      NotificationService().cancelNotification(task.id ?? 0);
+
+      await NotificationService().scheduleNotification(
+        id: reminderId,
+        title: 'Lembrete: ${task.title}',
+        body: 'Sua tarefa está programada para agora!',
+        scheduledDate: reminderTime,
+      );
+    } catch (error) {
+      debugPrint('Erro ao sincronizar lembrete de tarefa: $error');
+      await NotificationService().cancelNotification(reminderId);
     }
   }
 
@@ -113,10 +135,10 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
           if (widget.task != null)
             IconButton(
               icon: const Icon(Icons.delete),
-              onPressed: () {
-                ref.read(tasksProvider.notifier).removeTask(widget.task!.id!);
-                NotificationService().cancelNotification(widget.task!.id!);
-                Navigator.pop(context);
+              onPressed: () async {
+                await ref.read(tasksProvider.notifier).removeTask(widget.task!.id!);
+                await NotificationService().cancelNotification(NotificationService().taskReminderId(widget.task!.id!));
+                if (context.mounted) Navigator.pop(context);
               },
             )
         ],
@@ -197,7 +219,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
             const SizedBox(height: 16),
             Consumer(
               builder: (context, ref, child) {
-                final projects = ref.watch(projectsProvider);
+                final projects = ref.watch(projectsProvider).where((p) => p.status != 'completed' && p.status != 'canceled').toList();
                 return DropdownButtonFormField<int>(
                   initialValue: _projectId,
                   decoration: const InputDecoration(labelText: 'Vincular ao Projeto (Opcional)', border: OutlineInputBorder()),
@@ -218,7 +240,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
               const SizedBox(height: 16),
               Consumer(
                 builder: (context, ref, child) {
-                  final steps = ref.watch(projectStepsProvider(_projectId!));
+                  final steps = ref.watch(projectStepsProvider(_projectId!)).where((s) => s.status != 'completed' && s.status != 'canceled').toList();
                   return DropdownButtonFormField<int>(
                     initialValue: _projectStepId,
                     decoration: const InputDecoration(labelText: 'Etapa do Projeto (Opcional)', border: OutlineInputBorder()),
