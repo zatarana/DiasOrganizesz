@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../domain/providers.dart';
 import '../../data/models/transaction_model.dart';
-import '../../data/models/financial_category_model.dart';
 import 'create_transaction_screen.dart';
 import 'finance_categories_screen.dart';
 
@@ -16,8 +15,8 @@ class FinanceScreen extends ConsumerStatefulWidget {
 
 class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   DateTime _selectedMonth = DateTime.now();
-  String _filterType = 'all'; // all, income, expense
-  String _filterStatus = 'all'; // all, paid, pending, overdue
+  String _filterType = 'all';
+  String _filterStatus = 'all';
   int? _filterCategory;
   final TextEditingController _searchController = TextEditingController();
 
@@ -32,52 +31,50 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   void _generateFixedTransactions() {
     final allTransactions = ref.read(transactionsProvider);
     final previousMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1, 1);
-    
-    // Obter fixos e não cancelados do mês anterior
+
     final previousFixed = allTransactions.where((t) {
       final d = DateTime.tryParse(t.transactionDate);
       return d != null && d.month == previousMonth.month && d.year == previousMonth.year && t.isFixed && t.status != 'canceled';
     }).toList();
 
     int added = 0;
-    for (var t in previousFixed) {
+    for (final t in previousFixed) {
       final oldDate = DateTime.tryParse(t.transactionDate) ?? DateTime.now();
-      // Criar nova data pro mês atual mantendo o dia se possível
-      int targetDay = oldDate.day;
+      var targetDay = oldDate.day;
       final daysInMonth = DateUtils.getDaysInMonth(_selectedMonth.year, _selectedMonth.month);
-      if (targetDay > daysInMonth) targetDay = daysInMonth; 
+      if (targetDay > daysInMonth) targetDay = daysInMonth;
 
       final newDate = DateTime(_selectedMonth.year, _selectedMonth.month, targetDay);
-      
+
       DateTime? newDueDate;
       if (t.dueDate != null) {
         final oldDue = DateTime.tryParse(t.dueDate!);
         if (oldDue != null) {
-          int targetDueDay = oldDue.day;
+          var targetDueDay = oldDue.day;
           final daysInMonthDue = DateUtils.getDaysInMonth(_selectedMonth.year, _selectedMonth.month);
           if (targetDueDay > daysInMonthDue) targetDueDay = daysInMonthDue;
           newDueDate = DateTime(_selectedMonth.year, _selectedMonth.month, targetDueDay);
         }
       }
 
-      final newT = FinancialTransaction(
-          title: t.title,
-          description: t.description,
-          amount: t.amount,
-          type: t.type,
-          transactionDate: newDate.toIso8601String(),
-          dueDate: newDueDate?.toIso8601String(),
-          paidDate: null,
-          categoryId: t.categoryId,
-          paymentMethod: t.paymentMethod,
-          status: 'pending', // nascem como pendentes
-          isFixed: true,
-          recurrenceType: 'monthly',
-          notes: t.notes,
-          createdAt: DateTime.now().toIso8601String(),
-          updatedAt: DateTime.now().toIso8601String(),
+      final newTransaction = FinancialTransaction(
+        title: t.title,
+        description: t.description,
+        amount: t.amount,
+        type: t.type,
+        transactionDate: newDate.toIso8601String(),
+        dueDate: newDueDate?.toIso8601String(),
+        paidDate: null,
+        categoryId: t.categoryId,
+        paymentMethod: t.paymentMethod,
+        status: 'pending',
+        isFixed: true,
+        recurrenceType: 'monthly',
+        notes: t.notes,
+        createdAt: DateTime.now().toIso8601String(),
+        updatedAt: DateTime.now().toIso8601String(),
       );
-      ref.read(transactionsProvider.notifier).addTransaction(newT);
+      ref.read(transactionsProvider.notifier).addTransaction(newTransaction);
       added++;
     }
 
@@ -90,27 +87,21 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    var allTransactions = ref.watch(transactionsProvider);
-    var allCategories = ref.watch(financialCategoriesProvider);
-    
-    // Apply Filters
-    var filtered = allTransactions.where((t) {
+    final allTransactions = ref.watch(transactionsProvider);
+    final allCategories = ref.watch(financialCategoriesProvider);
+
+    final filtered = allTransactions.where((t) {
       final tDate = DateTime.tryParse(t.transactionDate);
       if (tDate == null) return false;
       if (tDate.month != _selectedMonth.month || tDate.year != _selectedMonth.year) return false;
-      
+
       if (_filterType != 'all' && t.type != _filterType) return false;
-      
       if (_filterStatus == 'paid' && t.status != 'paid') return false;
       if (_filterStatus == 'pending' && t.status != 'pending') return false;
       if (_filterStatus == 'overdue' && t.status != 'overdue') return false;
-
       if (_filterCategory != null && t.categoryId != _filterCategory) return false;
-      
-      if (_searchController.text.isNotEmpty && !t.title.toLowerCase().contains(_searchController.text.toLowerCase())) {
-        return false;
-      }
-      
+      if (_searchController.text.isNotEmpty && !t.title.toLowerCase().contains(_searchController.text.toLowerCase())) return false;
+
       return true;
     }).toList();
 
@@ -123,10 +114,10 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    for (var t in allTransactions) { // calculando totais do mes
+    for (final t in allTransactions) {
       final tDate = DateTime.tryParse(t.transactionDate);
       if (tDate != null && tDate.month == _selectedMonth.month && tDate.year == _selectedMonth.year) {
-        if (t.status == 'canceled') continue; // Movimentação cancelada não deve entrar em nenhum cálculo
+        if (t.status == 'canceled') continue;
 
         if (t.type == 'income') {
           if (t.status == 'paid') {
@@ -142,9 +133,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
             final dueDateToUse = t.dueDate != null ? DateTime.tryParse(t.dueDate!) : tDate;
             if (dueDateToUse != null) {
               final dueDateMidnight = DateTime(dueDateToUse.year, dueDateToUse.month, dueDateToUse.day);
-              if (t.status == 'pending' && dueDateMidnight.isBefore(today)) {
-                qtdeDespesasVencidas++;
-              }
+              if (t.status == 'pending' && dueDateMidnight.isBefore(today)) qtdeDespesasVencidas++;
             }
           }
         }
@@ -182,7 +171,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                   Row(
+                  Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       IconButton(icon: const Icon(Icons.chevron_left), onPressed: _prevMonth),
@@ -201,7 +190,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                     ),
-                    onChanged: (v) => setState((){}),
+                    onChanged: (_) => setState(() {}),
                   ),
                   const SizedBox(height: 16),
                   SingleChildScrollView(
@@ -233,17 +222,17 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                           ChoiceChip(
                             label: const Text('Todas as Categorias'),
                             selected: _filterCategory == null,
-                            onSelected: (b) => setState(() => _filterCategory = null),
+                            onSelected: (_) => setState(() => _filterCategory = null),
                           ),
                           const SizedBox(width: 8),
                           ...allCategories.map((c) => Padding(
-                            padding: const EdgeInsets.only(right: 8.0),
-                            child: ChoiceChip(
-                              label: Text(c.name),
-                              selected: _filterCategory == c.id,
-                              onSelected: (b) => setState(() => _filterCategory = b ? c.id : null),
-                            ),
-                          )),
+                                padding: const EdgeInsets.only(right: 8.0),
+                                child: ChoiceChip(
+                                  label: Text(c.name),
+                                  selected: _filterCategory == c.id,
+                                  onSelected: (selected) => setState(() => _filterCategory = selected ? c.id : null),
+                                ),
+                              )),
                         ],
                       ),
                     ),
@@ -254,86 +243,95 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
               ),
             ),
           ),
-          filtered.isEmpty 
-          ? SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(32.0),
-                child: Center(child: Text('Nenhuma movimentação para o período e filtros atuais.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600))),
-              ),
-            )
-          : SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final t = filtered[index];
-                final isPaid = t.status == 'paid';
-                final isCanceled = t.status == 'canceled';
-                final cat = allCategories.where((c) => c.id == t.categoryId).firstOrNull;
-                final color = cat != null ? Color(int.parse(cat.color)) : (t.type == 'income' ? Colors.green : Colors.red);
-                
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: isCanceled ? Colors.grey.withOpacity(0.2) : color.withOpacity(0.2),
-                    child: Icon(
-                      t.type == 'income' ? Icons.arrow_upward : Icons.arrow_downward,
-                      color: isCanceled ? Colors.grey : color,
+          filtered.isEmpty
+              ? SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32.0),
+                    child: Center(
+                      child: Text(
+                        'Nenhuma movimentação para o período e filtros atuais.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey.shade600),
+                      ),
                     ),
                   ),
-                  title: Text(t.title, style: TextStyle(
-                    decoration: isCanceled ? TextDecoration.lineThrough : null,
-                    color: isCanceled ? Colors.grey : Colors.black87,
-                  )),
-                  subtitle: Text(
-                    '${DateFormat('dd/MM/yyyy').format(DateTime.parse(t.transactionDate))}${cat != null ? ' • ${cat.name}' : ''}'
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            'R\$ ${t.amount.toStringAsFixed(2)}',
-                            style: TextStyle(
-                              color: isCanceled ? Colors.grey : (t.type == 'income' ? Colors.green : Colors.red),
-                              fontWeight: FontWeight.bold,
-                              decoration: isCanceled ? TextDecoration.lineThrough : null,
+                )
+              : SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final transaction = filtered[index];
+                      final isPaid = transaction.status == 'paid';
+                      final isCanceled = transaction.status == 'canceled';
+                      final cat = allCategories.where((c) => c.id == transaction.categoryId).firstOrNull;
+                      final color = cat != null ? Color(int.parse(cat.color)) : (transaction.type == 'income' ? Colors.green : Colors.red);
+
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: isCanceled ? Colors.grey.withValues(alpha: 0.2) : color.withValues(alpha: 0.2),
+                          child: Icon(
+                            transaction.type == 'income' ? Icons.arrow_upward : Icons.arrow_downward,
+                            color: isCanceled ? Colors.grey : color,
+                          ),
+                        ),
+                        title: Text(
+                          transaction.title,
+                          style: TextStyle(
+                            decoration: isCanceled ? TextDecoration.lineThrough : null,
+                            color: isCanceled ? Colors.grey : Colors.black87,
+                          ),
+                        ),
+                        subtitle: Text('${DateFormat('dd/MM/yyyy').format(DateTime.parse(transaction.transactionDate))}${cat != null ? ' • ${cat.name}' : ''}'),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  'R\$ ${transaction.amount.toStringAsFixed(2)}',
+                                  style: TextStyle(
+                                    color: isCanceled ? Colors.grey : (transaction.type == 'income' ? Colors.green : Colors.red),
+                                    fontWeight: FontWeight.bold,
+                                    decoration: isCanceled ? TextDecoration.lineThrough : null,
+                                  ),
+                                ),
+                                Text(
+                                  isCanceled ? 'Cancelado' : (transaction.status == 'paid' ? 'Efetuado' : (transaction.status == 'overdue' ? 'Atrasado' : 'Pendente')),
+                                  style: TextStyle(
+                                    color: isCanceled ? Colors.grey : (transaction.status == 'paid' ? Colors.green : (transaction.status == 'overdue' ? Colors.red : Colors.orange)),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          Text(
-                            isCanceled ? 'Cancelado' : (t.status == 'paid' ? 'Efetuado' : (t.status == 'overdue' ? 'Atrasado' : 'Pendente')), 
-                            style: TextStyle(
-                              color: isCanceled ? Colors.grey : (t.status == 'paid' ? Colors.green : (t.status == 'overdue' ? Colors.red : Colors.orange)), 
-                              fontSize: 12
-                            )
-                          ),
-                        ]
-                      ),
-                      Checkbox(
-                        value: isPaid,
-                        onChanged: isCanceled ? null : (val) {
-                          if (val != null) {
-                            final newStatus = val ? 'paid' : 'pending';
-                            ref.read(transactionsProvider.notifier).updateTransaction(
-                              t.copyWith(
-                                status: newStatus,
-                                paidDate: val ? DateTime.now().toIso8601String() : null,
-                                updatedAt: DateTime.now().toIso8601String(),
-                              )
-                            );
-                          }
+                            Checkbox(
+                              value: isPaid,
+                              onChanged: isCanceled
+                                  ? null
+                                  : (val) {
+                                      if (val != null) {
+                                        final newStatus = val ? 'paid' : 'pending';
+                                        ref.read(transactionsProvider.notifier).updateTransaction(
+                                              transaction.copyWith(
+                                                status: newStatus,
+                                                paidDate: val ? DateTime.now().toIso8601String() : null,
+                                                updatedAt: DateTime.now().toIso8601String(),
+                                              ),
+                                            );
+                                      }
+                                    },
+                            ),
+                          ],
+                        ),
+                        onTap: () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTransactionScreen(transaction: transaction)));
                         },
-                      ),
-                    ],
+                      );
+                    },
+                    childCount: filtered.length,
                   ),
-                  onTap: () {
-                     Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTransactionScreen(transaction: t)));
-                  },
-                );
-              },
-              childCount: filtered.length,
-            ),
-          ),
+                ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -349,7 +347,9 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     return ChoiceChip(
       label: Text(label),
       selected: groupValue == value,
-      onSelected: (b) { if(b) onSelect(value); },
+      onSelected: (selected) {
+        if (selected) onSelect(value);
+      },
     );
   }
 
@@ -396,20 +396,20 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                 _buildStat('Despesas', despesas, Colors.red),
               ],
             ),
-             if (despesasVencidas > 0) ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.warning, color: Colors.red, size: 20),
-                      const SizedBox(width: 8),
-                      Text('$despesasVencidas despesa(s) vencida(s)!', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                )
-             ]
+            if (despesasVencidas > 0) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning, color: Colors.red, size: 20),
+                    const SizedBox(width: 8),
+                    Text('$despesasVencidas despesa(s) vencida(s)!', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              )
+            ]
           ],
         ),
       ),
@@ -422,10 +422,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       children: [
         Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
         const SizedBox(height: 4),
-        Text(
-          'R\$ ${amount.toStringAsFixed(2)}',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color),
-        ),
+        Text('R\$ ${amount.toStringAsFixed(2)}', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
       ],
     );
   }
