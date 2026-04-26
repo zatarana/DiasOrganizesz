@@ -39,7 +39,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final showFab = _currentIndex == 0 || _currentIndex == 1;
 
     return Scaffold(
-      body: _pages[_currentIndex],
+      body: IndexedStack(index: _currentIndex, children: _pages),
       floatingActionButton: showFab
           ? FloatingActionButton(
               onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateTaskScreen())),
