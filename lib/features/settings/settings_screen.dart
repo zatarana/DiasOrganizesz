@@ -17,20 +17,15 @@ class SettingsScreen extends ConsumerWidget {
     return int.tryParse(settings[key] ?? '$fallback') ?? fallback;
   }
 
-  Future<void> _resetCoreData(BuildContext context, WidgetRef ref) async {
+  Future<void> _resetCoreData(WidgetRef ref) async {
     await NotificationService().cancelAllNotifications();
     await ref.read(dbProvider).resetCoreData();
     await ref.read(tasksProvider.notifier).loadTasks();
     await ref.read(transactionsProvider.notifier).loadTransactions();
     await ref.read(debtsProvider.notifier).loadDebts();
     await ref.read(projectsProvider.notifier).loadProjects();
+    await ref.read(financialCategoriesProvider.notifier).loadCategories();
     ref.invalidate(allProjectStepsProvider);
-
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Dados principais resetados. Categorias e configurações foram mantidas.')),
-      );
-    }
   }
 
   Future<void> _exportBackup(BuildContext context, WidgetRef ref) async {
@@ -52,6 +47,52 @@ class SettingsScreen extends ConsumerWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao exportar backup: $error')));
       }
+    }
+  }
+
+  Future<void> _confirmClearCanceledTransactions(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Limpar movimentações canceladas?'),
+        content: const Text('Isso removerá permanentemente transações com status cancelado. As dívidas vinculadas serão recalculadas.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Limpar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    await ref.read(transactionsProvider.notifier).clearCanceledTransactions();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Movimentações canceladas removidas.')));
+    }
+  }
+
+  Future<void> _confirmClearCanceledDebts(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Limpar dívidas canceladas?'),
+        content: const Text('Isso removerá permanentemente dívidas canceladas e desvinculará suas parcelas no financeiro.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Limpar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    await ref.read(debtsProvider.notifier).clearCanceledDebts();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dívidas canceladas removidas.')));
     }
   }
 
@@ -109,12 +150,7 @@ class SettingsScreen extends ConsumerWidget {
             leading: const Icon(Icons.delete_forever),
             title: const Text('Limpar movimentações canceladas'),
             subtitle: const Text('Remove transações com status cancelado'),
-            onTap: () async {
-              await ref.read(transactionsProvider.notifier).clearCanceledTransactions();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Movimentações canceladas removidas.')));
-              }
-            },
+            onTap: () => _confirmClearCanceledTransactions(context, ref),
           ),
           const Divider(),
           _section('Dívidas'),
@@ -143,12 +179,8 @@ class SettingsScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.cleaning_services),
             title: const Text('Limpar dívidas canceladas'),
-            onTap: () async {
-              await ref.read(debtsProvider.notifier).clearCanceledDebts();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dívidas canceladas removidas.')));
-              }
-            },
+            subtitle: const Text('Remove dívidas canceladas e desvincula parcelas'),
+            onTap: () => _confirmClearCanceledDebts(context, ref),
           ),
           const Divider(),
           _section('Projetos'),
@@ -192,7 +224,7 @@ class SettingsScreen extends ConsumerWidget {
           SwitchListTile(
             secondary: const Icon(Icons.shield_moon_outlined),
             title: const Text('Modo discreto para finanças'),
-            subtitle: const Text('Oculta valores com asteriscos (R\$ ******)'),
+            subtitle: Text('Oculta valores com asteriscos (${currency == 'USD' ? '\$ ******' : 'R\$ ******'})'),
             value: _settingBool(appSettings, AppSettingKeys.financeDiscreteMode),
             onChanged: (val) => ref.read(appSettingsProvider.notifier).setValue(AppSettingKeys.financeDiscreteMode, '$val'),
           ),
@@ -200,7 +232,7 @@ class SettingsScreen extends ConsumerWidget {
           SwitchListTile(
             secondary: const Icon(Icons.lock_outline),
             title: const Text('Bloqueio visual simples dos valores'),
-            subtitle: const Text('Permite revelar valores na Home com um toque'),
+            subtitle: const Text('Permite revelar valores na Home com um toque quando o modo discreto estiver desligado'),
             value: _settingBool(appSettings, AppSettingKeys.financeVisualLock),
             onChanged: (val) => ref.read(appSettingsProvider.notifier).setValue(AppSettingKeys.financeVisualLock, '$val'),
           ),
@@ -223,7 +255,7 @@ class SettingsScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.warning, color: Colors.red),
             title: const Text('Resetar dados principais', style: TextStyle(color: Colors.red)),
-            subtitle: const Text('Apaga tarefas, finanças, dívidas, projetos e etapas. Mantém categorias e configurações.'),
+            subtitle: const Text('Apaga tarefas, finanças, dívidas, projetos e etapas. Faça backup antes.'),
             onTap: () => _confirmResetCoreData(context, ref),
           ),
           const Divider(),
@@ -394,13 +426,18 @@ class SettingsScreen extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Resetar dados principais?'),
-        content: const Text('Isto apagará tarefas, movimentações financeiras, dívidas, projetos e etapas. Categorias e configurações serão mantidas.'),
+        content: const Text('Isto apagará tarefas, movimentações financeiras, dívidas, projetos e etapas. Categorias e configurações serão mantidas. Recomenda-se exportar um backup JSON antes.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           TextButton(
             onPressed: () async {
-              await _resetCoreData(context, ref);
-              if (ctx.mounted) Navigator.pop(ctx);
+              Navigator.pop(ctx);
+              await _resetCoreData(ref);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Dados principais resetados. Categorias e configurações foram mantidas.')),
+                );
+              }
             },
             child: const Text('Resetar', style: TextStyle(color: Colors.red)),
           ),
