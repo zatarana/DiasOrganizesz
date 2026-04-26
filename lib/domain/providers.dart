@@ -10,6 +10,7 @@ import '../data/models/transaction_model.dart';
 import '../data/models/project_model.dart';
 import '../data/models/project_step_model.dart';
 import '../data/database/db_helper.dart';
+import '../data/database/finance_planning_store.dart';
 import '../core/notifications/notification_service.dart';
 
 final dbProvider = Provider<DatabaseHelper>((ref) => DatabaseHelper.instance);
@@ -422,6 +423,7 @@ class FinancialCategoryNotifier extends StateNotifier<List<FinancialCategory>> {
 
   Future<void> removeCategory(int id) async {
     await db.deleteFinancialCategory(id);
+    await FinancePlanningStore.clearCategoryLinks(await db.database, id);
     state = state.where((t) => t.id != id).toList();
     await ref.read(transactionsProvider.notifier).loadTransactions();
     await ref.read(debtsProvider.notifier).loadDebts();
