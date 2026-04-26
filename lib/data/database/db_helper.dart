@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
+import 'finance_planning_store.dart';
 import '../models/category_model.dart';
 import '../models/financial_category_model.dart';
 import '../models/project_step_model.dart';
@@ -27,7 +28,7 @@ class DatabaseHelper {
     final path = join(dbPath, filePath);
     await _copyLegacyDatabaseIfNeeded(dbPath, path);
 
-    return openDatabase(path, version: 14, onCreate: _createDB, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: 15, onCreate: _createDB, onUpgrade: _onUpgrade);
   }
 
   Future<void> _copyLegacyDatabaseIfNeeded(String dbPath, String targetPath) async {
@@ -158,6 +159,10 @@ class DatabaseHelper {
       await _addColumnIfMissing(db, 'projects', 'reminderEnabled INTEGER NOT NULL DEFAULT 0');
       await _addColumnIfMissing(db, 'project_steps', 'reminderEnabled INTEGER NOT NULL DEFAULT 0');
     }
+    if (oldVersion < 15) {
+      await FinancePlanningStore.ensureTables(db);
+      await _addColumnIfMissing(db, 'transactions', 'accountId INTEGER');
+    }
   }
 
   Future<void> _addColumnIfMissing(Database db, String table, String columnSql) async {
@@ -217,6 +222,7 @@ class DatabaseHelper {
         dueDate TEXT,
         paidDate TEXT,
         categoryId INTEGER,
+        accountId INTEGER,
         paymentMethod TEXT,
         status TEXT NOT NULL,
         reminderEnabled INTEGER NOT NULL DEFAULT 0,
@@ -233,6 +239,7 @@ class DatabaseHelper {
     ''');
 
     await _createFinancialCategoriesTable(db);
+    await FinancePlanningStore.ensureTables(db);
 
     await db.execute('''
       CREATE TABLE debts (
@@ -350,6 +357,33 @@ class DatabaseHelper {
     });
   }
 
+  double _balanceDeltaFor(FinancialTransaction transaction) {
+    if (transaction.status != 'paid' || transaction.accountId == null) return 0;
+    return transaction.type == 'income' ? transaction.amount : -transaction.amount;
+  }
+
+  Future<void> _applyAccountDelta(Transaction txn, int accountId, double delta) async {
+    if (delta == 0) return;
+    await txn.rawUpdate(
+      'UPDATE financial_accounts SET currentBalance = currentBalance + ?, updatedAt = ? WHERE id = ?',
+      [delta, DateTime.now().toIso8601String(), accountId],
+    );
+  }
+
+  Future<void> _syncAccountBalanceOnCreate(Transaction txn, FinancialTransaction transaction) async {
+    if (transaction.accountId == null) return;
+    await _applyAccountDelta(txn, transaction.accountId!, _balanceDeltaFor(transaction));
+  }
+
+  Future<void> _syncAccountBalanceOnUpdate(Transaction txn, FinancialTransaction oldTransaction, FinancialTransaction newTransaction) async {
+    if (oldTransaction.accountId != null) {
+      await _applyAccountDelta(txn, oldTransaction.accountId!, -_balanceDeltaFor(oldTransaction));
+    }
+    if (newTransaction.accountId != null) {
+      await _applyAccountDelta(txn, newTransaction.accountId!, _balanceDeltaFor(newTransaction));
+    }
+  }
+
   Future<List<TaskCategory>> getCategories() async {
     final db = await instance.database;
     final result = await db.query('categories');
@@ -402,24 +436,54 @@ class DatabaseHelper {
 
   Future<List<FinancialTransaction>> getTransactions() async {
     final db = await instance.database;
+    await FinancePlanningStore.ensureTables(db);
+    await _addColumnIfMissing(db, 'transactions', 'accountId INTEGER');
     final result = await db.query('transactions', orderBy: 'transactionDate DESC');
     return result.map((json) => FinancialTransaction.fromMap(json)).toList();
   }
 
   Future<FinancialTransaction> createTransaction(FinancialTransaction transaction) async {
     final db = await instance.database;
-    final id = await db.insert('transactions', transaction.toMap());
+    await FinancePlanningStore.ensureTables(db);
+    await _addColumnIfMissing(db, 'transactions', 'accountId INTEGER');
+    late int id;
+    await db.transaction((txn) async {
+      id = await txn.insert('transactions', transaction.toMap());
+      await _syncAccountBalanceOnCreate(txn, transaction.copyWith(id: id));
+    });
     return transaction.copyWith(id: id);
   }
 
   Future<int> updateTransaction(FinancialTransaction transaction) async {
     final db = await instance.database;
-    return db.update('transactions', transaction.toMap(), where: 'id = ?', whereArgs: [transaction.id]);
+    await FinancePlanningStore.ensureTables(db);
+    await _addColumnIfMissing(db, 'transactions', 'accountId INTEGER');
+    final oldRows = await db.query('transactions', where: 'id = ?', whereArgs: [transaction.id], limit: 1);
+    if (oldRows.isEmpty) return 0;
+    final oldTransaction = FinancialTransaction.fromMap(oldRows.first);
+    late int count;
+    await db.transaction((txn) async {
+      count = await txn.update('transactions', transaction.toMap(), where: 'id = ?', whereArgs: [transaction.id]);
+      await _syncAccountBalanceOnUpdate(txn, oldTransaction, transaction);
+    });
+    return count;
   }
 
   Future<int> deleteTransaction(int id) async {
     final db = await instance.database;
-    return db.delete('transactions', where: 'id = ?', whereArgs: [id]);
+    await FinancePlanningStore.ensureTables(db);
+    await _addColumnIfMissing(db, 'transactions', 'accountId INTEGER');
+    final oldRows = await db.query('transactions', where: 'id = ?', whereArgs: [id], limit: 1);
+    FinancialTransaction? oldTransaction;
+    if (oldRows.isNotEmpty) oldTransaction = FinancialTransaction.fromMap(oldRows.first);
+    late int count;
+    await db.transaction((txn) async {
+      if (oldTransaction?.accountId != null) {
+        await _applyAccountDelta(txn, oldTransaction!.accountId!, -_balanceDeltaFor(oldTransaction));
+      }
+      count = await txn.delete('transactions', where: 'id = ?', whereArgs: [id]);
+    });
+    return count;
   }
 
   Future<List<FinancialCategory>> getFinancialCategories() async {
