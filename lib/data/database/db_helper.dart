@@ -52,11 +52,21 @@ class DatabaseHelper {
     ];
 
     for (final legacyName in legacyNames) {
-      final legacyFile = File(join(dbPath, legacyName));
+      final legacyPath = join(dbPath, legacyName);
+      final legacyFile = File(legacyPath);
       if (await legacyFile.exists()) {
         await legacyFile.copy(targetPath);
+        await _copySidecarIfExists('$legacyPath-wal', '$targetPath-wal');
+        await _copySidecarIfExists('$legacyPath-shm', '$targetPath-shm');
         return;
       }
+    }
+  }
+
+  Future<void> _copySidecarIfExists(String sourcePath, String targetPath) async {
+    final source = File(sourcePath);
+    if (await source.exists()) {
+      await source.copy(targetPath);
     }
   }
 
