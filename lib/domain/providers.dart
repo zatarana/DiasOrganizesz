@@ -198,7 +198,7 @@ class TaskNotifier extends StateNotifier<List<Task>> {
     final dateText = '${nextDate.year.toString().padLeft(4, '0')}-${nextDate.month.toString().padLeft(2, '0')}-${nextDate.day.toString().padLeft(2, '0')}';
     final now = DateTime.now().toIso8601String();
     final next = task.copyWith(
-      id: null,
+      clearId: true,
       date: dateText,
       status: 'pendente',
       clearParentTaskId: true,
