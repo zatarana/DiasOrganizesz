@@ -39,6 +39,7 @@ class FinancePlanningStore {
         description TEXT,
         targetAmount REAL NOT NULL,
         currentAmount REAL NOT NULL DEFAULT 0,
+        accountId INTEGER,
         targetDate TEXT,
         status TEXT NOT NULL DEFAULT 'active',
         color TEXT NOT NULL DEFAULT '0xFF4CAF50',
@@ -47,6 +48,13 @@ class FinancePlanningStore {
         updatedAt TEXT NOT NULL
       )
     ''');
+    await _addColumnIfMissing(db, 'financial_goals', 'accountId INTEGER');
+  }
+
+  static Future<void> _addColumnIfMissing(Database db, String table, String columnSql) async {
+    try {
+      await db.execute('ALTER TABLE $table ADD COLUMN $columnSql');
+    } catch (_) {}
   }
 
   static double _asDouble(dynamic value) {
@@ -112,6 +120,7 @@ class FinancePlanningStore {
 
   static Future<List<FinancialGoal>> getGoals(Database db) async {
     await ensureTables(db);
+    await clearArchivedAccountGoalLinks(db);
     final rows = await db.query('financial_goals', orderBy: 'status ASC, targetDate ASC, name ASC');
     return rows.map(FinancialGoal.fromMap).toList();
   }
@@ -123,6 +132,7 @@ class FinancePlanningStore {
     } else {
       await db.update('financial_accounts', account.toMap(), where: 'id = ?', whereArgs: [account.id]);
       await recalculateAccountBalance(db, account.id!);
+      if (account.isArchived) await clearGoalAccountLinks(db, account.id!);
     }
   }
 
@@ -137,6 +147,10 @@ class FinancePlanningStore {
 
   static Future<void> upsertGoal(Database db, FinancialGoal goal) async {
     await ensureTables(db);
+    if (goal.accountId != null) {
+      final accountRows = await db.query('financial_accounts', where: 'id = ? AND isArchived = 0', whereArgs: [goal.accountId], limit: 1);
+      if (accountRows.isEmpty) goal = goal.copyWith(clearAccountId: true);
+    }
     if (goal.id == null) {
       await db.insert('financial_goals', goal.toMap());
     } else {
@@ -149,6 +163,21 @@ class FinancePlanningStore {
     await db.update('budgets', {'categoryId': null}, where: 'categoryId = ?', whereArgs: [categoryId]);
   }
 
+  static Future<void> clearGoalAccountLinks(Database db, int accountId) async {
+    await ensureTables(db);
+    await db.update('financial_goals', {'accountId': null}, where: 'accountId = ?', whereArgs: [accountId]);
+  }
+
+  static Future<void> clearArchivedAccountGoalLinks(Database db) async {
+    await ensureTables(db);
+    await db.rawUpdate('''
+      UPDATE financial_goals
+      SET accountId = NULL
+      WHERE accountId IS NOT NULL
+        AND accountId NOT IN (SELECT id FROM financial_accounts WHERE isArchived = 0)
+    ''');
+  }
+
   static Future<void> resetPlanningData(Database db) async {
     await ensureTables(db);
     await db.delete('financial_accounts');
@@ -158,6 +187,7 @@ class FinancePlanningStore {
 
   static Future<Map<String, dynamic>> exportTables(Database db) async {
     await recalculateAllAccountBalances(db);
+    await clearArchivedAccountGoalLinks(db);
     return {
       'financial_accounts': await db.query('financial_accounts', orderBy: 'id ASC'),
       'budgets': await db.query('budgets', orderBy: 'id ASC'),
