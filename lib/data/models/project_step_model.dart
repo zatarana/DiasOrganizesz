@@ -25,6 +25,35 @@ class ProjectStep {
     required this.updatedAt,
   });
 
+  ProjectStep copyWith({
+    int? id,
+    int? projectId,
+    String? title,
+    String? description,
+    int? orderIndex,
+    String? status,
+    String? dueDate,
+    String? completedAt,
+    bool clearCompletedAt = false,
+    bool? reminderEnabled,
+    String? createdAt,
+    String? updatedAt,
+  }) {
+    return ProjectStep(
+      id: id ?? this.id,
+      projectId: projectId ?? this.projectId,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      orderIndex: orderIndex ?? this.orderIndex,
+      status: status ?? this.status,
+      dueDate: dueDate ?? this.dueDate,
+      completedAt: clearCompletedAt ? null : (completedAt ?? this.completedAt),
+      reminderEnabled: reminderEnabled ?? this.reminderEnabled,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -47,13 +76,13 @@ class ProjectStep {
       projectId: map['projectId'],
       title: map['title'],
       description: map['description'],
-      orderIndex: map['orderIndex'],
-      status: map['status'],
+      orderIndex: map['orderIndex'] ?? 0,
+      status: map['status'] ?? 'pending',
       dueDate: map['dueDate'],
       completedAt: map['completedAt'],
       reminderEnabled: map['reminderEnabled'] == 1,
-      createdAt: map['createdAt'],
-      updatedAt: map['updatedAt'],
+      createdAt: map['createdAt'] ?? DateTime.now().toIso8601String(),
+      updatedAt: map['updatedAt'] ?? DateTime.now().toIso8601String(),
     );
   }
 }
