@@ -35,15 +35,22 @@ class CategoriesScreen extends ConsumerWidget {
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () {
-                  if (nameController.text.isNotEmpty) {
-                    final cat = TaskCategory(
-                      name: nameController.text,
-                      color: '0xFF2196F3',
-                      createdAt: DateTime.now().toIso8601String(),
-                    );
-                    ref.read(categoriesProvider.notifier).addCategory(cat);
-                    Navigator.pop(ctx);
+                  final name = nameController.text.trim();
+                  if (name.isEmpty) return;
+
+                  final exists = ref.read(categoriesProvider).any((c) => c.name.toLowerCase() == name.toLowerCase());
+                  if (exists) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Já existe uma categoria com esse nome.')));
+                    return;
                   }
+
+                  final cat = TaskCategory(
+                    name: name,
+                    color: '0xFF2196F3',
+                    createdAt: DateTime.now().toIso8601String(),
+                  );
+                  ref.read(categoriesProvider.notifier).addCategory(cat);
+                  Navigator.pop(ctx);
                 },
                 child: const Text('Salvar'),
               ),
@@ -52,28 +59,33 @@ class CategoriesScreen extends ConsumerWidget {
           ),
         );
       },
-    );
+    ).whenComplete(nameController.dispose);
   }
 
-  void _confirmDelete(BuildContext context, WidgetRef ref, int categoryId) {
+  void _confirmDelete(BuildContext context, WidgetRef ref, TaskCategory category) {
+    final categories = ref.read(categoriesProvider);
+    if (categories.length <= 1) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mantenha pelo menos uma categoria para as tarefas.')));
+      return;
+    }
+    if (category.id == null) return;
+
+    final fallback = categories.firstWhere((c) => c.id != category.id, orElse: () => categories.first);
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Excluir Categoria?'),
-        content: const Text('As tarefas vinculadas a esta categoria serão migradas para a categoria Pessoal. Deseja continuar?'),
+        content: Text('As tarefas vinculadas a "${category.name}" serão migradas para "${fallback.name}". Deseja continuar?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           TextButton(
-            onPressed: () {
-              final tasks = ref.read(tasksProvider);
-              for (final task in tasks) {
-                if (task.categoryId == categoryId) {
-                  ref.read(tasksProvider.notifier).updateTask(task.copyWith(categoryId: 1));
-                }
+            onPressed: () async {
+              await ref.read(categoriesProvider.notifier).removeCategory(category.id!);
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Categoria excluída com sucesso.')));
               }
-              ref.read(categoriesProvider.notifier).removeCategory(categoryId);
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Categoria excluída com sucesso.')));
             },
             child: const Text('Excluir', style: TextStyle(color: Colors.red)),
           ),
@@ -100,7 +112,7 @@ class CategoriesScreen extends ConsumerWidget {
                 final cat = categories[i];
                 return ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: Color(int.parse(cat.color)),
+                    backgroundColor: Color(int.tryParse(cat.color) ?? 0xFF2196F3),
                     child: Icon(
                       cat.icon == 'person' ? Icons.person : (cat.icon == 'work' ? Icons.work : Icons.folder),
                       color: Colors.white,
@@ -109,7 +121,7 @@ class CategoriesScreen extends ConsumerWidget {
                   title: Text(cat.name),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete, color: Colors.grey),
-                    onPressed: () => _confirmDelete(context, ref, cat.id!),
+                    onPressed: () => _confirmDelete(context, ref, cat),
                   ),
                 );
               },
