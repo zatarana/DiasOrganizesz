@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/providers.dart';
 import '../../data/models/financial_category_model.dart';
-import '../../core/utils/icon_mapper.dart'; // we will create / reuse
+import '../../core/utils/icon_mapper.dart';
 
 class FinanceCategoriesScreen extends ConsumerWidget {
   const FinanceCategoriesScreen({super.key});
@@ -12,19 +12,17 @@ class FinanceCategoriesScreen extends ConsumerWidget {
     final categories = ref.watch(financialCategoriesProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Categorias Fin.'),
-      ),
+      appBar: AppBar(title: const Text('Categorias Fin.')),
       body: ListView.builder(
         itemCount: categories.length,
         itemBuilder: (context, index) {
           final cat = categories[index];
           final color = Color(int.parse(cat.color));
-          
+
           return ListTile(
             leading: CircleAvatar(
-              backgroundColor: color.withOpacity(0.2),
-              child: Icon(Icons.category, color: color), // Simplified for now, can map real icons
+              backgroundColor: color.withValues(alpha: 0.2),
+              child: Icon(IconMapper.fromName(cat.icon), color: color),
             ),
             title: Text(cat.name),
             subtitle: Text(cat.type == 'income' ? 'Receita' : (cat.type == 'expense' ? 'Despesa' : 'Misto')),
@@ -55,15 +53,15 @@ class CreateFinanceCategoryScreen extends ConsumerStatefulWidget {
 class _CreateFinanceCategoryScreenState extends ConsumerState<CreateFinanceCategoryScreen> {
   final _nameController = TextEditingController();
   String _type = 'both';
-  String _selectedColor = "0xFF9E9E9E";
-  String _selectedIcon = "category";
+  String _selectedColor = '0xFF9E9E9E';
+  String _selectedIcon = 'category';
 
   final List<String> _colors = [
-    "0xFFF44336", "0xFFE91E63", "0xFF9C27B0", "0xFF673AB7",
-    "0xFF3F51B5", "0xFF2196F3", "0xFF03A9F4", "0xFF00BCD4",
-    "0xFF009688", "0xFF4CAF50", "0xFF8BC34A", "0xFFCDDC39",
-    "0xFFFFEB3B", "0xFFFFC107", "0xFFFF9800", "0xFFFF5722",
-    "0xFF795548", "0xFF9E9E9E", "0xFF607D8B",
+    '0xFFF44336', '0xFFE91E63', '0xFF9C27B0', '0xFF673AB7',
+    '0xFF3F51B5', '0xFF2196F3', '0xFF03A9F4', '0xFF00BCD4',
+    '0xFF009688', '0xFF4CAF50', '0xFF8BC34A', '0xFFCDDC39',
+    '0xFFFFEB3B', '0xFFFFC107', '0xFFFF9800', '0xFFFF5722',
+    '0xFF795548', '0xFF9E9E9E', '0xFF607D8B',
   ];
 
   @override
@@ -102,18 +100,18 @@ class _CreateFinanceCategoryScreenState extends ConsumerState<CreateFinanceCateg
               decoration: const InputDecoration(labelText: 'Nome da Categoria', border: OutlineInputBorder()),
             ),
             const SizedBox(height: 16),
-             DropdownButtonFormField<String>(
-                value: _type,
-                items: const [
-                  DropdownMenuItem(value: 'income', child: Text('Apenas Receitas')),
-                  DropdownMenuItem(value: 'expense', child: Text('Apenas Despesas')),
-                  DropdownMenuItem(value: 'both', child: Text('Misto (Receitas e Despesas)')),
-                ],
-                onChanged: (v) {
-                  if (v != null) setState(() => _type = v);
-                },
-                decoration: const InputDecoration(labelText: 'Tipo de Categoria', border: OutlineInputBorder()),
-              ),
+            DropdownButtonFormField<String>(
+              initialValue: _type,
+              items: const [
+                DropdownMenuItem(value: 'income', child: Text('Apenas Receitas')),
+                DropdownMenuItem(value: 'expense', child: Text('Apenas Despesas')),
+                DropdownMenuItem(value: 'both', child: Text('Misto (Receitas e Despesas)')),
+              ],
+              onChanged: (v) {
+                if (v != null) setState(() => _type = v);
+              },
+              decoration: const InputDecoration(labelText: 'Tipo de Categoria', border: OutlineInputBorder()),
+            ),
             const SizedBox(height: 16),
             const Text('Cor:'),
             const SizedBox(height: 8),
