@@ -31,9 +31,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
     final overdueCount = projects.where((p) => _matchesQuickFilter(p, forcedFilter: 'overdue')).length;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Projetos'),
-      ),
+      appBar: AppBar(title: const Text('Projetos')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateProjectScreen()));
@@ -115,32 +113,21 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             CircleAvatar(
-                              backgroundColor: color.withOpacity(0.1),
+                              backgroundColor: color.withValues(alpha: 0.1),
                               child: Icon(_iconFromKey(project.icon), color: color),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: Text(
-                                project.name,
-                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                              ),
+                              child: Text(project.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                             ),
                             _buildStatusBadge(project.status),
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: _buildPriorityBadge(project.priority),
-                        ),
+                        Align(alignment: Alignment.centerLeft, child: _buildPriorityBadge(project.priority)),
                         if (project.description != null && project.description!.isNotEmpty) ...[
                           const SizedBox(height: 8),
-                          Text(
-                            project.description!,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: Colors.grey.shade600),
-                          ),
+                          Text(project.description!, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.grey.shade600)),
                         ],
                         const SizedBox(height: 8),
                         Text('Prazo: $dueDateLabel', style: const TextStyle(fontSize: 12)),
@@ -187,7 +174,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
         child: Row(
           children: [
             CircleAvatar(
-              backgroundColor: color.withOpacity(0.1),
+              backgroundColor: color.withValues(alpha: 0.1),
               child: Icon(icon, color: color),
             ),
             const SizedBox(width: 10),
@@ -339,7 +326,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: color),
       ),
@@ -366,7 +353,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: color),
       ),
