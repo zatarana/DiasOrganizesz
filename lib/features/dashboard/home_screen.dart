@@ -40,9 +40,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _pages[_currentIndex],
       floatingActionButton: showFab
           ? FloatingActionButton(
-              onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateTaskScreen()));
-              },
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateTaskScreen())),
               child: const Icon(Icons.add),
             )
           : null,
@@ -105,11 +103,18 @@ class _MoreTile extends StatelessWidget {
   }
 }
 
-class TaskDashboard extends ConsumerWidget {
+class TaskDashboard extends ConsumerStatefulWidget {
   const TaskDashboard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TaskDashboard> createState() => _TaskDashboardState();
+}
+
+class _TaskDashboardState extends ConsumerState<TaskDashboard> {
+  bool _valuesRevealed = false;
+
+  @override
+  Widget build(BuildContext context) {
     final tasks = ref.watch(tasksProvider);
     final transactions = ref.watch(transactionsProvider);
     final projects = ref.watch(projectsProvider);
@@ -117,13 +122,17 @@ class TaskDashboard extends ConsumerWidget {
     final appSettings = ref.watch(appSettingsProvider);
 
     final currency = appSettings[AppSettingKeys.defaultCurrency] ?? 'BRL';
+    final homeShowsValues = (appSettings[AppSettingKeys.homeShowFinancialValues] ?? 'true') == 'true';
+    final visualLockEnabled = (appSettings[AppSettingKeys.financeVisualLock] ?? 'false') == 'true';
     final hideValues = (appSettings[AppSettingKeys.privacyHideHomeValues] ?? 'false') == 'true' ||
         (appSettings[AppSettingKeys.financeDiscreteMode] ?? 'false') == 'true' ||
-        (appSettings[AppSettingKeys.homeShowFinancialValues] ?? 'true') != 'true';
+        !homeShowsValues ||
+        (visualLockEnabled && !_valuesRevealed);
+    final showProjectsCard = (appSettings[AppSettingKeys.homeShowProjectsCard] ?? 'true') == 'true';
 
     final now = DateTime.now();
     final today = DateFormat('yyyy-MM-dd').format(now);
-    final todayTasks = tasks.where((task) => task.date == today).toList();
+    final todayTasks = tasks.where((task) => task.date == today && task.status != 'canceled').toList();
     final pendingTasks = tasks.where((task) => task.status == 'pendente').length;
     final overdueTasks = tasks.where((task) => task.status == 'atrasada').length;
 
@@ -188,8 +197,50 @@ class TaskDashboard extends ConsumerWidget {
       return '$prefix ${value.toDouble().toStringAsFixed(2)}';
     }
 
+    final cards = <Widget>[
+      _DashboardSummaryCard(
+        title: 'Financeiro do mês',
+        icon: Icons.account_balance_wallet,
+        color: Colors.blue,
+        lines: ['Previsto: ${money(saldoPrevisto)}', 'Receitas: ${money(receitasPrevistas)}', 'Realizado: ${money(saldoRealizado)}'],
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceScreen())),
+      ),
+      _DashboardSummaryCard(
+        title: 'Tarefas',
+        icon: Icons.checklist,
+        color: Colors.green,
+        lines: ['Hoje: ${todayTasks.length}', 'Pendentes: $pendingTasks', 'Atrasadas: $overdueTasks'],
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskListScreen())),
+      ),
+      _DashboardSummaryCard(
+        title: 'Dívidas',
+        icon: Icons.money_off,
+        color: Colors.deepOrange,
+        lines: ['Em aberto: $openDebts', 'Restante: ${money(remainingDebts)}', 'Parcelas atraso: $overdueDebtInstallments'],
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtsScreen())),
+      ),
+      if (showProjectsCard)
+        _DashboardSummaryCard(
+          title: 'Projetos',
+          icon: Icons.rocket_launch,
+          color: Colors.purple,
+          lines: ['Ativos: $activeProjects', 'Atrasados: $overdueProjects', 'Total: ${projects.length}'],
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProjectsScreen())),
+        ),
+    ];
+
     return Scaffold(
-      appBar: AppBar(title: const Text('DiasOrganize', style: TextStyle(fontWeight: FontWeight.bold))),
+      appBar: AppBar(
+        title: const Text('DiasOrganize', style: TextStyle(fontWeight: FontWeight.bold)),
+        actions: [
+          if (visualLockEnabled && homeShowsValues)
+            IconButton(
+              tooltip: _valuesRevealed ? 'Ocultar valores' : 'Revelar valores',
+              icon: Icon(_valuesRevealed ? Icons.visibility_off : Icons.visibility),
+              onPressed: () => setState(() => _valuesRevealed = !_valuesRevealed),
+            ),
+        ],
+      ),
       drawer: const AppDrawer(),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -201,36 +252,7 @@ class TaskDashboard extends ConsumerWidget {
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
             childAspectRatio: 1.15,
-            children: [
-              _DashboardSummaryCard(
-                title: 'Financeiro do mês',
-                icon: Icons.account_balance_wallet,
-                color: Colors.blue,
-                lines: ['Previsto: ${money(saldoPrevisto)}', 'Receitas: ${money(receitasPrevistas)}', 'Realizado: ${money(saldoRealizado)}'],
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceScreen())),
-              ),
-              _DashboardSummaryCard(
-                title: 'Tarefas',
-                icon: Icons.checklist,
-                color: Colors.green,
-                lines: ['Hoje: ${todayTasks.length}', 'Pendentes: $pendingTasks', 'Atrasadas: $overdueTasks'],
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskListScreen())),
-              ),
-              _DashboardSummaryCard(
-                title: 'Dívidas',
-                icon: Icons.money_off,
-                color: Colors.deepOrange,
-                lines: ['Em aberto: $openDebts', 'Restante: ${money(remainingDebts)}', 'Parcelas atraso: $overdueDebtInstallments'],
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtsScreen())),
-              ),
-              _DashboardSummaryCard(
-                title: 'Projetos',
-                icon: Icons.rocket_launch,
-                color: Colors.purple,
-                lines: ['Ativos: $activeProjects', 'Atrasados: $overdueProjects', 'Total: ${projects.length}'],
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProjectsScreen())),
-              ),
-            ],
+            children: cards,
           ),
           const SizedBox(height: 20),
           Row(
@@ -257,9 +279,7 @@ class TaskDashboard extends ConsumerWidget {
                       color: task.status == 'concluida' ? Colors.green : Colors.grey,
                     ),
                     onTap: () {
-                      ref.read(tasksProvider.notifier).updateTask(
-                            task.copyWith(status: task.status == 'concluida' ? 'pendente' : 'concluida', updatedAt: DateTime.now().toIso8601String()),
-                          );
+                      ref.read(tasksProvider.notifier).updateTask(task.copyWith(status: task.status == 'concluida' ? 'pendente' : 'concluida', updatedAt: DateTime.now().toIso8601String()));
                     },
                   ),
                 )),
