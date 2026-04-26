@@ -23,14 +23,14 @@ class DatabaseHelper {
 
     return await openDatabase(
       path, 
-      version: 7, 
+      version: 8, 
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 7) {
+    if (oldVersion < 8) {
       await db.execute('''
         CREATE TABLE IF NOT EXISTS transactions (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -120,6 +120,21 @@ class DatabaseHelper {
         await db.execute('ALTER TABLE debts ADD COLUMN firstDueDate TEXT');
         await db.execute('ALTER TABLE transactions ADD COLUMN discountAmount REAL DEFAULT 0');
       }
+      if (oldVersion < 8) {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT,
+            startDate TEXT,
+            endDate TEXT,
+            status TEXT NOT NULL,
+            createdAt TEXT NOT NULL,
+            updatedAt TEXT NOT NULL
+          )
+        ''');
+        await db.execute('ALTER TABLE tasks ADD COLUMN projectId INTEGER');
+      }
     }
   }
 
@@ -140,6 +155,7 @@ class DatabaseHelper {
         title TEXT NOT NULL,
         description TEXT,
         categoryId INTEGER,
+        projectId INTEGER,
         priority TEXT NOT NULL,
         date TEXT,
         time TEXT,
@@ -147,7 +163,21 @@ class DatabaseHelper {
         reminderEnabled INTEGER NOT NULL,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
-        FOREIGN KEY (categoryId) REFERENCES categories (id)
+        FOREIGN KEY (categoryId) REFERENCES categories (id),
+        FOREIGN KEY (projectId) REFERENCES projects (id)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE projects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
+        startDate TEXT,
+        endDate TEXT,
+        status TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
       )
     ''');
 
@@ -368,6 +398,33 @@ class DatabaseHelper {
     // When deleting debt, we could delete associated transactions, or just un-link them. Leaving un-link for simplicity and preserving historical records.
     await db.update('transactions', {'debtId': null}, where: 'debtId = ?', whereArgs: [id]);
     return await db.delete('debts', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // Projects
+  Future<List<Map<String, dynamic>>> getProjects() async {
+    final db = await instance.database;
+    return await db.query('projects', orderBy: 'createdAt DESC');
+  }
+
+  Future<int> createProject(Map<String, dynamic> project) async {
+    final db = await instance.database;
+    return await db.insert('projects', project);
+  }
+
+  Future<int> updateProject(Map<String, dynamic> project) async {
+    final db = await instance.database;
+    return await db.update(
+      'projects',
+      project,
+      where: 'id = ?',
+      whereArgs: [project['id']],
+    );
+  }
+
+  Future<int> deleteProject(int id) async {
+    final db = await instance.database;
+    await db.update('tasks', {'projectId': null}, where: 'projectId = ?', whereArgs: [id]);
+    return await db.delete('projects', where: 'id = ?', whereArgs: [id]);
   }
 }
 

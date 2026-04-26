@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../finance/finance_screen.dart';
 import '../debts/debts_screen.dart';
-// import '../projects/projects_screen.dart';
+import '../projects/projects_screen.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -48,7 +48,7 @@ class AppDrawer extends StatelessWidget {
             title: const Text('Projetos'),
             onTap: () {
               Navigator.pop(context);
-              // Navigator.push(context, MaterialPageRoute(builder: (_) => const ProjectsScreen()));
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const ProjectsScreen()));
             },
           ),
         ],

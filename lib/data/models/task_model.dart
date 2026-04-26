@@ -3,6 +3,7 @@ class Task {
   final String title;
   final String? description;
   final int? categoryId;
+  final int? projectId;
   final String priority; // 'baixa', 'media', 'alta'
   final String? date;
   final String? time;
@@ -16,6 +17,7 @@ class Task {
     required this.title,
     this.description,
     this.categoryId,
+    this.projectId,
     required this.priority,
     this.date,
     this.time,
@@ -31,6 +33,7 @@ class Task {
       'title': title,
       'description': description,
       'categoryId': categoryId,
+      'projectId': projectId,
       'priority': priority,
       'date': date,
       'time': time,
@@ -47,6 +50,7 @@ class Task {
       title: map['title'],
       description: map['description'],
       categoryId: map['categoryId'],
+      projectId: map['projectId'],
       priority: map['priority'],
       date: map['date'],
       time: map['time'],
@@ -62,6 +66,7 @@ class Task {
     String? title,
     String? description,
     int? categoryId,
+    int? projectId,
     String? priority,
     String? date,
     String? time,
@@ -75,6 +80,7 @@ class Task {
       title: title ?? this.title,
       description: description ?? this.description,
       categoryId: categoryId ?? this.categoryId,
+      projectId: projectId ?? this.projectId,
       priority: priority ?? this.priority,
       date: date ?? this.date,
       time: time ?? this.time,

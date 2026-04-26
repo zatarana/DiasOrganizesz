@@ -6,6 +6,7 @@ import '../data/models/financial_category_model.dart';
 import '../data/models/debt_model.dart';
 import '../data/models/setting_model.dart';
 import '../data/models/transaction_model.dart';
+import '../data/models/project_model.dart';
 import '../data/database/db_helper.dart';
 import '../core/notifications/notification_service.dart';
 
@@ -191,16 +192,27 @@ class TransactionNotifier extends StateNotifier<List<FinancialTransaction>> {
     if (idx == -1) return;
     
     final debt = debts[idx];
+    if (debt.status == 'canceled' || debt.status == 'paused') return;
+
     final debtTransactions = state.where((t) => t.debtId == debtId && t.status != 'canceled').toList();
     
     if (debtTransactions.isEmpty) return;
 
     final allPaid = debtTransactions.every((t) => t.status == 'paid');
+    final hasOverdue = debtTransactions.any((t) => t.status == 'overdue');
     
-    if (allPaid && debt.status != 'paid') {
-      ref.read(debtsProvider.notifier).updateDebt(debt.copyWith(status: 'paid'));
-    } else if (!allPaid && debt.status == 'paid') {
-      ref.read(debtsProvider.notifier).updateDebt(debt.copyWith(status: 'active'));
+    String newStatus = debt.status;
+
+    if (allPaid) {
+       newStatus = 'paid';
+    } else if (hasOverdue) {
+       newStatus = 'overdue';
+    } else {
+       newStatus = 'active';
+    }
+    
+    if (newStatus != debt.status) {
+      ref.read(debtsProvider.notifier).updateDebt(debt.copyWith(status: newStatus));
     }
   }
 }
@@ -269,6 +281,40 @@ class DebtNotifier extends StateNotifier<List<Debt>> {
   Future<void> removeDebt(int id) async {
     await db.deleteDebt(id);
     state = state.where((d) => d.id != id).toList();
+  }
+}
+
+final projectsProvider = StateNotifierProvider<ProjectNotifier, List<Project>>((ref) {
+  return ProjectNotifier(ref.watch(dbProvider));
+});
+
+class ProjectNotifier extends StateNotifier<List<Project>> {
+  final DatabaseHelper db;
+  ProjectNotifier(this.db) : super([]) {
+    loadProjects();
+  }
+
+  Future<void> loadProjects() async {
+    final m = await db.getProjects();
+    state = m.map((e) => Project.fromMap(e)).toList();
+  }
+
+  Future<void> addProject(Project project) async {
+    final id = await db.createProject(project.toMap());
+    state = [project.copyWith(id: id), ...state];
+  }
+
+  Future<void> updateProject(Project project) async {
+    await db.updateProject(project.toMap());
+    state = [
+      for (final p in state)
+        if (p.id == project.id) project else p
+    ];
+  }
+
+  Future<void> removeProject(int id) async {
+    await db.deleteProject(id);
+    state = state.where((p) => p.id != id).toList();
   }
 }
 

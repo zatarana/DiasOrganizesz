@@ -229,7 +229,12 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
                             color: progress >= 1.0 ? Colors.green : Colors.blue,
                           ),
                         ),
-                        if (d.status == 'paused')
+                        if (d.status == 'canceled')
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8.0),
+                            child: Text('DÍVIDA CANCELADA 🚫', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                          )
+                        else if (d.status == 'paused')
                           const Padding(
                             padding: EdgeInsets.only(top: 8.0),
                             child: Text('DÍVIDA PAUSADA ⏸️', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 12)),
@@ -239,7 +244,7 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
                             padding: EdgeInsets.only(top: 8.0),
                             child: Text('DÍVIDA QUITADA! 🎉', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
                           )
-                        else if (ds['overdueAmount'] > 0)
+                        else if (d.status == 'overdue' || ds['overdueAmount'] > 0)
                           Padding(
                             padding: const EdgeInsets.only(top: 8.0),
                             child: Row(

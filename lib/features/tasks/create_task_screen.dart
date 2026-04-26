@@ -7,7 +7,10 @@ import 'package:intl/intl.dart';
 
 class CreateTaskScreen extends ConsumerStatefulWidget {
   final Task? task;
-  const CreateTaskScreen({super.key, this.task});
+  final DateTime? selectedDate;
+  final int? projectId;
+
+  const CreateTaskScreen({super.key, this.task, this.selectedDate, this.projectId});
 
   @override
   ConsumerState<CreateTaskScreen> createState() => _CreateTaskScreenState();
@@ -20,18 +23,24 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
   String? _time;
   String _priority = 'media';
   int? _categoryId;
+  int? _projectId;
   bool _hasReminder = false;
 
   @override
   void initState() {
     super.initState();
+    _projectId = widget.projectId;
+    if (widget.selectedDate != null) {
+      _date = DateFormat('yyyy-MM-dd').format(widget.selectedDate!);
+    }
     if (widget.task != null) {
       _titleController.text = widget.task!.title;
-      _descController.text = widget.task!.description;
-      _date = widget.task!.date;
+      _descController.text = widget.task!.description ?? '';
+      if (widget.task!.date != null) _date = widget.task!.date!;
       _time = widget.task!.time;
       _priority = widget.task!.priority;
       _categoryId = widget.task!.categoryId;
+      _projectId = widget.task!.projectId ?? widget.projectId;
       _hasReminder = widget.task!.reminderEnabled;
     }
   }
@@ -52,6 +61,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
       date: _date,
       time: _time,
       categoryId: catId!,
+      projectId: _projectId,
       priority: _priority,
       status: widget.task?.status ?? 'pendente',
       reminderEnabled: _hasReminder,
@@ -167,6 +177,38 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
               subtitle: const Text('Requer data e horário definidos'),
               value: _hasReminder,
               onChanged: _time != null ? (val) => setState(() => _hasReminder = val) : null,
+            ),
+            const SizedBox(height: 16),
+            Consumer(
+              builder: (context, ref, child) {
+                 final categories = ref.watch(categoriesProvider);
+                 if (categories.isEmpty) return const SizedBox.shrink();
+                 return DropdownButtonFormField<int>(
+                   value: _categoryId ?? categories.first.id,
+                   decoration: const InputDecoration(labelText: 'Categoria', border: OutlineInputBorder()),
+                   items: categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+                   onChanged: (val) {
+                     if (val != null) setState(() => _categoryId = val);
+                   },
+                 );
+              }
+            ),
+            const SizedBox(height: 16),
+            Consumer(
+              builder: (context, ref, child) {
+                 final projects = ref.watch(projectsProvider);
+                 return DropdownButtonFormField<int>(
+                   value: _projectId,
+                   decoration: const InputDecoration(labelText: 'Vincular ao Projeto (Opcional)', border: OutlineInputBorder()),
+                   items: [
+                     const DropdownMenuItem<int>(value: null, child: Text('Nenhum projeto')),
+                     ...projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))),
+                   ],
+                   onChanged: (val) {
+                     setState(() => _projectId = val);
+                   },
+                 );
+              }
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
