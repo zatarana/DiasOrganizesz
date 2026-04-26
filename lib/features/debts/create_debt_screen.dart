@@ -29,6 +29,11 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
 
    bool _generateInstallments = false;
    bool _remindInstallments = false;
+    if (widget.debt == null) {
+      final settings = ref.read(appSettingsProvider);
+      _remindInstallments = (settings[AppSettingKeys.debtsRemindersDefault] ?? 'false') == 'true';
+    }
+   bool _remindInstallments = false;
 
   @override
   void initState() {
@@ -145,6 +150,12 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
                   decoration: const InputDecoration(labelText: 'Categoria Financeira', border: OutlineInputBorder()),
                   value: _selectedCategoryId,
                   items: [
+                 SwitchListTile(
+                   title: const Text('Lembrar parcelas automaticamente?'),
+                   subtitle: const Text('Agenda lembrete local para vencimento de cada parcela'),
+                   value: _remindInstallments,
+                   onChanged: (v) => setState(() => _remindInstallments = v),
+                 ),
                     const DropdownMenuItem<int>(value: null, child: Text('Selecione uma categoria (Obrigatório)')),
                     ...categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
                   ],
@@ -273,7 +284,7 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
        if (confirm != true) return;
     }
 
-    final debt = Debt(
+              reminderEnabled: _remindInstallments,
       id: widget.debt?.id,
       name: name,
       totalAmount: amount,

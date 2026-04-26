@@ -25,13 +25,13 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Instalar dependências
-        run: flutter pub get
-
       - name: Analisar projeto
         run: flutter analyze
 
       - name: Executar testes
+        run: flutter test
+
+          name: DiasOrganize-v2-debug-apk
         run: flutter test
 
       - name: Construir APK (Debug)

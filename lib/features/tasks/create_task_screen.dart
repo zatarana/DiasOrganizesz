@@ -25,6 +25,9 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
   int? _categoryId;
   int? _projectId;
   int? _projectStepId;
+      _projectStepId = widget.task!.projectStepId;
+      projectStepId: _projectId == null ? null : _projectStepId,
+  int? _projectStepId;
   bool _hasReminder = false;
 
   @override
@@ -184,7 +187,27 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
             const SizedBox(height: 16),
             Consumer(
               builder: (context, ref, child) {
-                 final categories = ref.watch(categoriesProvider);
+                     setState(() {
+                       _projectId = val;
+                       _projectStepId = null;
+                     });
+            if (_projectId != null) ...[
+              const SizedBox(height: 16),
+              Consumer(
+                builder: (context, ref, child) {
+                  final steps = ref.watch(projectStepsProvider(_projectId!));
+                  return DropdownButtonFormField<int>(
+                    value: _projectStepId,
+                    decoration: const InputDecoration(labelText: 'Etapa do Projeto (Opcional)', border: OutlineInputBorder()),
+                    items: [
+                      const DropdownMenuItem<int>(value: null, child: Text('Sem etapa específica')),
+                      ...steps.map((s) => DropdownMenuItem<int>(value: s.id, child: Text(s.title))),
+                    ],
+                    onChanged: (val) => setState(() => _projectStepId = val),
+                  );
+                },
+              ),
+            ],
                  if (categories.isEmpty) return const SizedBox.shrink();
                  return DropdownButtonFormField<int>(
                    value: _categoryId ?? categories.first.id,

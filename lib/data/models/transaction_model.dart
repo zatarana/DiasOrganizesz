@@ -11,6 +11,12 @@ class FinancialTransaction {
   final String? paymentMethod;
   final String status; // 'pending', 'paid', 'overdue', 'canceled'
   final bool reminderEnabled;
+    this.reminderEnabled = false,
+    bool? reminderEnabled,
+      reminderEnabled: reminderEnabled ?? this.reminderEnabled,
+      'reminderEnabled': reminderEnabled ? 1 : 0,
+      reminderEnabled: map['reminderEnabled'] == 1,
+  final bool reminderEnabled;
   final bool isFixed;
   final String recurrenceType; // 'none', 'monthly'
   final String? notes;
