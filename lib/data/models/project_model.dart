@@ -12,49 +12,6 @@ class Project {
   final String priority; // baixa, media, alta
   final String color; // hex string
   final String icon; // icon key
-    this.notes,
-    this.completedAt,
-    this.progress = 0,
-    this.reminderEnabled = false,
-    this.priority = 'media',
-    this.color = '0xFF2196F3',
-    this.icon = 'rocket_launch',
-      'notes': notes,
-      'completedAt': completedAt,
-      'progress': progress,
-      'reminderEnabled': reminderEnabled ? 1 : 0,
-      'priority': priority,
-      'color': color,
-      'icon': icon,
-      notes: map['notes'],
-      completedAt: map['completedAt'],
-      progress: (map['progress'] is num) ? (map['progress'] as num).toDouble() : 0,
-      reminderEnabled: map['reminderEnabled'] == 1,
-      priority: map['priority'] ?? 'media',
-      color: map['color'] ?? '0xFF2196F3',
-      icon: map['icon'] ?? 'rocket_launch',
-    String? notes,
-    String? completedAt,
-    bool clearCompletedAt = false,
-    double? progress,
-    bool? reminderEnabled,
-    String? priority,
-    String? color,
-    String? icon,
-      notes: notes ?? this.notes,
-      completedAt: clearCompletedAt ? null : (completedAt ?? this.completedAt),
-      progress: progress ?? this.progress,
-      reminderEnabled: reminderEnabled ?? this.reminderEnabled,
-      priority: priority ?? this.priority,
-      color: color ?? this.color,
-      icon: icon ?? this.icon,
-  final String? notes;
-  final String? completedAt;
-  final double progress; // 0..100
-  final bool reminderEnabled;
-  final String priority; // baixa, media, alta
-  final String color; // hex string
-  final String icon; // icon key
   final String createdAt;
   final String updatedAt;
 
