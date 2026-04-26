@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../data/database/finance_planning_store.dart';
+import '../../data/models/financial_account_model.dart';
 import '../../domain/providers.dart';
 import '../../data/models/transaction_model.dart';
 
@@ -26,7 +28,10 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   bool _isFixed = false;
   String _recurrenceType = 'none';
   int? _categoryId;
+  int? _accountId;
   bool _reminderEnabled = false;
+  bool _loadingAccounts = true;
+  List<FinancialAccount> _accounts = [];
 
   bool get _isEditing => widget.transaction?.id != null;
 
@@ -44,6 +49,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   @override
   void initState() {
     super.initState();
+    _loadAccounts();
     final template = widget.transaction;
     if (template != null) {
       _titleController.text = template.title;
@@ -69,7 +75,19 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
       _isFixed = template.isFixed;
       _recurrenceType = template.recurrenceType;
       _categoryId = template.categoryId;
+      _accountId = template.accountId;
     }
+  }
+
+  Future<void> _loadAccounts() async {
+    final db = await ref.read(dbProvider).database;
+    final accounts = await FinancePlanningStore.getAccounts(db);
+    if (!mounted) return;
+    setState(() {
+      _accounts = accounts;
+      _loadingAccounts = false;
+      if (_accountId != null && !_accounts.any((account) => account.id == _accountId)) _accountId = null;
+    });
   }
 
   @override
@@ -130,6 +148,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   Widget build(BuildContext context) {
     final categories = ref.watch(financialCategoriesProvider).where((c) => c.type == _type || c.type == 'both').toList();
     final safeCategoryId = categories.any((category) => category.id == _categoryId) ? _categoryId : null;
+    final safeAccountId = _accounts.any((account) => account.id == _accountId) ? _accountId : null;
 
     return Scaffold(
       appBar: AppBar(
@@ -226,7 +245,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<int>(
-                initialValue: safeCategoryId,
+                value: safeCategoryId,
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Sem Categoria')),
                   ...categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
@@ -235,8 +254,22 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                 decoration: const InputDecoration(labelText: 'Categoria', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 16),
+              DropdownButtonFormField<int>(
+                value: safeAccountId,
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('Sem conta')),
+                  ..._accounts.map((account) => DropdownMenuItem(value: account.id, child: Text('${account.name}${account.isArchived ? ' (arquivada)' : ''}'))),
+                ],
+                onChanged: _loadingAccounts ? null : (v) => setState(() => _accountId = v),
+                decoration: InputDecoration(
+                  labelText: _status == 'paid' ? 'Conta utilizada (obrigatória)' : 'Conta vinculada',
+                  border: const OutlineInputBorder(),
+                  helperText: _status == 'paid' ? 'Transações pagas alteram o saldo da conta.' : 'Será usada quando a transação for paga.',
+                ),
+              ),
+              const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                initialValue: _selectedPaymentMethod,
+                value: _selectedPaymentMethod,
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Forma de Pagamento (Nenhuma)')),
                   ..._paymentMethods.map((m) => DropdownMenuItem(value: m, child: Text(m.toUpperCase()))),
@@ -246,7 +279,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                initialValue: _status,
+                value: _status,
                 items: const [
                   DropdownMenuItem(value: 'pending', child: Text('Pendente')),
                   DropdownMenuItem(value: 'paid', child: Text('Efetuado / Pago')),
@@ -315,11 +348,21 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O desconto não pode ser negativo.')));
       return;
     }
+    if (_status == 'paid' && _accountId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selecione uma conta para marcar a movimentação como paga/efetuada.')));
+      return;
+    }
 
     final categories = ref.read(financialCategoriesProvider).where((c) => c.type == _type || c.type == 'both').toList();
     final safeCategoryId = categories.any((category) => category.id == _categoryId) ? _categoryId : null;
+    final safeAccountId = _accounts.any((account) => account.id == _accountId) ? _accountId : null;
     final normalizedStatus = _statusAfterSave(_status);
     final canReminder = normalizedStatus != 'paid' && normalizedStatus != 'canceled' && (_dueDate != null || _type == 'income');
+
+    if (normalizedStatus == 'paid' && safeAccountId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A conta selecionada não existe mais. Escolha uma conta válida.')));
+      return;
+    }
 
     final transaction = FinancialTransaction(
       id: _isEditing ? template?.id : null,
@@ -331,6 +374,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
       dueDate: _dueDate?.toIso8601String(),
       paidDate: normalizedStatus == 'paid' ? (_paidDate ?? DateTime.now()).toIso8601String() : null,
       categoryId: safeCategoryId,
+      accountId: safeAccountId,
       paymentMethod: _selectedPaymentMethod,
       status: normalizedStatus,
       reminderEnabled: canReminder && _reminderEnabled,
