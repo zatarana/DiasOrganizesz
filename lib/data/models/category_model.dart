@@ -10,8 +10,8 @@ class TaskCategory {
     required this.name,
     required this.color,
     this.icon,
-    required this.createdAt,
-  });
+    String? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now().toIso8601String();
 
   Map<String, dynamic> toMap() {
     return {
@@ -27,7 +27,7 @@ class TaskCategory {
     return TaskCategory(
       id: map['id'],
       name: map['name'],
-      color: map['color'],
+      color: map['color'] ?? '0xFF2196F3',
       icon: map['icon'],
       createdAt: map['createdAt'],
     );
