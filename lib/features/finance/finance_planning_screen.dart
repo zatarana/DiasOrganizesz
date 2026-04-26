@@ -189,26 +189,38 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
             final account = _accountById(goal.accountId);
             return Card(
               child: ListTile(
-                title: Text(goal.name),
+                isThreeLine: true,
+                title: Text(goal.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (goal.description != null && goal.description!.isNotEmpty) Text(goal.description!),
-                    Text('Guardado: ${_money(goal.currentAmount)} de ${_money(goal.targetAmount)}'),
-                    Text(account == null ? 'Controle manual' : 'Conta de aporte: ${account.name}'),
+                    if (goal.description != null && goal.description!.isNotEmpty) Text(goal.description!, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text('Guardado: ${_money(goal.currentAmount)} de ${_money(goal.targetAmount)}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(account == null ? 'Controle manual' : 'Conta de aporte: ${account.name}', maxLines: 1, overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 6),
                     LinearProgressIndicator(value: goalRatio),
-                    if (goal.targetDate != null) Text('Prazo: ${_safeDateLabel(goal.targetDate)}'),
-                    if (account == null) const Text('Dica: vincule uma conta para registrar aportes com impacto no saldo.', style: TextStyle(fontSize: 12, color: Colors.orange)),
+                    if (goal.targetDate != null) Text('Prazo: ${_safeDateLabel(goal.targetDate)}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                    if (account == null) const Text('Dica: vincule uma conta para registrar aportes.', style: TextStyle(fontSize: 12, color: Colors.orange), maxLines: 1, overflow: TextOverflow.ellipsis),
                   ],
                 ),
-                trailing: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('${(goalRatio * 100).toStringAsFixed(0)}%', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    if (account != null && goal.status != 'completed')
-                      IconButton(icon: const Icon(Icons.add_circle_outline), tooltip: 'Aportar', onPressed: () => _showGoalDepositDialog(goal)),
-                  ],
+                trailing: SizedBox(
+                  width: 76,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Flexible(child: Text('${(goalRatio * 100).toStringAsFixed(0)}%', style: const TextStyle(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
+                      if (account != null && goal.status != 'completed')
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          icon: const Icon(Icons.add_circle_outline, size: 22),
+                          tooltip: 'Aportar',
+                          onPressed: () => _showGoalDepositDialog(goal),
+                        ),
+                    ],
+                  ),
                 ),
                 onTap: () => _showGoalDialog(goal: goal),
               ),
