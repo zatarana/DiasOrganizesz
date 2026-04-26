@@ -4,6 +4,7 @@ class FinancialGoal {
   final String? description;
   final double targetAmount;
   final double currentAmount;
+  final int? accountId;
   final String? targetDate;
   final String status;
   final String color;
@@ -17,6 +18,7 @@ class FinancialGoal {
     this.description,
     required this.targetAmount,
     this.currentAmount = 0,
+    this.accountId,
     this.targetDate,
     this.status = 'active',
     this.color = '0xFF4CAF50',
@@ -32,6 +34,8 @@ class FinancialGoal {
     bool clearDescription = false,
     double? targetAmount,
     double? currentAmount,
+    int? accountId,
+    bool clearAccountId = false,
     String? targetDate,
     bool clearTargetDate = false,
     String? status,
@@ -46,6 +50,7 @@ class FinancialGoal {
       description: clearDescription ? null : (description ?? this.description),
       targetAmount: targetAmount ?? this.targetAmount,
       currentAmount: currentAmount ?? this.currentAmount,
+      accountId: clearAccountId ? null : (accountId ?? this.accountId),
       targetDate: clearTargetDate ? null : (targetDate ?? this.targetDate),
       status: status ?? this.status,
       color: color ?? this.color,
@@ -61,6 +66,7 @@ class FinancialGoal {
         'description': description,
         'targetAmount': targetAmount,
         'currentAmount': currentAmount,
+        'accountId': accountId,
         'targetDate': targetDate,
         'status': status,
         'color': color,
@@ -74,13 +80,13 @@ class FinancialGoal {
       if (value is num) return value.toDouble();
       return double.tryParse('$value') ?? 0.0;
     }
-
     return FinancialGoal(
       id: map['id'],
       name: map['name'] ?? 'Meta sem nome',
       description: map['description'],
       targetAmount: asDouble(map['targetAmount']),
       currentAmount: asDouble(map['currentAmount']),
+      accountId: map['accountId'],
       targetDate: map['targetDate'],
       status: map['status'] ?? 'active',
       color: map['color'] ?? '0xFF4CAF50',
