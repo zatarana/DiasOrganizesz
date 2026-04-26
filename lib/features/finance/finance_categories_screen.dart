@@ -7,31 +7,35 @@ import '../../core/utils/icon_mapper.dart';
 class FinanceCategoriesScreen extends ConsumerWidget {
   const FinanceCategoriesScreen({super.key});
 
+  Color _safeColor(String rawColor) => Color(int.tryParse(rawColor) ?? 0xFF9E9E9E);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final categories = ref.watch(financialCategoriesProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Categorias Fin.')),
-      body: ListView.builder(
-        itemCount: categories.length,
-        itemBuilder: (context, index) {
-          final cat = categories[index];
-          final color = Color(int.parse(cat.color));
+      body: categories.isEmpty
+          ? const Center(child: Text('Nenhuma categoria financeira.'))
+          : ListView.builder(
+              itemCount: categories.length,
+              itemBuilder: (context, index) {
+                final cat = categories[index];
+                final color = _safeColor(cat.color);
 
-          return ListTile(
-            leading: CircleAvatar(
-              backgroundColor: color.withValues(alpha: 0.2),
-              child: Icon(IconMapper.fromName(cat.icon), color: color),
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: color.withValues(alpha: 0.2),
+                    child: Icon(IconMapper.fromName(cat.icon), color: color),
+                  ),
+                  title: Text(cat.name),
+                  subtitle: Text(cat.type == 'income' ? 'Receita' : (cat.type == 'expense' ? 'Despesa' : 'Misto')),
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => CreateFinanceCategoryScreen(category: cat)));
+                  },
+                );
+              },
             ),
-            title: Text(cat.name),
-            subtitle: Text(cat.type == 'income' ? 'Receita' : (cat.type == 'expense' ? 'Despesa' : 'Misto')),
-            onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => CreateFinanceCategoryScreen(category: cat)));
-            },
-          );
-        },
-      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateFinanceCategoryScreen()));
@@ -57,11 +61,25 @@ class _CreateFinanceCategoryScreenState extends ConsumerState<CreateFinanceCateg
   String _selectedIcon = 'category';
 
   final List<String> _colors = [
-    '0xFFF44336', '0xFFE91E63', '0xFF9C27B0', '0xFF673AB7',
-    '0xFF3F51B5', '0xFF2196F3', '0xFF03A9F4', '0xFF00BCD4',
-    '0xFF009688', '0xFF4CAF50', '0xFF8BC34A', '0xFFCDDC39',
-    '0xFFFFEB3B', '0xFFFFC107', '0xFFFF9800', '0xFFFF5722',
-    '0xFF795548', '0xFF9E9E9E', '0xFF607D8B',
+    '0xFFF44336',
+    '0xFFE91E63',
+    '0xFF9C27B0',
+    '0xFF673AB7',
+    '0xFF3F51B5',
+    '0xFF2196F3',
+    '0xFF03A9F4',
+    '0xFF00BCD4',
+    '0xFF009688',
+    '0xFF4CAF50',
+    '0xFF8BC34A',
+    '0xFFCDDC39',
+    '0xFFFFEB3B',
+    '0xFFFFC107',
+    '0xFFFF9800',
+    '0xFFFF5722',
+    '0xFF795548',
+    '0xFF9E9E9E',
+    '0xFF607D8B',
   ];
 
   @override
@@ -76,6 +94,73 @@ class _CreateFinanceCategoryScreenState extends ConsumerState<CreateFinanceCateg
   }
 
   @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  void _confirmDelete() {
+    final category = widget.category;
+    if (category?.id == null) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir categoria financeira?'),
+        content: Text('Movimentações e dívidas vinculadas a "${category!.name}" ficarão sem categoria. Deseja continuar?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () async {
+              await ref.read(financialCategoriesProvider.notifier).removeCategory(category.id!);
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (mounted) Navigator.pop(context);
+            },
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _save() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe o nome da categoria.')));
+      return;
+    }
+
+    final duplicate = ref.read(financialCategoriesProvider).any((category) {
+      final sameName = category.name.toLowerCase() == name.toLowerCase();
+      final differentId = category.id != widget.category?.id;
+      return sameName && differentId;
+    });
+
+    if (duplicate) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Já existe uma categoria financeira com esse nome.')));
+      return;
+    }
+
+    final cat = FinancialCategory(
+      id: widget.category?.id,
+      name: name,
+      type: _type,
+      color: _selectedColor,
+      icon: _selectedIcon,
+      createdAt: widget.category?.createdAt ?? DateTime.now().toIso8601String(),
+      updatedAt: DateTime.now().toIso8601String(),
+    );
+
+    if (widget.category == null) {
+      await ref.read(financialCategoriesProvider.notifier).addCategory(cat);
+    } else {
+      await ref.read(financialCategoriesProvider.notifier).updateCategory(cat);
+    }
+
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -84,10 +169,7 @@ class _CreateFinanceCategoryScreenState extends ConsumerState<CreateFinanceCateg
           if (widget.category != null)
             IconButton(
               icon: const Icon(Icons.delete),
-              onPressed: () {
-                ref.read(financialCategoriesProvider.notifier).removeCategory(widget.category!.id!);
-                Navigator.pop(context);
-              },
+              onPressed: _confirmDelete,
             )
         ],
       ),
@@ -120,7 +202,7 @@ class _CreateFinanceCategoryScreenState extends ConsumerState<CreateFinanceCateg
               runSpacing: 8,
               children: _colors.map((c) {
                 final isSelected = c == _selectedColor;
-                final color = Color(int.parse(c));
+                final color = Color(int.tryParse(c) ?? 0xFF9E9E9E);
                 return GestureDetector(
                   onTap: () => setState(() => _selectedColor = c),
                   child: Container(
@@ -138,25 +220,7 @@ class _CreateFinanceCategoryScreenState extends ConsumerState<CreateFinanceCateg
             const Spacer(),
             ElevatedButton(
               style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
-              onPressed: () {
-                if (_nameController.text.isNotEmpty) {
-                  final cat = FinancialCategory(
-                    id: widget.category?.id,
-                    name: _nameController.text,
-                    type: _type,
-                    color: _selectedColor,
-                    icon: _selectedIcon,
-                    createdAt: widget.category?.createdAt ?? DateTime.now().toIso8601String(),
-                    updatedAt: DateTime.now().toIso8601String(),
-                  );
-                  if (widget.category == null) {
-                    ref.read(financialCategoriesProvider.notifier).addCategory(cat);
-                  } else {
-                    ref.read(financialCategoriesProvider.notifier).updateCategory(cat);
-                  }
-                  Navigator.pop(context);
-                }
-              },
+              onPressed: _save,
               child: const Text('Salvar'),
             ),
           ],
