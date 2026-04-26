@@ -296,6 +296,17 @@ class DatabaseHelper {
     }
   }
 
+  Future<void> resetCoreData() async {
+    final db = await instance.database;
+    await db.transaction((txn) async {
+      for (final table in ['tasks', 'transactions', 'debts', 'project_steps', 'project_stages', 'projects']) {
+        try {
+          await txn.delete(table);
+        } catch (_) {}
+      }
+    });
+  }
+
   Future<List<TaskCategory>> getCategories() async {
     final db = await instance.database;
     final result = await db.query('categories');
