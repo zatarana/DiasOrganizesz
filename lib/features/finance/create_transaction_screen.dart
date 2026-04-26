@@ -28,6 +28,8 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   int? _categoryId;
   bool _reminderEnabled = false;
 
+  bool get _isEditing => widget.transaction?.id != null;
+
   final List<String> _paymentMethods = [
     'dinheiro',
     'pix',
@@ -42,30 +44,31 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   @override
   void initState() {
     super.initState();
-    if (widget.transaction != null) {
-      _titleController.text = widget.transaction!.title;
-      _descriptionController.text = widget.transaction!.description ?? '';
-      _notesController.text = widget.transaction!.notes ?? '';
-      if (widget.transaction!.discountAmount != null && widget.transaction!.discountAmount! > 0) {
-        _discountController.text = widget.transaction!.discountAmount!.toStringAsFixed(2);
+    final template = widget.transaction;
+    if (template != null) {
+      _titleController.text = template.title;
+      _descriptionController.text = template.description ?? '';
+      _notesController.text = template.notes ?? '';
+      if (template.discountAmount != null && template.discountAmount! > 0) {
+        _discountController.text = template.discountAmount!.toStringAsFixed(2);
       }
-      _amountController.text = widget.transaction!.amount.toStringAsFixed(2);
+      _amountController.text = template.amount > 0 ? template.amount.toStringAsFixed(2) : '';
 
-      if (_paymentMethods.contains(widget.transaction!.paymentMethod?.toLowerCase())) {
-        _selectedPaymentMethod = widget.transaction!.paymentMethod?.toLowerCase();
-      } else if (widget.transaction!.paymentMethod != null && widget.transaction!.paymentMethod!.isNotEmpty) {
+      if (_paymentMethods.contains(template.paymentMethod?.toLowerCase())) {
+        _selectedPaymentMethod = template.paymentMethod?.toLowerCase();
+      } else if (template.paymentMethod != null && template.paymentMethod!.isNotEmpty) {
         _selectedPaymentMethod = 'outro';
       }
 
-      _type = widget.transaction!.type;
-      _transactionDate = DateTime.parse(widget.transaction!.transactionDate);
-      if (widget.transaction!.dueDate != null) _dueDate = DateTime.parse(widget.transaction!.dueDate!);
-      if (widget.transaction!.paidDate != null) _paidDate = DateTime.parse(widget.transaction!.paidDate!);
-      _status = widget.transaction!.status;
-      _reminderEnabled = widget.transaction!.reminderEnabled;
-      _isFixed = widget.transaction!.isFixed;
-      _recurrenceType = widget.transaction!.recurrenceType;
-      _categoryId = widget.transaction!.categoryId;
+      _type = template.type;
+      _transactionDate = DateTime.tryParse(template.transactionDate) ?? DateTime.now();
+      if (template.dueDate != null) _dueDate = DateTime.tryParse(template.dueDate!);
+      if (template.paidDate != null) _paidDate = DateTime.tryParse(template.paidDate!);
+      _status = template.status;
+      _reminderEnabled = template.reminderEnabled;
+      _isFixed = template.isFixed;
+      _recurrenceType = template.recurrenceType;
+      _categoryId = template.categoryId;
     }
   }
 
@@ -75,9 +78,9 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.transaction == null ? 'Nova Movimentação' : 'Editar Movimentação'),
+        title: Text(_isEditing ? 'Editar Movimentação' : 'Nova Movimentação'),
         actions: [
-          if (widget.transaction != null)
+          if (_isEditing)
             IconButton(
               icon: const Icon(Icons.delete),
               onPressed: () {
@@ -89,10 +92,12 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                     actions: [
                       TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
                       TextButton(
-                        onPressed: () {
-                          ref.read(transactionsProvider.notifier).removeTransaction(widget.transaction!.id!);
-                          Navigator.pop(ctx);
-                          Navigator.pop(context);
+                        onPressed: () async {
+                          await ref.read(transactionsProvider.notifier).removeTransaction(widget.transaction!.id!);
+                          if (context.mounted) {
+                            Navigator.pop(ctx);
+                            Navigator.pop(context);
+                          }
                         },
                         child: const Text('Excluir', style: TextStyle(color: Colors.red)),
                       ),
@@ -251,6 +256,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   void _save() {
     final amount = double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0;
     final discount = double.tryParse(_discountController.text.replaceAll(',', '.')) ?? 0.0;
+    final template = widget.transaction;
 
     if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O título é obrigatório.')));
@@ -262,7 +268,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
     }
 
     final transaction = FinancialTransaction(
-      id: widget.transaction?.id,
+      id: _isEditing ? template?.id : null,
       title: _titleController.text,
       description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
       amount: amount,
@@ -277,18 +283,18 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
       isFixed: _isFixed,
       recurrenceType: _recurrenceType,
       notes: _notesController.text.isNotEmpty ? _notesController.text : null,
-      debtId: widget.transaction?.debtId,
-      installmentNumber: widget.transaction?.installmentNumber,
-      totalInstallments: widget.transaction?.totalInstallments,
+      debtId: template?.debtId,
+      installmentNumber: template?.installmentNumber,
+      totalInstallments: template?.totalInstallments,
       discountAmount: discount > 0 ? discount : null,
-      createdAt: widget.transaction?.createdAt ?? DateTime.now().toIso8601String(),
+      createdAt: _isEditing ? template!.createdAt : DateTime.now().toIso8601String(),
       updatedAt: DateTime.now().toIso8601String(),
     );
 
-    if (widget.transaction == null) {
-      ref.read(transactionsProvider.notifier).addTransaction(transaction);
-    } else {
+    if (_isEditing) {
       ref.read(transactionsProvider.notifier).updateTransaction(transaction);
+    } else {
+      ref.read(transactionsProvider.notifier).addTransaction(transaction);
     }
     Navigator.pop(context);
   }
