@@ -28,9 +28,14 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   int? _categoryId;
   bool _reminderEnabled = false;
 
-  // Available Payment Methods
   final List<String> _paymentMethods = [
-    'dinheiro', 'pix', 'cartão de débito', 'cartão de crédito', 'boleto', 'transferência', 'outro'
+    'dinheiro',
+    'pix',
+    'cartão de débito',
+    'cartão de crédito',
+    'boleto',
+    'transferência',
+    'outro',
   ];
   String? _selectedPaymentMethod;
 
@@ -40,28 +45,22 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
     if (widget.transaction != null) {
       _titleController.text = widget.transaction!.title;
       _descriptionController.text = widget.transaction!.description ?? '';
-      if (widget.transaction!.notes != null) {
-        _notesController.text = widget.transaction!.notes ?? '';
-      }
+      _notesController.text = widget.transaction!.notes ?? '';
       if (widget.transaction!.discountAmount != null && widget.transaction!.discountAmount! > 0) {
         _discountController.text = widget.transaction!.discountAmount!.toStringAsFixed(2);
       }
       _amountController.text = widget.transaction!.amount.toStringAsFixed(2);
-      
+
       if (_paymentMethods.contains(widget.transaction!.paymentMethod?.toLowerCase())) {
         _selectedPaymentMethod = widget.transaction!.paymentMethod?.toLowerCase();
       } else if (widget.transaction!.paymentMethod != null && widget.transaction!.paymentMethod!.isNotEmpty) {
-        _selectedPaymentMethod = 'outro'; // Map unknown to outro
+        _selectedPaymentMethod = 'outro';
       }
 
       _type = widget.transaction!.type;
       _transactionDate = DateTime.parse(widget.transaction!.transactionDate);
-      if (widget.transaction!.dueDate != null) {
-        _dueDate = DateTime.parse(widget.transaction!.dueDate!);
-      }
-      if (widget.transaction!.paidDate != null) {
-        _paidDate = DateTime.parse(widget.transaction!.paidDate!);
-      }
+      if (widget.transaction!.dueDate != null) _dueDate = DateTime.parse(widget.transaction!.dueDate!);
+      if (widget.transaction!.paidDate != null) _paidDate = DateTime.parse(widget.transaction!.paidDate!);
       _status = widget.transaction!.status;
       _reminderEnabled = widget.transaction!.reminderEnabled;
       _isFixed = widget.transaction!.isFixed;
@@ -98,10 +97,10 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                         child: const Text('Excluir', style: TextStyle(color: Colors.red)),
                       ),
                     ],
-                  )
+                  ),
                 );
               },
-            )
+            ),
         ],
       ),
       body: Padding(
@@ -116,9 +115,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                   ButtonSegment(value: 'expense', label: Text('Despesa', style: TextStyle(color: Colors.red))),
                 ],
                 selected: {_type},
-                onSelectionChanged: (set) {
-                  setState(() => _type = set.first);
-                },
+                onSelectionChanged: (set) => setState(() => _type = set.first),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -138,16 +135,16 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
               ),
               if (_status == 'paid') ...[
-                 const SizedBox(height: 16),
-                 TextField(
-                   controller: _discountController,
-                   decoration: InputDecoration(
-                     labelText: 'Desconto / Economia gerada (R\$)', 
-                     border: const OutlineInputBorder(),
-                     hintText: _type == 'expense' ? 'Desconto por pagar antecipado' : 'Desconto concedido',
-                   ),
-                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                 ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _discountController,
+                  decoration: InputDecoration(
+                    labelText: 'Desconto / Economia gerada (R\$)',
+                    border: const OutlineInputBorder(),
+                    hintText: _type == 'expense' ? 'Desconto por pagar antecipado' : 'Desconto concedido',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
               ],
               const SizedBox(height: 16),
               Row(
@@ -156,7 +153,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                     child: OutlinedButton(
                       onPressed: () async {
                         final dt = await showDatePicker(context: context, initialDate: _transactionDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
-                        if(dt != null) setState(() => _transactionDate = dt);
+                        if (dt != null) setState(() => _transactionDate = dt);
                       },
                       child: Text('Data: ${DateFormat('dd/MM/yyyy').format(_transactionDate)}'),
                     ),
@@ -166,11 +163,11 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                     child: OutlinedButton(
                       onPressed: () async {
                         final dt = await showDatePicker(context: context, initialDate: _dueDate ?? _transactionDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
-                        if(dt != null) setState(() => _dueDate = dt);
+                        if (dt != null) setState(() => _dueDate = dt);
                       },
                       child: Text(_dueDate == null ? 'Vencimento: -' : 'Venc. ${DateFormat('dd/MM/yyyy').format(_dueDate!)}'),
                     ),
-                  )
+                  ),
                 ],
               ),
               SwitchListTile(
@@ -181,27 +178,27 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<int>(
-                value: _categoryId,
+                initialValue: _categoryId,
                 items: [
-                   const DropdownMenuItem(value: null, child: Text('Sem Categoria')),
-                   ...categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                  const DropdownMenuItem(value: null, child: Text('Sem Categoria')),
+                  ...categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
                 ],
-                onChanged: (v) => setState( ()=> _categoryId = v),
+                onChanged: (v) => setState(() => _categoryId = v),
                 decoration: const InputDecoration(labelText: 'Categoria', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: _selectedPaymentMethod,
+                initialValue: _selectedPaymentMethod,
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Forma de Pagamento (Nenhuma)')),
                   ..._paymentMethods.map((m) => DropdownMenuItem(value: m, child: Text(m.toUpperCase()))),
                 ],
-                onChanged: (v) => setState( ()=> _selectedPaymentMethod = v),
+                onChanged: (v) => setState(() => _selectedPaymentMethod = v),
                 decoration: const InputDecoration(labelText: 'Forma de Pagamento', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: _status,
+                initialValue: _status,
                 items: const [
                   DropdownMenuItem(value: 'pending', child: Text('Pendente')),
                   DropdownMenuItem(value: 'paid', child: Text('Efetuado / Pago')),
@@ -210,12 +207,12 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                 ],
                 onChanged: (v) {
                   setState(() {
-                     _status = v!;
-                     if (_status == 'paid') {
-                       _paidDate ??= DateTime.now();
-                     } else {
-                       _paidDate = null;
-                     }
+                    _status = v!;
+                    if (_status == 'paid') {
+                      _paidDate ??= DateTime.now();
+                    } else {
+                      _paidDate = null;
+                    }
                   });
                 },
                 decoration: const InputDecoration(labelText: 'Status Atual', border: OutlineInputBorder()),
@@ -241,49 +238,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
               const SizedBox(height: 32),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                onPressed: () {
-                  final amount = double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0;
-                  final discount = double.tryParse(_discountController.text.replaceAll(',', '.')) ?? 0.0;
-
-                  if (_titleController.text.trim().isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O título é obrigatório.')));
-                    return;
-                  }
-                  if (amount <= 0) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O valor deve ser maior que zero.')));
-                    return;
-                  }
-                  
-                  final t = FinancialTransaction(
-                      id: widget.transaction?.id,
-                      title: _titleController.text,
-                      description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
-                      amount: amount,
-                      type: _type,
-                      transactionDate: _transactionDate.toIso8601String(),
-                      dueDate: _dueDate?.toIso8601String(),
-                      paidDate: _paidDate?.toIso8601String(),
-                      categoryId: _categoryId,
-                      paymentMethod: _selectedPaymentMethod,
-                      status: _status,
-                      reminderEnabled: _reminderEnabled,
-                      isFixed: _isFixed,
-                      recurrenceType: _recurrenceType,
-                      notes: _notesController.text.isNotEmpty ? _notesController.text : null,
-                      debtId: widget.transaction?.debtId,
-                      installmentNumber: widget.transaction?.installmentNumber,
-                      totalInstallments: widget.transaction?.totalInstallments,
-                      discountAmount: discount > 0 ? discount : null,
-                      createdAt: widget.transaction?.createdAt ?? DateTime.now().toIso8601String(),
-                      updatedAt: DateTime.now().toIso8601String(),
-                    );
-                    if (widget.transaction == null) {
-                      ref.read(transactionsProvider.notifier).addTransaction(t);
-                    } else {
-                      ref.read(transactionsProvider.notifier).updateTransaction(t);
-                    }
-                    Navigator.pop(context);
-                },
+                onPressed: _save,
                 child: const Text('Salvar'),
               ),
             ],
@@ -291,5 +246,50 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
         ),
       ),
     );
+  }
+
+  void _save() {
+    final amount = double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0;
+    final discount = double.tryParse(_discountController.text.replaceAll(',', '.')) ?? 0.0;
+
+    if (_titleController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O título é obrigatório.')));
+      return;
+    }
+    if (amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O valor deve ser maior que zero.')));
+      return;
+    }
+
+    final transaction = FinancialTransaction(
+      id: widget.transaction?.id,
+      title: _titleController.text,
+      description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
+      amount: amount,
+      type: _type,
+      transactionDate: _transactionDate.toIso8601String(),
+      dueDate: _dueDate?.toIso8601String(),
+      paidDate: _paidDate?.toIso8601String(),
+      categoryId: _categoryId,
+      paymentMethod: _selectedPaymentMethod,
+      status: _status,
+      reminderEnabled: _reminderEnabled,
+      isFixed: _isFixed,
+      recurrenceType: _recurrenceType,
+      notes: _notesController.text.isNotEmpty ? _notesController.text : null,
+      debtId: widget.transaction?.debtId,
+      installmentNumber: widget.transaction?.installmentNumber,
+      totalInstallments: widget.transaction?.totalInstallments,
+      discountAmount: discount > 0 ? discount : null,
+      createdAt: widget.transaction?.createdAt ?? DateTime.now().toIso8601String(),
+      updatedAt: DateTime.now().toIso8601String(),
+    );
+
+    if (widget.transaction == null) {
+      ref.read(transactionsProvider.notifier).addTransaction(transaction);
+    } else {
+      ref.read(transactionsProvider.notifier).updateTransaction(transaction);
+    }
+    Navigator.pop(context);
   }
 }
