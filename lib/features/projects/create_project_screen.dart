@@ -38,11 +38,39 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
       _color = widget.project!.color;
       _icon = widget.project!.icon;
       _reminderEnabled = widget.project!.reminderEnabled;
-      if (widget.project!.startDate != null) _startDate = DateTime.parse(widget.project!.startDate!);
-      if (widget.project!.endDate != null) _endDate = DateTime.parse(widget.project!.endDate!);
+      if (widget.project!.startDate != null) _startDate = DateTime.tryParse(widget.project!.startDate!);
+      if (widget.project!.endDate != null) _endDate = DateTime.tryParse(widget.project!.endDate!);
     } else {
       _startDate = DateTime.now();
     }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descriptionController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickStartDate() async {
+    final dt = await showDatePicker(
+      context: context,
+      initialDate: _startDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (dt != null) setState(() => _startDate = dt);
+  }
+
+  Future<void> _pickEndDate() async {
+    final dt = await showDatePicker(
+      context: context,
+      initialDate: _endDate ?? (_startDate ?? DateTime.now()),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (dt != null) setState(() => _endDate = dt);
   }
 
   @override
@@ -75,34 +103,37 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () async {
-                      final dt = await showDatePicker(
-                        context: context,
-                        initialDate: _startDate ?? DateTime.now(),
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2100),
-                      );
-                      if (dt != null) setState(() => _startDate = dt);
-                    },
+                    onPressed: _pickStartDate,
                     icon: const Icon(Icons.calendar_today),
                     label: Text(_startDate == null ? 'Data Inicial' : DateFormat('dd/MM/yyyy').format(_startDate!)),
                   ),
                 ),
-                const SizedBox(width: 16),
+                IconButton(
+                  tooltip: 'Limpar data inicial',
+                  onPressed: _startDate == null ? null : () => setState(() => _startDate = null),
+                  icon: const Icon(Icons.clear),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () async {
-                      final dt = await showDatePicker(
-                        context: context,
-                        initialDate: _endDate ?? (_startDate ?? DateTime.now()),
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2100),
-                      );
-                      if (dt != null) setState(() => _endDate = dt);
-                    },
+                    onPressed: _pickEndDate,
                     icon: const Icon(Icons.event),
                     label: Text(_endDate == null ? 'Prazo Final' : DateFormat('dd/MM/yyyy').format(_endDate!)),
                   ),
+                ),
+                IconButton(
+                  tooltip: 'Limpar prazo final',
+                  onPressed: _endDate == null
+                      ? null
+                      : () => setState(() {
+                            _endDate = null;
+                            _reminderEnabled = false;
+                          }),
+                  icon: const Icon(Icons.clear),
                 ),
               ],
             ),
@@ -181,8 +212,11 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
     );
   }
 
-  void _saveProject() {
+  Future<void> _saveProject() async {
     final title = _nameController.text.trim();
+    final description = _descriptionController.text.trim();
+    final notes = _notesController.text.trim();
+
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Título é obrigatório.')));
       return;
@@ -194,18 +228,17 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
     }
 
     final completedAt = _status == 'completed' ? (widget.project?.completedAt ?? DateTime.now().toIso8601String()) : null;
-
     final project = Project(
       id: widget.project?.id,
       name: title,
-      description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
+      description: description.isNotEmpty ? description : null,
       startDate: _startDate?.toIso8601String(),
       endDate: _endDate?.toIso8601String(),
       status: _status,
-      notes: _notesController.text.isNotEmpty ? _notesController.text : null,
+      notes: notes.isNotEmpty ? notes : null,
       completedAt: completedAt,
       progress: _status == 'completed' ? 100 : (widget.project?.progress ?? 0),
-      reminderEnabled: _reminderEnabled,
+      reminderEnabled: _endDate != null && _reminderEnabled,
       priority: _priority,
       color: _color,
       icon: _icon,
@@ -214,11 +247,11 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
     );
 
     if (widget.project == null) {
-      ref.read(projectsProvider.notifier).addProject(project);
+      await ref.read(projectsProvider.notifier).addProject(project);
     } else {
-      ref.read(projectsProvider.notifier).updateProject(project);
+      await ref.read(projectsProvider.notifier).updateProject(project);
     }
 
-    Navigator.pop(context);
+    if (mounted) Navigator.pop(context);
   }
 }
