@@ -503,7 +503,24 @@ class ProjectNotifier extends StateNotifier<List<Project>> {
   }
 
   Future<void> removeProject(int id, {bool deleteLinkedTasks = false}) async {
-    await NotificationService().cancelNotification(NotificationService().projectReminderId(id));
+    final notificationService = NotificationService();
+    final linkedTasks = ref.read(tasksProvider).where((t) => t.projectId == id && t.id != null).toList();
+    final linkedSteps = await db.getProjectSteps(id);
+
+    await notificationService.cancelNotification(notificationService.projectReminderId(id));
+
+    for (final step in linkedSteps) {
+      if (step.id != null) {
+        await notificationService.cancelNotification(notificationService.projectStepReminderId(step.id!));
+      }
+    }
+
+    if (deleteLinkedTasks) {
+      for (final task in linkedTasks) {
+        await notificationService.cancelNotification(notificationService.taskReminderId(task.id!));
+      }
+    }
+
     await db.deleteProject(id, deleteLinkedTasks: deleteLinkedTasks);
     state = state.where((p) => p.id != id).toList();
     await ref.read(tasksProvider.notifier).loadTasks();
