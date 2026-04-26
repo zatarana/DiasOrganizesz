@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../finance/finance_screen.dart';
-// import '../debts/debts_screen.dart';
+import '../debts/debts_screen.dart';
 // import '../projects/projects_screen.dart';
 
 class AppDrawer extends StatelessWidget {
@@ -40,7 +40,7 @@ class AppDrawer extends StatelessWidget {
             title: const Text('Dívidas'),
             onTap: () {
               Navigator.pop(context);
-              // Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtsScreen()));
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtsScreen()));
             },
           ),
           ListTile(

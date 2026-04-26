@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models/task_model.dart';
 import '../data/models/category_model.dart';
 import '../data/models/financial_category_model.dart';
+import '../data/models/debt_model.dart';
 import '../data/models/setting_model.dart';
 import '../data/models/transaction_model.dart';
 import '../data/database/db_helper.dart';
@@ -175,6 +176,73 @@ class TransactionNotifier extends StateNotifier<List<FinancialTransaction>> {
   Future<void> removeTransaction(int id) async {
     await db.deleteTransaction(id);
     state = state.where((t) => t.id != id).toList();
+  }
+}
+
+final financialCategoriesProvider = StateNotifierProvider<FinancialCategoryNotifier, List<FinancialCategory>>((ref) {
+  return FinancialCategoryNotifier(ref.watch(dbProvider));
+});
+
+class FinancialCategoryNotifier extends StateNotifier<List<FinancialCategory>> {
+  final DatabaseHelper db;
+  FinancialCategoryNotifier(this.db) : super([]) {
+    loadCategories();
+  }
+
+  Future<void> loadCategories() async {
+    state = await db.getFinancialCategories();
+  }
+
+  Future<void> addCategory(FinancialCategory category) async {
+    final newCategory = await db.createFinancialCategory(category);
+    state = [...state, newCategory];
+  }
+
+  Future<void> updateCategory(FinancialCategory category) async {
+    await db.updateFinancialCategory(category);
+    state = [
+      for (final t in state)
+        if (t.id == category.id) category else t
+    ];
+  }
+
+  Future<void> removeCategory(int id) async {
+    await db.deleteFinancialCategory(id);
+    state = state.where((t) => t.id != id).toList();
+  }
+}
+
+final debtsProvider = StateNotifierProvider<DebtNotifier, List<Debt>>((ref) {
+  return DebtNotifier(ref.watch(dbProvider));
+});
+
+class DebtNotifier extends StateNotifier<List<Debt>> {
+  final DatabaseHelper db;
+  DebtNotifier(this.db) : super([]) {
+    loadDebts();
+  }
+
+  Future<void> loadDebts() async {
+    final m = await db.getDebts();
+    state = m.map((e) => Debt.fromMap(e)).toList();
+  }
+
+  Future<void> addDebt(Debt debt) async {
+    final id = await db.createDebt(debt.toMap());
+    state = [debt.copyWith(id: id), ...state];
+  }
+
+  Future<void> updateDebt(Debt debt) async {
+    await db.updateDebt(debt.toMap());
+    state = [
+      for (final d in state)
+        if (d.id == debt.id) debt else d
+    ];
+  }
+
+  Future<void> removeDebt(int id) async {
+    await db.deleteDebt(id);
+    state = state.where((d) => d.id != id).toList();
   }
 }
 

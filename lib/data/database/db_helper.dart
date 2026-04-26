@@ -13,7 +13,7 @@ class DatabaseHelper {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDB('diasorganize_v5.db');
+    _database = await _initDB('diasorganize_v6.db');
     return _database!;
   }
 
@@ -23,14 +23,14 @@ class DatabaseHelper {
 
     return await openDatabase(
       path, 
-      version: 5, 
+      version: 6, 
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 5) {
+    if (oldVersion < 6) {
       await db.execute('''
         CREATE TABLE IF NOT EXISTS transactions (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,6 +95,23 @@ class DatabaseHelper {
           await db.insert('financial_categories', cat);
         }
       }
+      if (oldVersion < 6) {
+         await db.execute('''
+          CREATE TABLE IF NOT EXISTS debts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            description TEXT,
+            totalAmount REAL NOT NULL,
+            creditor TEXT,
+            status TEXT NOT NULL,
+            createdAt TEXT NOT NULL,
+            updatedAt TEXT NOT NULL
+          )
+        ''');
+        await db.execute('ALTER TABLE transactions ADD COLUMN debtId INTEGER');
+        await db.execute('ALTER TABLE transactions ADD COLUMN installmentNumber INTEGER');
+        await db.execute('ALTER TABLE transactions ADD COLUMN totalInstallments INTEGER');
+      }
     }
   }
 
@@ -150,6 +167,34 @@ class DatabaseHelper {
         isFixed INTEGER NOT NULL DEFAULT 0,
         recurrenceType TEXT NOT NULL,
         notes TEXT,
+        debtId INTEGER,
+        installmentNumber INTEGER,
+        totalInstallments INTEGER,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    ''');
+    
+    await db.execute('''
+      CREATE TABLE financial_categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        color TEXT NOT NULL,
+        icon TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE debts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        totalAmount REAL NOT NULL,
+        creditor TEXT,
+        status TEXT NOT NULL,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       )
@@ -280,6 +325,34 @@ class DatabaseHelper {
     // Padrão: setar null nas transações que usam esta categoria
     await db.update('transactions', {'categoryId': null}, where: 'categoryId = ?', whereArgs: [id]);
     return await db.delete('financial_categories', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // Debts
+  Future<List<Map<String, dynamic>>> getDebts() async {
+    final db = await instance.database;
+    return await db.query('debts', orderBy: 'createdAt DESC');
+  }
+
+  Future<int> createDebt(Map<String, dynamic> debt) async {
+    final db = await instance.database;
+    return await db.insert('debts', debt);
+  }
+
+  Future<int> updateDebt(Map<String, dynamic> debt) async {
+    final db = await instance.database;
+    return await db.update(
+      'debts',
+      debt,
+      where: 'id = ?',
+      whereArgs: [debt['id']],
+    );
+  }
+
+  Future<int> deleteDebt(int id) async {
+    final db = await instance.database;
+    // When deleting debt, we could delete associated transactions, or just un-link them. Leaving un-link for simplicity and preserving historical records.
+    await db.update('transactions', {'debtId': null}, where: 'debtId = ?', whereArgs: [id]);
+    return await db.delete('debts', where: 'id = ?', whereArgs: [id]);
   }
 }
 

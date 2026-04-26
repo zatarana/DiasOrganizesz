@@ -13,6 +13,9 @@ class FinancialTransaction {
   final bool isFixed;
   final String recurrenceType; // 'none', 'monthly'
   final String? notes;
+  final int? debtId;
+  final int? installmentNumber;
+  final int? totalInstallments;
   final String createdAt;
   final String updatedAt;
 
@@ -31,6 +34,9 @@ class FinancialTransaction {
     required this.isFixed,
     required this.recurrenceType,
     this.notes,
+    this.debtId,
+    this.installmentNumber,
+    this.totalInstallments,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -50,6 +56,9 @@ class FinancialTransaction {
     bool? isFixed,
     String? recurrenceType,
     String? notes,
+    int? debtId,
+    int? installmentNumber,
+    int? totalInstallments,
     String? createdAt,
     String? updatedAt,
   }) {
@@ -68,6 +77,9 @@ class FinancialTransaction {
       isFixed: isFixed ?? this.isFixed,
       recurrenceType: recurrenceType ?? this.recurrenceType,
       notes: notes ?? this.notes,
+      debtId: debtId ?? this.debtId,
+      installmentNumber: installmentNumber ?? this.installmentNumber,
+      totalInstallments: totalInstallments ?? this.totalInstallments,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -89,6 +101,9 @@ class FinancialTransaction {
       'isFixed': isFixed ? 1 : 0,
       'recurrenceType': recurrenceType,
       'notes': notes,
+      'debtId': debtId,
+      'installmentNumber': installmentNumber,
+      'totalInstallments': totalInstallments,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
     };
@@ -120,6 +135,9 @@ class FinancialTransaction {
       isFixed: map['isFixed'] == 1,
       recurrenceType: map['recurrenceType'] ?? 'none',
       notes: map['notes'],
+      debtId: map['debtId'],
+      installmentNumber: map['installmentNumber'],
+      totalInstallments: map['totalInstallments'],
       createdAt: map['createdAt'] ?? DateTime.now().toIso8601String(),
       updatedAt: map['updatedAt'] ?? DateTime.now().toIso8601String(),
     );
