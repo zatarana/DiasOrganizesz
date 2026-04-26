@@ -147,12 +147,13 @@ class TaskNotifier extends StateNotifier<List<Task>> {
 }
 
 final transactionsProvider = StateNotifierProvider<TransactionNotifier, List<FinancialTransaction>>((ref) {
-  return TransactionNotifier(ref.watch(dbProvider));
+  return TransactionNotifier(ref.watch(dbProvider), ref);
 });
 
 class TransactionNotifier extends StateNotifier<List<FinancialTransaction>> {
   final DatabaseHelper db;
-  TransactionNotifier(this.db) : super([]) {
+  final Ref ref;
+  TransactionNotifier(this.db, this.ref) : super([]) {
     loadTransactions();
   }
 
@@ -163,6 +164,7 @@ class TransactionNotifier extends StateNotifier<List<FinancialTransaction>> {
   Future<void> addTransaction(FinancialTransaction transaction) async {
     final newTransaction = await db.createTransaction(transaction);
     state = [newTransaction, ...state]; // Add to top since it sorted desc usually, though DB sort is date based
+    _checkDebtStatus(transaction.debtId);
   }
 
   Future<void> updateTransaction(FinancialTransaction transaction) async {
@@ -171,11 +173,35 @@ class TransactionNotifier extends StateNotifier<List<FinancialTransaction>> {
       for (final t in state)
         if (t.id == transaction.id) transaction else t
     ];
+    _checkDebtStatus(transaction.debtId);
   }
 
   Future<void> removeTransaction(int id) async {
+    final transaction = state.firstWhere((t) => t.id == id, orElse: () => state.first);
     await db.deleteTransaction(id);
     state = state.where((t) => t.id != id).toList();
+    _checkDebtStatus(transaction.debtId);
+  }
+
+  void _checkDebtStatus(int? debtId) {
+    if (debtId == null) return;
+    
+    final debts = ref.read(debtsProvider);
+    final idx = debts.indexWhere((d) => d.id == debtId);
+    if (idx == -1) return;
+    
+    final debt = debts[idx];
+    final debtTransactions = state.where((t) => t.debtId == debtId && t.status != 'canceled').toList();
+    
+    if (debtTransactions.isEmpty) return;
+
+    final allPaid = debtTransactions.every((t) => t.status == 'paid');
+    
+    if (allPaid && debt.status != 'paid') {
+      ref.read(debtsProvider.notifier).updateDebt(debt.copyWith(status: 'paid'));
+    } else if (!allPaid && debt.status == 'paid') {
+      ref.read(debtsProvider.notifier).updateDebt(debt.copyWith(status: 'active'));
+    }
   }
 }
 

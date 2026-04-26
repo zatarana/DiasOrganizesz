@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../domain/providers.dart';
 import '../../data/models/debt_model.dart';
 import 'create_debt_screen.dart';
+import 'debt_details_screen.dart';
 
 class DebtsScreen extends ConsumerStatefulWidget {
   const DebtsScreen({super.key});
@@ -13,6 +14,7 @@ class DebtsScreen extends ConsumerStatefulWidget {
 }
 
 class _DebtsScreenState extends ConsumerState<DebtsScreen> {
+  String _currentFilter = 'todas'; // todas, ativas, quitadas, atrasadas, pausadas
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +26,7 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
     double totalAtrasado = 0;
     
     // List of calculated debts to display
-    final debtSummaries = <Map<String, dynamic>>[];
+    final allDebtSummaries = <Map<String, dynamic>>[];
 
     for (var debt in debts) {
       if (debt.status == 'canceled') continue;
@@ -36,26 +38,42 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
       double totalDiscountForThisDebt = 0;
       int paidInstallments = 0;
       int overdueInstallments = 0;
+      DateTime? nextDueDate;
       
-      final linkedTransactions = transactions.where((t) => t.debtId == debt.id && t.status != 'canceled');
+      final linkedTransactions = transactions.where((t) => t.debtId == debt.id && t.status != 'canceled').toList();
       
+      // Sort transactions by due date to get the true next due date
+      linkedTransactions.sort((a, b) {
+        if (a.dueDate == null && b.dueDate == null) return 0;
+        if (a.dueDate == null) return 1;
+        if (b.dueDate == null) return -1;
+        return DateTime.parse(a.dueDate!).compareTo(DateTime.parse(b.dueDate!));
+      });
+
       for (var t in linkedTransactions) {
+        DateTime? due = t.dueDate != null ? DateTime.tryParse(t.dueDate!) : null;
+
         if (t.status == 'paid') {
           paidForThisDebt += t.amount;
           paidInstallments++;
           if (t.discountAmount != null && t.discountAmount! > 0) {
-             paidForThisDebt += t.discountAmount!; // economy counts as paid against the total limit technically, or reduces remaining
+             paidForThisDebt += t.discountAmount!;
              totalDiscountForThisDebt += t.discountAmount!;
           }
         } else if (t.status == 'overdue') {
           overdueForThisDebt += t.amount;
           overdueInstallments++;
+          if (nextDueDate == null && due != null) {
+            nextDueDate = due; // Oldest overdue is effectively the next required payment
+          }
         } else if (t.status == 'pending') {
-          if (t.dueDate != null) {
-            final due = DateTime.tryParse(t.dueDate!);
-            if (due != null && due.isBefore(DateTime.now()) && due.day < DateTime.now().day) {
-               overdueForThisDebt += t.amount; // just in case it wasn't flagged overdue, but logic covers it.
+          if (due != null) {
+            if (due.isBefore(DateTime.now()) && due.day < DateTime.now().day) {
+               overdueForThisDebt += t.amount;
                overdueInstallments++;
+               if (nextDueDate == null) nextDueDate = due;
+            } else {
+               if (nextDueDate == null) nextDueDate = due;
             }
           }
         }
@@ -64,7 +82,7 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
       totalPago += paidForThisDebt;
       totalAtrasado += overdueForThisDebt;
 
-      debtSummaries.add({
+      allDebtSummaries.add({
         'debt': debt,
         'paidAmount': paidForThisDebt,
         'overdueAmount': overdueForThisDebt,
@@ -73,10 +91,24 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
         'installmentsCount': linkedTransactions.length,
         'paidInstallments': paidInstallments,
         'overdueInstallments': overdueInstallments,
+        'nextDueDate': nextDueDate,
       });
     }
 
     final totalPendente = totalDividas - totalPago;
+
+    List<Map<String, dynamic>> filteredDebtSummaries = allDebtSummaries.where((ds) {
+       final Debt d = ds['debt'];
+       final remaining = ds['remainingAmount'] as double;
+       final isPaidOut = remaining <= 0;
+       
+       if (_currentFilter == 'todas') return true;
+       if (_currentFilter == 'ativas') return d.status == 'active' && !isPaidOut;
+       if (_currentFilter == 'quitadas') return d.status == 'paid' || isPaidOut;
+       if (_currentFilter == 'atrasadas') return (ds['overdueAmount'] as double) > 0;
+       if (_currentFilter == 'pausadas') return d.status == 'paused';
+       return true;
+    }).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -91,28 +123,51 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                    _buildSummaryCard(totalDividas, totalPendente, totalPago, totalAtrasado),
+                   const SizedBox(height: 24),
+                   const Text('Filtros Rápidos', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                   const SizedBox(height: 8),
+                   SingleChildScrollView(
+                     scrollDirection: Axis.horizontal,
+                     child: Row(
+                       children: [
+                         _buildFilterChip('Todas', 'todas'),
+                         _buildFilterChip('Ativas', 'ativas'),
+                         _buildFilterChip('Atrasadas', 'atrasadas'),
+                         _buildFilterChip('Quitadas', 'quitadas'),
+                         _buildFilterChip('Pausadas', 'pausadas'),
+                       ],
+                     ),
+                   ),
                    const SizedBox(height: 16),
-                   const Text('Dívidas Ativas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                   Text(
+                     _currentFilter == 'todas' ? 'Todas as Dívidas' : 
+                     _currentFilter == 'ativas' ? 'Dívidas Ativas' :
+                     _currentFilter == 'atrasadas' ? 'Dívidas em Atraso' :
+                     _currentFilter == 'quitadas' ? 'Dívidas Quitadas' : 
+                     'Dívidas Pausadas', 
+                     style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+                   ),
                 ],
               )
             )
           ),
-          debtSummaries.isEmpty
+          filteredDebtSummaries.isEmpty
           ? SliverToBoxAdapter(
              child: Padding(
                padding: const EdgeInsets.all(32.0),
                child: Center(
-                 child: Text('Você não tem dívidas cadastradas. Que ótimo!', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600))
+                 child: Text('Nenhuma dívida encontrada para este filtro.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600))
                ),
              ),
           )
           : SliverList(
             delegate: SliverChildBuilderDelegate((context, index) {
-              final ds = debtSummaries[index];
+              final ds = filteredDebtSummaries[index];
               final Debt d = ds['debt'];
               final paid = ds['paidAmount'] as double;
               final remaining = ds['remainingAmount'] as double;
               final progress = d.totalAmount > 0 ? (paid / d.totalAmount) : 0.0;
+              final nextDueDate = ds['nextDueDate'] as DateTime?;
 
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -120,7 +175,7 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
                 child: InkWell(
                   borderRadius: BorderRadius.circular(12),
                   onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => CreateDebtScreen(debt: d)));
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => DebtDetailsScreen(debt: d)));
                   },
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
@@ -149,10 +204,20 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
                         ),
                         if (ds['installmentsCount'] > 0) ...[
                           const SizedBox(height: 4),
-                          Text(
-                            'Parcelas: ${ds['paidInstallments']} / ${ds['installmentsCount']} pagas',
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Parcelas: ${ds['paidInstallments']} / ${ds['installmentsCount']} pagas',
+                                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                              ),
+                              if (nextDueDate != null && progress < 1.0)
+                                Text(
+                                  'Próx. Venc: ${DateFormat('dd/MM/yy').format(nextDueDate)}',
+                                  style: TextStyle(fontSize: 12, color: Colors.indigo.shade400, fontWeight: FontWeight.bold),
+                                ),
+                            ],
+                          )
                         ],
                         const SizedBox(height: 10),
                         ClipRRect(
@@ -164,7 +229,12 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
                             color: progress >= 1.0 ? Colors.green : Colors.blue,
                           ),
                         ),
-                        if (progress >= 1.0)
+                        if (d.status == 'paused')
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8.0),
+                            child: Text('DÍVIDA PAUSADA ⏸️', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 12)),
+                          )
+                        else if (progress >= 1.0 || d.status == 'paid')
                           const Padding(
                             padding: EdgeInsets.only(top: 8.0),
                             child: Text('DÍVIDA QUITADA! 🎉', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
@@ -190,7 +260,7 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
                   ),
                 ),
               );
-            }, childCount: debtSummaries.length),
+            }, childCount: filteredDebtSummaries.length),
           )
         ],
       ),
@@ -199,6 +269,22 @@ class _DebtsScreenState extends ConsumerState<DebtsScreen> {
           Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateDebtScreen()));
         },
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, String value) {
+    final isSelected = _currentFilter == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: isSelected,
+        onSelected: (selected) {
+          if (selected) {
+            setState(() => _currentFilter = value);
+          }
+        },
       ),
     );
   }
