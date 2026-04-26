@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
@@ -6,17 +7,24 @@ class NotificationService {
   static final NotificationService _notificationService = NotificationService._internal();
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
-  factory NotificationService() {
-    return _notificationService;
-  }
+  factory NotificationService() => _notificationService;
 
   NotificationService._internal();
 
+  static const String _channelId = 'diasorganize_channel_id';
+  static const String _channelName = 'DiasOrganize Lembretes';
+  static const String _channelDescription = 'Canal de lembretes para tarefas, finanças, dívidas e projetos';
+
   Future<void> init() async {
     tz.initializeTimeZones();
+
     const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
     const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
     await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+
+    final androidPlugin = flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    await androidPlugin?.requestNotificationsPermission();
+    await androidPlugin?.requestExactAlarmsPermission();
   }
 
   Future<void> scheduleNotification({
@@ -25,25 +33,43 @@ class NotificationService {
     required String body,
     required DateTime scheduledDate,
   }) async {
-    await flutterLocalNotificationsPlugin.zonedSchedule(
-      id,
-      title,
-      body,
-      tz.TZDateTime.from(scheduledDate, tz.local),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'diasorganize_channel_id',
-          'DiasOrganize Lembretes',
-          channelDescription: 'Canal de lembretes para tarefas',
-          importance: Importance.max,
-          priority: Priority.high,
-        ),
+    if (!scheduledDate.isAfter(DateTime.now())) return;
+
+    final details = const NotificationDetails(
+      android: AndroidNotificationDetails(
+        _channelId,
+        _channelName,
+        channelDescription: _channelDescription,
+        importance: Importance.max,
+        priority: Priority.high,
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
     );
+
+    try {
+      await flutterLocalNotificationsPlugin.zonedSchedule(
+        id,
+        title,
+        body,
+        tz.TZDateTime.from(scheduledDate, tz.local),
+        details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    } catch (error) {
+      debugPrint('Falha ao agendar notificação exata, tentando modo inexato: $error');
+      await flutterLocalNotificationsPlugin.zonedSchedule(
+        id,
+        title,
+        body,
+        tz.TZDateTime.from(scheduledDate, tz.local),
+        details,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    }
   }
 
+  int taskReminderId(int taskId) => taskId;
   int transactionReminderId(int transactionId) => 100000 + transactionId;
   int projectReminderId(int projectId) => 200000 + projectId;
   int projectStepReminderId(int stepId) => 300000 + stepId;
