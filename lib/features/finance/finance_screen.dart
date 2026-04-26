@@ -49,8 +49,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
 
   Future<double> _loadRealAccountBalance() async {
     final db = await ref.read(dbProvider).database;
-    final accounts = await FinancePlanningStore.getAccounts(db);
-    return accounts.where((account) => !account.isArchived).fold<double>(0, (sum, account) => sum + account.currentBalance);
+    return FinancePlanningStore.getActiveAccountsBalance(db);
   }
 
   FinancialCategory? _findCategory(List<FinancialCategory> categories, int? categoryId) {
@@ -122,25 +121,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       if (source.accountId != null && copiedAccountId == null) accountCleared++;
 
       final now = DateTime.now().toIso8601String();
-      final newTransaction = FinancialTransaction(
-        title: source.title,
-        description: source.description,
-        amount: source.amount,
-        type: source.type,
-        transactionDate: newTransactionDate.toIso8601String(),
-        dueDate: newDueDate?.toIso8601String(),
-        paidDate: null,
-        categoryId: source.categoryId,
-        accountId: copiedAccountId,
-        paymentMethod: source.paymentMethod,
-        status: 'pending',
-        reminderEnabled: source.reminderEnabled,
-        isFixed: true,
-        recurrenceType: 'monthly',
-        notes: source.notes,
-        createdAt: now,
-        updatedAt: now,
-      );
+      final newTransaction = FinancialTransaction(title: source.title, description: source.description, amount: source.amount, type: source.type, transactionDate: newTransactionDate.toIso8601String(), dueDate: newDueDate?.toIso8601String(), paidDate: null, categoryId: source.categoryId, accountId: copiedAccountId, paymentMethod: source.paymentMethod, status: 'pending', reminderEnabled: source.reminderEnabled, isFixed: true, recurrenceType: 'monthly', notes: source.notes, createdAt: now, updatedAt: now);
       await ref.read(transactionsProvider.notifier).addTransaction(newTransaction);
       added++;
     }
@@ -172,12 +153,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       return;
     }
 
-    final updated = transaction.copyWith(
-      status: isPaid ? 'paid' : _statusAfterUnpay(transaction),
-      paidDate: isPaid ? DateTime.now().toIso8601String() : null,
-      clearPaidDate: !isPaid,
-      updatedAt: DateTime.now().toIso8601String(),
-    );
+    final updated = transaction.copyWith(status: isPaid ? 'paid' : _statusAfterUnpay(transaction), paidDate: isPaid ? DateTime.now().toIso8601String() : null, clearPaidDate: !isPaid, updatedAt: DateTime.now().toIso8601String());
     await ref.read(transactionsProvider.notifier).updateTransaction(updated);
     setState(() {});
   }
@@ -297,14 +273,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                     children: [
                       ElevatedButton.icon(onPressed: _openPlanning, icon: const Icon(Icons.savings_outlined), label: const Text('Contas, Orçamentos e Metas')),
                       const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          IconButton(icon: const Icon(Icons.chevron_left), onPressed: _prevMonth),
-                          Text(DateFormat('MMMM yyyy', 'pt_BR').format(_selectedMonth).toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          IconButton(icon: const Icon(Icons.chevron_right), onPressed: _nextMonth),
-                        ],
-                      ),
+                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [IconButton(icon: const Icon(Icons.chevron_left), onPressed: _prevMonth), Text(DateFormat('MMMM yyyy', 'pt_BR').format(_selectedMonth).toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)), IconButton(icon: const Icon(Icons.chevron_right), onPressed: _nextMonth)]),
                       const SizedBox(height: 8),
                       _buildSummaryCard(realAccountBalance, saldoPrevisto, resultadoRealizado, receitasPrevistas, despesasPrevistas, qtdeDespesasVencidas),
                       const SizedBox(height: 16),
@@ -312,17 +281,8 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                       const SizedBox(height: 16),
                       TextField(controller: _searchController, decoration: InputDecoration(hintText: 'Buscar movimentação...', prefixIcon: const Icon(Icons.search), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), contentPadding: const EdgeInsets.symmetric(horizontal: 16)), onChanged: (_) => setState(() {})),
                       const SizedBox(height: 16),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(children: [_buildFilterChip('Todos', 'all', _filterType, (v) => setState(() => _filterType = v)), const SizedBox(width: 8), _buildFilterChip('Receitas', 'income', _filterType, (v) => setState(() => _filterType = v)), const SizedBox(width: 8), _buildFilterChip('Despesas', 'expense', _filterType, (v) => setState(() => _filterType = v)), const SizedBox(width: 16), _buildFilterChip('Tudo', 'all', _filterStatus, (v) => setState(() => _filterStatus = v)), const SizedBox(width: 8), _buildFilterChip('Pago', 'paid', _filterStatus, (v) => setState(() => _filterStatus = v)), const SizedBox(width: 8), _buildFilterChip('Pendente', 'pending', _filterStatus, (v) => setState(() => _filterStatus = v)), const SizedBox(width: 8), _buildFilterChip('Atrasado', 'overdue', _filterStatus, (v) => setState(() => _filterStatus = v))]),
-                      ),
-                      if (allCategories.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(children: [ChoiceChip(label: const Text('Todas as Categorias'), selected: _filterCategory == null, onSelected: (_) => setState(() => _filterCategory = null)), const SizedBox(width: 8), ...allCategories.map((c) => Padding(padding: const EdgeInsets.only(right: 8.0), child: ChoiceChip(label: Text(c.name), selected: _filterCategory == c.id, onSelected: (selected) => setState(() => _filterCategory = selected ? c.id : null))))]),
-                        ),
-                      ],
+                      SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [_buildFilterChip('Todos', 'all', _filterType, (v) => setState(() => _filterType = v)), const SizedBox(width: 8), _buildFilterChip('Receitas', 'income', _filterType, (v) => setState(() => _filterType = v)), const SizedBox(width: 8), _buildFilterChip('Despesas', 'expense', _filterType, (v) => setState(() => _filterType = v)), const SizedBox(width: 16), _buildFilterChip('Tudo', 'all', _filterStatus, (v) => setState(() => _filterStatus = v)), const SizedBox(width: 8), _buildFilterChip('Pago', 'paid', _filterStatus, (v) => setState(() => _filterStatus = v)), const SizedBox(width: 8), _buildFilterChip('Pendente', 'pending', _filterStatus, (v) => setState(() => _filterStatus = v)), const SizedBox(width: 8), _buildFilterChip('Atrasado', 'overdue', _filterStatus, (v) => setState(() => _filterStatus = v))])),
+                      if (allCategories.isNotEmpty) ...[const SizedBox(height: 8), SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [ChoiceChip(label: const Text('Todas as Categorias'), selected: _filterCategory == null, onSelected: (_) => setState(() => _filterCategory = null)), const SizedBox(width: 8), ...allCategories.map((c) => Padding(padding: const EdgeInsets.only(right: 8.0), child: ChoiceChip(label: Text(c.name), selected: _filterCategory == c.id, onSelected: (selected) => setState(() => _filterCategory = selected ? c.id : null))))]))],
                       const SizedBox(height: 16),
                       const Text('Movimentações', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     ],
@@ -343,13 +303,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                           leading: CircleAvatar(backgroundColor: isCanceled ? Colors.grey.withOpacity(0.2) : color.withOpacity(0.2), child: Icon(transaction.type == 'income' ? Icons.arrow_upward : Icons.arrow_downward, color: isCanceled ? Colors.grey : color)),
                           title: Text(transaction.title, style: TextStyle(decoration: isCanceled ? TextDecoration.lineThrough : null, color: isCanceled ? Colors.grey : Colors.black87)),
                           subtitle: Text('${expected == null ? 'Sem data' : 'Venc./Prev.: ${DateFormat('dd/MM/yyyy').format(expected)}'}${cat != null ? ' • ${cat.name}' : ''}'),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [Text('R\$ ${transaction.amount.toStringAsFixed(2)}', style: TextStyle(color: isCanceled ? Colors.grey : (transaction.type == 'income' ? Colors.green : Colors.red), fontWeight: FontWeight.bold, decoration: isCanceled ? TextDecoration.lineThrough : null)), Text(isCanceled ? 'Cancelado' : (transaction.status == 'paid' ? 'Efetuado' : (transaction.status == 'overdue' ? 'Atrasado' : 'Pendente')), style: TextStyle(color: isCanceled ? Colors.grey : (transaction.status == 'paid' ? Colors.green : (transaction.status == 'overdue' ? Colors.red : Colors.orange)), fontSize: 12))]),
-                              Checkbox(value: isPaid, onChanged: isCanceled ? null : (val) { if (val != null) _togglePaid(transaction, val); }),
-                            ],
-                          ),
+                          trailing: Row(mainAxisSize: MainAxisSize.min, children: [Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [Text('R\$ ${transaction.amount.toStringAsFixed(2)}', style: TextStyle(color: isCanceled ? Colors.grey : (transaction.type == 'income' ? Colors.green : Colors.red), fontWeight: FontWeight.bold, decoration: isCanceled ? TextDecoration.lineThrough : null)), Text(isCanceled ? 'Cancelado' : (transaction.status == 'paid' ? 'Efetuado' : (transaction.status == 'overdue' ? 'Atrasado' : 'Pendente')), style: TextStyle(color: isCanceled ? Colors.grey : (transaction.status == 'paid' ? Colors.green : (transaction.status == 'overdue' ? Colors.red : Colors.orange)), fontSize: 12))]), Checkbox(value: isPaid, onChanged: isCanceled ? null : (val) { if (val != null) _togglePaid(transaction, val); })]),
                           onTap: () => _openTransactionForm(transaction: transaction),
                         );
                       }, childCount: filtered.length),
@@ -365,21 +319,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   Widget _buildFilterChip(String label, String value, String groupValue, Function(String) onSelect) => ChoiceChip(label: Text(label), selected: groupValue == value, onSelected: (selected) { if (selected) onSelect(value); });
 
   Widget _buildSummaryCard(double realBalance, double saldoPrevisto, double resultadoRealizado, double receitas, double despesas, int despesasVencidas) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(children: [
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: _summaryValue('Saldo real em contas', realBalance, realBalance >= 0 ? Colors.green : Colors.red, big: true)), const SizedBox(width: 12), Expanded(child: _summaryValue('Resultado do mês', resultadoRealizado, resultadoRealizado >= 0 ? Colors.green : Colors.red))]),
-          const SizedBox(height: 16),
-          const Divider(),
-          const SizedBox(height: 16),
-          Wrap(spacing: 16, runSpacing: 12, children: [_buildStat('Previsto mês', saldoPrevisto, saldoPrevisto >= 0 ? Colors.green : Colors.red), _buildStat('Receitas previstas', receitas, Colors.green), _buildStat('Despesas previstas', despesas, Colors.red)]),
-          if (despesasVencidas > 0) ...[const SizedBox(height: 16), Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)), child: Row(children: [const Icon(Icons.warning, color: Colors.red, size: 20), const SizedBox(width: 8), Expanded(child: Text('$despesasVencidas despesa(s) vencida(s)!', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)))]))]
-        ]),
-      ),
-    );
+    return Card(elevation: 2, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), child: Padding(padding: const EdgeInsets.all(20.0), child: Column(children: [Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: _summaryValue('Saldo real em contas', realBalance, realBalance >= 0 ? Colors.green : Colors.red, big: true)), const SizedBox(width: 12), Expanded(child: _summaryValue('Resultado do mês', resultadoRealizado, resultadoRealizado >= 0 ? Colors.green : Colors.red))]), const SizedBox(height: 16), const Divider(), const SizedBox(height: 16), Wrap(spacing: 16, runSpacing: 12, children: [_buildStat('Previsto mês', saldoPrevisto, saldoPrevisto >= 0 ? Colors.green : Colors.red), _buildStat('Receitas previstas', receitas, Colors.green), _buildStat('Despesas previstas', despesas, Colors.red)]), if (despesasVencidas > 0) ...[const SizedBox(height: 16), Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)), child: Row(children: [const Icon(Icons.warning, color: Colors.red, size: 20), const SizedBox(width: 8), Expanded(child: Text('$despesasVencidas despesa(s) vencida(s)!', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)))]))]])));
   }
 
   Widget _summaryValue(String label, double amount, Color color, {bool big = false}) {
@@ -390,16 +330,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     final economyRate = paidIncomes <= 0 ? 0.0 : ((paidIncomes - paidExpenses) / paidIncomes) * 100;
     final resultLabel = resultDiff >= 0 ? 'Melhor que mês anterior' : 'Pior que mês anterior';
     final expenseLabel = expenseDiff <= 0 ? 'Gastos menores' : 'Gastos maiores';
-    return Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Análise de gastos', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-      const SizedBox(height: 10),
-      LinearProgressIndicator(value: paidExpenseRatio),
-      const SizedBox(height: 6),
-      Text('Despesas pagas representam ${(paidExpenseRatio * 100).toStringAsFixed(0)}% das despesas previstas.'),
-      const SizedBox(height: 12),
-      Wrap(spacing: 10, runSpacing: 10, children: [_analysisChip(Icons.compare_arrows, '$resultLabel: R\$ ${resultDiff.abs().toStringAsFixed(2)}', resultDiff >= 0 ? Colors.green : Colors.red), _analysisChip(Icons.trending_up, '$expenseLabel: R\$ ${expenseDiff.abs().toStringAsFixed(2)}', expenseDiff <= 0 ? Colors.green : Colors.orange), _analysisChip(Icons.pie_chart, 'Maior gasto: $topCategoryName — R\$ ${topCategoryAmount.toStringAsFixed(2)}', Colors.blue), _analysisChip(Icons.savings, 'Taxa de sobra: ${economyRate.toStringAsFixed(1)}%', economyRate >= 0 ? Colors.green : Colors.red)]),
-      if (previousResult != 0) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Resultado mês anterior: R\$ ${previousResult.toStringAsFixed(2)}', style: TextStyle(color: Colors.grey.shade700))),
-    ])));
+    return Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Análise de gastos', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), const SizedBox(height: 10), LinearProgressIndicator(value: paidExpenseRatio), const SizedBox(height: 6), Text('Despesas pagas representam ${(paidExpenseRatio * 100).toStringAsFixed(0)}% das despesas previstas.'), const SizedBox(height: 12), Wrap(spacing: 10, runSpacing: 10, children: [_analysisChip(Icons.compare_arrows, '$resultLabel: R\$ ${resultDiff.abs().toStringAsFixed(2)}', resultDiff >= 0 ? Colors.green : Colors.red), _analysisChip(Icons.trending_up, '$expenseLabel: R\$ ${expenseDiff.abs().toStringAsFixed(2)}', expenseDiff <= 0 ? Colors.green : Colors.orange), _analysisChip(Icons.pie_chart, 'Maior gasto: $topCategoryName — R\$ ${topCategoryAmount.toStringAsFixed(2)}', Colors.blue), _analysisChip(Icons.savings, 'Taxa de sobra: ${economyRate.toStringAsFixed(1)}%', economyRate >= 0 ? Colors.green : Colors.red)]), if (previousResult != 0) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Resultado mês anterior: R\$ ${previousResult.toStringAsFixed(2)}', style: TextStyle(color: Colors.grey.shade700)))])));
   }
 
   Widget _analysisChip(IconData icon, String label, Color color) {
