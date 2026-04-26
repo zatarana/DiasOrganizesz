@@ -13,8 +13,17 @@ class StatsScreen extends ConsumerWidget {
     final financialCategories = ref.watch(financialCategoriesProvider);
     final debts = ref.watch(debtsProvider);
     final projects = ref.watch(projectsProvider);
+    final appSettings = ref.watch(appSettingsProvider);
 
     final now = DateTime.now();
+    final currency = appSettings[AppSettingKeys.defaultCurrency] ?? 'BRL';
+    final hideFinancialValues = (appSettings[AppSettingKeys.financeDiscreteMode] ?? 'false') == 'true';
+
+    String money(num value) {
+      if (hideFinancialValues) return currency == 'USD' ? '\$ ******' : 'R\$ ******';
+      final prefix = currency == 'USD' ? '\$' : 'R\$';
+      return '$prefix ${value.toDouble().toStringAsFixed(2)}';
+    }
 
     DateTime? expectedDate(transaction) => DateTime.tryParse(transaction.dueDate ?? transaction.transactionDate);
     DateTime? paidDate(transaction) => transaction.paidDate == null ? null : DateTime.tryParse(transaction.paidDate!);
@@ -47,9 +56,6 @@ class StatsScreen extends ConsumerWidget {
     final expenseByCategory = <int, double>{};
     final paymentCounts = <String, int>{};
 
-    final monthExpectedTransactions = <dynamic>[];
-    final monthPaidTransactions = <dynamic>[];
-
     for (final transaction in transactions.where((t) => t.status != 'canceled')) {
       final expected = expectedDate(transaction);
       final paid = paidDate(transaction);
@@ -57,7 +63,6 @@ class StatsScreen extends ConsumerWidget {
       final paidInMonth = transaction.status == 'paid' && (sameMonth(paid) || (paid == null && expectedInMonth));
 
       if (expectedInMonth) {
-        monthExpectedTransactions.add(transaction);
         if (transaction.type == 'income') {
           receitasPrevistas += transaction.amount;
         } else if (transaction.type == 'expense') {
@@ -70,7 +75,6 @@ class StatsScreen extends ConsumerWidget {
       }
 
       if (paidInMonth) {
-        monthPaidTransactions.add(transaction);
         if (transaction.type == 'income') {
           receitasPagas += transaction.amount;
         } else if (transaction.type == 'expense') {
@@ -100,7 +104,7 @@ class StatsScreen extends ConsumerWidget {
     final totalDescontosDividas = debtTransactions.where((transaction) => transaction.status == 'paid').fold<double>(0, (sum, transaction) => sum + (transaction.discountAmount ?? 0));
     final totalAbatidoDividas = totalPagoEmDividas + totalDescontosDividas;
     final totalRestante = (totalDividas - totalAbatidoDividas).clamp(0, double.infinity).toDouble();
-    final percentualQuitado = totalDividas == 0 ? 0.0 : (totalAbatidoDividas / totalDividas) * 100;
+    final percentualQuitado = totalDividas == 0 ? 0.0 : ((totalAbatidoDividas / totalDividas) * 100).clamp(0, 100).toDouble();
     final parcelasPagas = debtTransactions.where((transaction) => transaction.status == 'paid').length;
     final parcelasPendentes = debtTransactions.where((transaction) => transaction.status == 'pending').length;
     final parcelasAtrasadas = debtTransactions.where((transaction) => transaction.status == 'overdue').length;
@@ -134,7 +138,14 @@ class StatsScreen extends ConsumerWidget {
       final end = DateTime.tryParse(project.endDate!);
       return end != null && end.isAfter(now);
     }).toList()
-      ..sort((a, b) => DateTime.parse(a.endDate!).compareTo(DateTime.parse(b.endDate!)));
+      ..sort((a, b) {
+        final ad = DateTime.tryParse(a.endDate!);
+        final bd = DateTime.tryParse(b.endDate!);
+        if (ad == null && bd == null) return 0;
+        if (ad == null) return 1;
+        if (bd == null) return -1;
+        return ad.compareTo(bd);
+      });
     if (withDue.isNotEmpty) projetoMaisProximo = withDue.first.name;
 
     return DefaultTabController(
@@ -164,23 +175,23 @@ class StatsScreen extends ConsumerWidget {
               _Metric('Categoria com mais tarefas', topTaskCategory),
             ]),
             _StatsList(items: [
-              _Metric('Receitas previstas do mês', 'R\$ ${receitasPrevistas.toStringAsFixed(2)}'),
-              _Metric('Despesas previstas do mês', 'R\$ ${despesasPrevistas.toStringAsFixed(2)}'),
-              _Metric('Saldo previsto', 'R\$ ${saldoPrevisto.toStringAsFixed(2)}'),
-              _Metric('Receitas pagas/recebidas', 'R\$ ${receitasPagas.toStringAsFixed(2)}'),
-              _Metric('Despesas pagas', 'R\$ ${despesasPagas.toStringAsFixed(2)}'),
-              _Metric('Saldo realizado', 'R\$ ${saldoRealizado.toStringAsFixed(2)}'),
+              _Metric('Receitas previstas do mês', money(receitasPrevistas)),
+              _Metric('Despesas previstas do mês', money(despesasPrevistas)),
+              _Metric('Saldo previsto', money(saldoPrevisto)),
+              _Metric('Receitas pagas/recebidas', money(receitasPagas)),
+              _Metric('Despesas pagas', money(despesasPagas)),
+              _Metric('Saldo realizado', money(saldoRealizado)),
               _Metric('Categoria com maior gasto previsto', topExpenseCategory),
               _Metric('Forma de pagamento mais usada', mostUsedPayment),
-              _Metric('Total pendente previsto', 'R\$ ${totalPendente.toStringAsFixed(2)}'),
-              _Metric('Total realizado', 'R\$ ${totalPago.toStringAsFixed(2)}'),
+              _Metric('Total pendente previsto', money(totalPendente)),
+              _Metric('Total realizado', money(totalPago)),
             ]),
             _StatsList(items: [
-              _Metric('Total em dívidas', 'R\$ ${totalDividas.toStringAsFixed(2)}'),
-              _Metric('Pago em dinheiro', 'R\$ ${totalPagoEmDividas.toStringAsFixed(2)}'),
-              _Metric('Descontos abatidos', 'R\$ ${totalDescontosDividas.toStringAsFixed(2)}'),
-              _Metric('Total abatido', 'R\$ ${totalAbatidoDividas.toStringAsFixed(2)}'),
-              _Metric('Total restante', 'R\$ ${totalRestante.toStringAsFixed(2)}'),
+              _Metric('Total em dívidas', money(totalDividas)),
+              _Metric('Pago em dinheiro', money(totalPagoEmDividas)),
+              _Metric('Descontos abatidos', money(totalDescontosDividas)),
+              _Metric('Total abatido', money(totalAbatidoDividas)),
+              _Metric('Total restante', money(totalRestante)),
               _Metric('Percentual quitado', '${percentualQuitado.toStringAsFixed(1)}%'),
               _Metric('Parcelas pagas', '$parcelasPagas'),
               _Metric('Parcelas pendentes', '$parcelasPendentes'),
@@ -198,9 +209,9 @@ class StatsScreen extends ConsumerWidget {
             ]),
             _StatsList(items: [
               _Metric('Tarefas totais', '$createdTasks'),
-              _Metric('Saldo previsto do mês', 'R\$ ${saldoPrevisto.toStringAsFixed(2)}'),
-              _Metric('Saldo realizado do mês', 'R\$ ${saldoRealizado.toStringAsFixed(2)}'),
-              _Metric('Dívidas restantes', 'R\$ ${totalRestante.toStringAsFixed(2)}'),
+              _Metric('Saldo previsto do mês', money(saldoPrevisto)),
+              _Metric('Saldo realizado do mês', money(saldoRealizado)),
+              _Metric('Dívidas restantes', money(totalRestante)),
               _Metric('Projetos em andamento', '$projetosAndamento'),
               _Metric('Média progresso projetos', '${mediaProgresso.toStringAsFixed(1)}%'),
             ]),
@@ -232,7 +243,14 @@ class _StatsList extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 10),
           child: ListTile(
             title: Text(item.label),
-            trailing: Text(item.value, style: const TextStyle(fontWeight: FontWeight.bold)),
+            trailing: Flexible(
+              child: Text(
+                item.value,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.end,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ),
         );
       },
