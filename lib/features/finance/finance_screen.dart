@@ -353,7 +353,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
 
                       return ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: isCanceled ? Colors.grey.withValues(alpha: 0.2) : color.withValues(alpha: 0.2),
+                          backgroundColor: isCanceled ? Colors.grey.withOpacity(0.2) : color.withOpacity(0.2),
                           child: Icon(
                             transaction.type == 'income' ? Icons.arrow_upward : Icons.arrow_downward,
                             color: isCanceled ? Colors.grey : color,
@@ -482,7 +482,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                   children: [
                     const Icon(Icons.warning, color: Colors.red, size: 20),
                     const SizedBox(width: 8),
-                    Text('$despesasVencidas despesa(s) vencida(s)!', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                    Expanded(child: Text('$despesasVencidas despesa(s) vencida(s)!', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
                   ],
                 ),
               )
