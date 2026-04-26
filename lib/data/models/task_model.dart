@@ -5,14 +5,6 @@ class Task {
   final int? categoryId;
   final int? projectId;
   final int? projectStepId;
-    this.projectStepId,
-      'projectStepId': projectStepId,
-      projectStepId: map['projectStepId'],
-    int? projectStepId,
-    bool clearProjectId = false,
-    bool clearProjectStepId = false,
-      projectId: clearProjectId ? null : (projectId ?? this.projectId),
-      projectStepId: clearProjectStepId ? null : (projectStepId ?? this.projectStepId),
   final String priority; // 'baixa', 'media', 'alta'
   final String? date;
   final String? time;
