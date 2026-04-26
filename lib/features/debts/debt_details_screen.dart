@@ -242,6 +242,13 @@ class _DebtDetailsScreenState extends ConsumerState<DebtDetailsScreen> {
   }
 
   Future<void> _toggleInstallment(FinancialTransaction transaction, bool isPaid) async {
+    if (isPaid && transaction.accountId == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Escolha uma conta antes de marcar a parcela como paga.')));
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTransactionScreen(transaction: transaction)));
+      return;
+    }
+
     String newStatus = isPaid ? 'paid' : 'pending';
     if (!isPaid && _isInstallmentOverdue(transaction)) newStatus = 'overdue';
 
