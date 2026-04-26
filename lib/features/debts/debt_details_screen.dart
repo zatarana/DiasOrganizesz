@@ -17,6 +17,15 @@ class DebtDetailsScreen extends ConsumerStatefulWidget {
 }
 
 class _DebtDetailsScreenState extends ConsumerState<DebtDetailsScreen> {
+  DateTime? _transactionDate(FinancialTransaction transaction) => DateTime.tryParse(transaction.dueDate ?? transaction.transactionDate);
+
+  String _formatDate(String? rawDate) {
+    if (rawDate == null) return 'Sem data';
+    final date = DateTime.tryParse(rawDate);
+    if (date == null) return 'Data inválida';
+    return DateFormat('dd/MM/yyyy').format(date);
+  }
+
   @override
   Widget build(BuildContext context) {
     final debts = ref.watch(debtsProvider);
@@ -34,8 +43,8 @@ class _DebtDetailsScreenState extends ConsumerState<DebtDetailsScreen> {
     final installments = allTransactions.where((t) => t.debtId == currentDebt.id && t.status != 'canceled').toList()
       ..sort((a, b) {
         if (a.installmentNumber != null && b.installmentNumber != null) return a.installmentNumber!.compareTo(b.installmentNumber!);
-        final ad = DateTime.tryParse(a.dueDate ?? a.transactionDate) ?? DateTime(2100);
-        final bd = DateTime.tryParse(b.dueDate ?? b.transactionDate) ?? DateTime(2100);
+        final ad = _transactionDate(a) ?? DateTime(2100);
+        final bd = _transactionDate(b) ?? DateTime(2100);
         return ad.compareTo(bd);
       });
 
@@ -181,8 +190,8 @@ class _DebtDetailsScreenState extends ConsumerState<DebtDetailsScreen> {
         },
         leading: Checkbox(
           value: isPaid,
-          onChanged: (val) {
-            if (val != null) _toggleInstallment(transaction, val);
+          onChanged: (val) async {
+            if (val != null) await _toggleInstallment(transaction, val);
           },
         ),
         title: Text(
@@ -195,14 +204,13 @@ class _DebtDetailsScreenState extends ConsumerState<DebtDetailsScreen> {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (transaction.dueDate != null)
-              Text(
-                'Vencimento: ${DateFormat('dd/MM/yyyy').format(DateTime.parse(transaction.dueDate!))}',
-                style: TextStyle(color: isOverdue ? Colors.red : null),
-              ),
+            Text(
+              'Vencimento: ${_formatDate(transaction.dueDate ?? transaction.transactionDate)}',
+              style: TextStyle(color: isOverdue ? Colors.red : null),
+            ),
             if (isPaid && transaction.paidDate != null)
               Text(
-                'Pago em: ${DateFormat('dd/MM/yyyy').format(DateTime.parse(transaction.paidDate!))}',
+                'Pago em: ${_formatDate(transaction.paidDate)}',
                 style: const TextStyle(color: Colors.green, fontSize: 12),
               ),
             if (transaction.discountAmount != null && transaction.discountAmount! > 0)
@@ -233,7 +241,7 @@ class _DebtDetailsScreenState extends ConsumerState<DebtDetailsScreen> {
     return dueDate.isBefore(today);
   }
 
-  void _toggleInstallment(FinancialTransaction transaction, bool isPaid) {
+  Future<void> _toggleInstallment(FinancialTransaction transaction, bool isPaid) async {
     String newStatus = isPaid ? 'paid' : 'pending';
     if (!isPaid && _isInstallmentOverdue(transaction)) newStatus = 'overdue';
 
@@ -244,7 +252,7 @@ class _DebtDetailsScreenState extends ConsumerState<DebtDetailsScreen> {
       updatedAt: DateTime.now().toIso8601String(),
     );
 
-    ref.read(transactionsProvider.notifier).updateTransaction(updated);
+    await ref.read(transactionsProvider.notifier).updateTransaction(updated);
   }
 
   void _confirmDelete(Debt debt) {
