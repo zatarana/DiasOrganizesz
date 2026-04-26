@@ -1,6 +1,11 @@
 import 'dart:io';
 
 void main() {
+  patchGradleDesugaring();
+  patchAndroidManifestPermissions();
+}
+
+void patchGradleDesugaring() {
   final kotlinGradle = File('android/app/build.gradle.kts');
   final groovyGradle = File('android/app/build.gradle');
 
@@ -66,4 +71,37 @@ void main() {
 
   stderr.writeln('Nenhum arquivo Gradle Android encontrado em android/app.');
   exit(1);
+}
+
+void patchAndroidManifestPermissions() {
+  final manifest = File('android/app/src/main/AndroidManifest.xml');
+  if (!manifest.existsSync()) {
+    stderr.writeln('AndroidManifest.xml não encontrado.');
+    exit(1);
+  }
+
+  var text = manifest.readAsStringSync();
+  final permissions = <String>[
+    '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
+    '<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />',
+    '<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />',
+  ];
+
+  final missingPermissions = permissions.where((permission) {
+    final nameMatch = RegExp(r'android:name="([^"]+)"').firstMatch(permission);
+    final name = nameMatch?.group(1);
+    return name != null && !text.contains(name);
+  }).toList();
+
+  if (missingPermissions.isEmpty) return;
+
+  final manifestTag = RegExp(r'<manifest[^>]*>').firstMatch(text);
+  if (manifestTag == null) {
+    stderr.writeln('Tag <manifest> não encontrada no AndroidManifest.xml.');
+    exit(1);
+  }
+
+  final insertion = '\n    ${missingPermissions.join('\n    ')}';
+  text = text.replaceRange(manifestTag.end, manifestTag.end, insertion);
+  manifest.writeAsStringSync(text);
 }
