@@ -17,7 +17,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _notesController = TextEditingController();
-  
+
   DateTime? _startDate;
   DateTime? _endDate;
   String _status = 'active';
@@ -38,12 +38,8 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
       _color = widget.project!.color;
       _icon = widget.project!.icon;
       _reminderEnabled = widget.project!.reminderEnabled;
-      if (widget.project!.startDate != null) {
-        _startDate = DateTime.parse(widget.project!.startDate!);
-      }
-      if (widget.project!.endDate != null) {
-        _endDate = DateTime.parse(widget.project!.endDate!);
-      }
+      if (widget.project!.startDate != null) _startDate = DateTime.parse(widget.project!.startDate!);
+      if (widget.project!.endDate != null) _endDate = DateTime.parse(widget.project!.endDate!);
     } else {
       _startDate = DateTime.now();
     }
@@ -52,9 +48,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.project == null ? 'Novo Projeto' : 'Editar Projeto'),
-      ),
+      appBar: AppBar(title: Text(widget.project == null ? 'Novo Projeto' : 'Editar Projeto')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -82,13 +76,13 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () async {
-                       final dt = await showDatePicker(
-                         context: context, 
-                         initialDate: _startDate ?? DateTime.now(), 
-                         firstDate: DateTime(2000), 
-                         lastDate: DateTime(2100)
-                       );
-                       if (dt != null) setState(()=> _startDate = dt);
+                      final dt = await showDatePicker(
+                        context: context,
+                        initialDate: _startDate ?? DateTime.now(),
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (dt != null) setState(() => _startDate = dt);
                     },
                     icon: const Icon(Icons.calendar_today),
                     label: Text(_startDate == null ? 'Data Inicial' : DateFormat('dd/MM/yyyy').format(_startDate!)),
@@ -98,13 +92,13 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () async {
-                       final dt = await showDatePicker(
-                         context: context, 
-                         initialDate: _endDate ?? (_startDate ?? DateTime.now()), 
-                         firstDate: DateTime(2000), 
-                         lastDate: DateTime(2100)
-                       );
-                       if (dt != null) setState(()=> _endDate = dt);
+                      final dt = await showDatePicker(
+                        context: context,
+                        initialDate: _endDate ?? (_startDate ?? DateTime.now()),
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (dt != null) setState(() => _endDate = dt);
                     },
                     icon: const Icon(Icons.event),
                     label: Text(_endDate == null ? 'Prazo Final' : DateFormat('dd/MM/yyyy').format(_endDate!)),
@@ -114,35 +108,35 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-               decoration: const InputDecoration(labelText: 'Status *', border: OutlineInputBorder()),
-               value: _status,
-               items: const [
-                 DropdownMenuItem(value: 'active', child: Text('Ativo')),
-                 DropdownMenuItem(value: 'paused', child: Text('Pausado')),
-                 DropdownMenuItem(value: 'completed', child: Text('Concluído')),
-                 DropdownMenuItem(value: 'canceled', child: Text('Cancelado')),
-               ],
-               onChanged: (val) {
-                 if (val != null) setState(() => _status = val);
-               },
+              decoration: const InputDecoration(labelText: 'Status *', border: OutlineInputBorder()),
+              initialValue: _status,
+              items: const [
+                DropdownMenuItem(value: 'active', child: Text('Ativo')),
+                DropdownMenuItem(value: 'paused', child: Text('Pausado')),
+                DropdownMenuItem(value: 'completed', child: Text('Concluído')),
+                DropdownMenuItem(value: 'canceled', child: Text('Cancelado')),
+              ],
+              onChanged: (val) {
+                if (val != null) setState(() => _status = val);
+              },
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-               decoration: const InputDecoration(labelText: 'Prioridade *', border: OutlineInputBorder()),
-               value: _priority,
-               items: const [
-                 DropdownMenuItem(value: 'baixa', child: Text('Baixa')),
-                 DropdownMenuItem(value: 'media', child: Text('Média')),
-                 DropdownMenuItem(value: 'alta', child: Text('Alta')),
-               ],
-               onChanged: (val) {
-                 if (val != null) setState(() => _priority = val);
-               },
+              decoration: const InputDecoration(labelText: 'Prioridade *', border: OutlineInputBorder()),
+              initialValue: _priority,
+              items: const [
+                DropdownMenuItem(value: 'baixa', child: Text('Baixa')),
+                DropdownMenuItem(value: 'media', child: Text('Média')),
+                DropdownMenuItem(value: 'alta', child: Text('Alta')),
+              ],
+              onChanged: (val) {
+                if (val != null) setState(() => _priority = val);
+              },
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
               decoration: const InputDecoration(labelText: 'Cor', border: OutlineInputBorder()),
-              value: _color,
+              initialValue: _color,
               items: const [
                 DropdownMenuItem(value: '0xFF2196F3', child: Text('Azul')),
                 DropdownMenuItem(value: '0xFF4CAF50', child: Text('Verde')),
@@ -157,7 +151,7 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
               decoration: const InputDecoration(labelText: 'Ícone', border: OutlineInputBorder()),
-              value: _icon,
+              initialValue: _icon,
               items: const [
                 DropdownMenuItem(value: 'rocket_launch', child: Text('Foguete')),
                 DropdownMenuItem(value: 'work', child: Text('Trabalho')),
@@ -188,45 +182,43 @@ class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
   }
 
   void _saveProject() {
-     final title = _nameController.text.trim();
-     if (title.isEmpty) {
-       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Título é obrigatório.')));
-       return;
-     }
+    final title = _nameController.text.trim();
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Título é obrigatório.')));
+      return;
+    }
 
-     if (_startDate != null && _endDate != null && _endDate!.isBefore(_startDate!)) {
-       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Prazo final não pode ser anterior à data de início.')));
-       return;
-     }
+    if (_startDate != null && _endDate != null && _endDate!.isBefore(_startDate!)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Prazo final não pode ser anterior à data de início.')));
+      return;
+    }
 
-     final String? completedAt = _status == 'completed'
-        ? (widget.project?.completedAt ?? DateTime.now().toIso8601String())
-        : null;
+    final completedAt = _status == 'completed' ? (widget.project?.completedAt ?? DateTime.now().toIso8601String()) : null;
 
-     final project = Project(
-        id: widget.project?.id,
-        name: title,
-        description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
-        startDate: _startDate?.toIso8601String(),
-        endDate: _endDate?.toIso8601String(),
-        status: _status,
-        notes: _notesController.text.isNotEmpty ? _notesController.text : null,
-        completedAt: completedAt,
-        progress: _status == 'completed' ? 100 : (widget.project?.progress ?? 0),
-        reminderEnabled: _reminderEnabled,
-        priority: _priority,
-        color: _color,
-        icon: _icon,
-        createdAt: widget.project?.createdAt ?? DateTime.now().toIso8601String(),
-        updatedAt: DateTime.now().toIso8601String(),
-     );
+    final project = Project(
+      id: widget.project?.id,
+      name: title,
+      description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
+      startDate: _startDate?.toIso8601String(),
+      endDate: _endDate?.toIso8601String(),
+      status: _status,
+      notes: _notesController.text.isNotEmpty ? _notesController.text : null,
+      completedAt: completedAt,
+      progress: _status == 'completed' ? 100 : (widget.project?.progress ?? 0),
+      reminderEnabled: _reminderEnabled,
+      priority: _priority,
+      color: _color,
+      icon: _icon,
+      createdAt: widget.project?.createdAt ?? DateTime.now().toIso8601String(),
+      updatedAt: DateTime.now().toIso8601String(),
+    );
 
-     if (widget.project == null) {
-       ref.read(projectsProvider.notifier).addProject(project);
-     } else {
-       ref.read(projectsProvider.notifier).updateProject(project);
-     }
+    if (widget.project == null) {
+      ref.read(projectsProvider.notifier).addProject(project);
+    } else {
+      ref.read(projectsProvider.notifier).updateProject(project);
+    }
 
-     Navigator.pop(context);
+    Navigator.pop(context);
   }
 }
