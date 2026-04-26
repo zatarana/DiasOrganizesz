@@ -28,7 +28,7 @@ class DatabaseHelper {
     final path = join(dbPath, filePath);
     await _copyLegacyDatabaseIfNeeded(dbPath, path);
 
-    return openDatabase(path, version: 15, onCreate: _createDB, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: 16, onCreate: _createDB, onUpgrade: _onUpgrade);
   }
 
   Future<void> _copyLegacyDatabaseIfNeeded(String dbPath, String targetPath) async {
@@ -36,6 +36,7 @@ class DatabaseHelper {
     if (await target.exists()) return;
 
     const legacyNames = [
+      'diasorganize_v15.db',
       'diasorganize_v14.db',
       'diasorganize_v13.db',
       'diasorganize_v12.db',
@@ -66,9 +67,7 @@ class DatabaseHelper {
 
   Future<void> _copySidecarIfExists(String sourcePath, String targetPath) async {
     final source = File(sourcePath);
-    if (await source.exists()) {
-      await source.copy(targetPath);
-    }
+    if (await source.exists()) await source.copy(targetPath);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -163,6 +162,15 @@ class DatabaseHelper {
       await FinancePlanningStore.ensureTables(db);
       await _addColumnIfMissing(db, 'transactions', 'accountId INTEGER');
     }
+    if (oldVersion < 16) {
+      await _addColumnIfMissing(db, 'tasks', 'parentTaskId INTEGER');
+      await _addColumnIfMissing(db, 'tasks', 'recurrenceType TEXT NOT NULL DEFAULT "none"');
+    }
+  }
+
+  Future<void> _ensureTaskColumns(Database db) async {
+    await _addColumnIfMissing(db, 'tasks', 'parentTaskId INTEGER');
+    await _addColumnIfMissing(db, 'tasks', 'recurrenceType TEXT NOT NULL DEFAULT "none"');
   }
 
   Future<void> _addColumnIfMissing(Database db, String table, String columnSql) async {
@@ -190,11 +198,13 @@ class DatabaseHelper {
         categoryId INTEGER,
         projectId INTEGER,
         projectStepId INTEGER,
+        parentTaskId INTEGER,
         priority TEXT NOT NULL,
         date TEXT,
         time TEXT,
         status TEXT NOT NULL,
         reminderEnabled INTEGER NOT NULL,
+        recurrenceType TEXT NOT NULL DEFAULT 'none',
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       )
@@ -324,7 +334,6 @@ class DatabaseHelper {
   Future<void> _seedFinancialCategories(Database db) async {
     final existing = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM financial_categories')) ?? 0;
     if (existing > 0) return;
-
     final now = DateTime.now().toIso8601String();
     final defaultCats = [
       {'name': 'Salário', 'type': 'income', 'color': '0xFF4CAF50', 'icon': 'attach_money'},
@@ -340,7 +349,6 @@ class DatabaseHelper {
       {'name': 'Trabalho', 'type': 'both', 'color': '0xFF607D8B', 'icon': 'work'},
       {'name': 'Outros', 'type': 'both', 'color': '0xFF9E9E9E', 'icon': 'category'},
     ];
-
     for (final cat in defaultCats) {
       await db.insert('financial_categories', {...cat, 'createdAt': now, 'updatedAt': now});
     }
@@ -374,10 +382,7 @@ class DatabaseHelper {
 
   Future<void> _applyAccountDelta(Transaction txn, int accountId, double delta) async {
     if (delta == 0) return;
-    await txn.rawUpdate(
-      'UPDATE financial_accounts SET currentBalance = currentBalance + ?, updatedAt = ? WHERE id = ?',
-      [delta, DateTime.now().toIso8601String(), accountId],
-    );
+    await txn.rawUpdate('UPDATE financial_accounts SET currentBalance = currentBalance + ?, updatedAt = ? WHERE id = ?', [delta, DateTime.now().toIso8601String(), accountId]);
   }
 
   Future<void> _syncAccountBalanceOnCreate(Transaction txn, FinancialTransaction transaction) async {
@@ -386,12 +391,8 @@ class DatabaseHelper {
   }
 
   Future<void> _syncAccountBalanceOnUpdate(Transaction txn, FinancialTransaction oldTransaction, FinancialTransaction newTransaction) async {
-    if (oldTransaction.accountId != null) {
-      await _applyAccountDelta(txn, oldTransaction.accountId!, -_balanceDeltaFor(oldTransaction));
-    }
-    if (newTransaction.accountId != null) {
-      await _applyAccountDelta(txn, newTransaction.accountId!, _balanceDeltaFor(newTransaction));
-    }
+    if (oldTransaction.accountId != null) await _applyAccountDelta(txn, oldTransaction.accountId!, -_balanceDeltaFor(oldTransaction));
+    if (newTransaction.accountId != null) await _applyAccountDelta(txn, newTransaction.accountId!, _balanceDeltaFor(newTransaction));
   }
 
   Future<List<TaskCategory>> getCategories() async {
@@ -413,23 +414,28 @@ class DatabaseHelper {
 
   Future<List<Task>> getTasks() async {
     final db = await instance.database;
+    await _ensureTaskColumns(db);
     final result = await db.query('tasks', orderBy: 'date ASC, time ASC');
     return result.map((json) => Task.fromMap(json)).toList();
   }
 
   Future<Task> createTask(Task task) async {
     final db = await instance.database;
+    await _ensureTaskColumns(db);
     final id = await db.insert('tasks', task.toMap());
     return task.copyWith(id: id);
   }
 
   Future<int> updateTask(Task task) async {
     final db = await instance.database;
+    await _ensureTaskColumns(db);
     return db.update('tasks', task.toMap(), where: 'id = ?', whereArgs: [task.id]);
   }
 
   Future<int> deleteTask(int id) async {
     final db = await instance.database;
+    await _ensureTaskColumns(db);
+    await db.update('tasks', {'parentTaskId': null}, where: 'parentTaskId = ?', whereArgs: [id]);
     return db.delete('tasks', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -490,9 +496,7 @@ class DatabaseHelper {
     if (oldRows.isNotEmpty) oldTransaction = FinancialTransaction.fromMap(oldRows.first);
     late int count;
     await db.transaction((txn) async {
-      if (oldTransaction?.accountId != null) {
-        await _applyAccountDelta(txn, oldTransaction!.accountId!, -_balanceDeltaFor(oldTransaction));
-      }
+      if (oldTransaction?.accountId != null) await _applyAccountDelta(txn, oldTransaction!.accountId!, -_balanceDeltaFor(oldTransaction));
       count = await txn.delete('transactions', where: 'id = ?', whereArgs: [id]);
     });
     return count;
@@ -561,15 +565,14 @@ class DatabaseHelper {
 
   Future<int> deleteProject(int id, {bool deleteLinkedTasks = false}) async {
     final db = await instance.database;
+    await _ensureTaskColumns(db);
     if (deleteLinkedTasks) {
       await db.delete('tasks', where: 'projectId = ?', whereArgs: [id]);
     } else {
       await db.update('tasks', {'projectId': null, 'projectStepId': null}, where: 'projectId = ?', whereArgs: [id]);
     }
     await db.delete('project_steps', where: 'projectId = ?', whereArgs: [id]);
-    try {
-      await db.delete('project_stages', where: 'projectId = ?', whereArgs: [id]);
-    } catch (_) {}
+    try { await db.delete('project_stages', where: 'projectId = ?', whereArgs: [id]); } catch (_) {}
     return db.delete('projects', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -588,19 +591,7 @@ class DatabaseHelper {
   Future<ProjectStep> createProjectStep(ProjectStep step) async {
     final db = await instance.database;
     final id = await db.insert('project_steps', step.toMap());
-    return ProjectStep(
-      id: id,
-      projectId: step.projectId,
-      title: step.title,
-      description: step.description,
-      orderIndex: step.orderIndex,
-      status: step.status,
-      dueDate: step.dueDate,
-      completedAt: step.completedAt,
-      reminderEnabled: step.reminderEnabled,
-      createdAt: step.createdAt,
-      updatedAt: step.updatedAt,
-    );
+    return ProjectStep(id: id, projectId: step.projectId, title: step.title, description: step.description, orderIndex: step.orderIndex, status: step.status, dueDate: step.dueDate, completedAt: step.completedAt, reminderEnabled: step.reminderEnabled, createdAt: step.createdAt, updatedAt: step.updatedAt);
   }
 
   Future<int> updateProjectStep(ProjectStep step) async {
@@ -610,6 +601,8 @@ class DatabaseHelper {
 
   Future<int> deleteProjectStep(int id) async {
     final db = await instance.database;
+    await _ensureTaskColumns(db);
+    await db.update('tasks', {'projectStepId': null}, where: 'projectStepId = ?', whereArgs: [id]);
     return db.delete('project_steps', where: 'id = ?', whereArgs: [id]);
   }
 }
