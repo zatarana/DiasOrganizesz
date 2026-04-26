@@ -83,7 +83,8 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
     }
 
     final categories = ref.read(categoriesProvider);
-    final catId = _categoryId ?? (categories.isNotEmpty ? categories.first.id : 1);
+    final categoryStillExists = _categoryId != null && categories.any((category) => category.id == _categoryId);
+    final catId = categoryStillExists ? _categoryId : (categories.isNotEmpty ? categories.first.id : 1);
     final hasValidReminder = _hasReminder && _time != null;
 
     final task = Task(
@@ -149,6 +150,31 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
     }
   }
 
+  Future<void> _confirmDelete() async {
+    final task = widget.task;
+    if (task?.id == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir tarefa?'),
+        content: Text('Deseja excluir "${task!.title}"? Esta ação não pode ser desfeita.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    await ref.read(tasksProvider.notifier).removeTask(task!.id!);
+    await NotificationService().cancelNotification(NotificationService().taskReminderId(task.id!));
+    if (mounted) Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -158,11 +184,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
           if (widget.task != null)
             IconButton(
               icon: const Icon(Icons.delete),
-              onPressed: () async {
-                await ref.read(tasksProvider.notifier).removeTask(widget.task!.id!);
-                await NotificationService().cancelNotification(NotificationService().taskReminderId(widget.task!.id!));
-                if (context.mounted) Navigator.pop(context);
-              },
+              onPressed: _confirmDelete,
             )
         ],
       ),
@@ -192,7 +214,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                     onTap: () async {
                       final selected = await showDatePicker(
                         context: context,
-                        initialDate: DateTime.parse(_date),
+                        initialDate: DateTime.tryParse(_date) ?? DateTime.now(),
                         firstDate: DateTime(2000),
                         lastDate: DateTime(2100),
                       );
@@ -240,8 +262,9 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
               builder: (context, ref, child) {
                 final categories = ref.watch(categoriesProvider);
                 if (categories.isEmpty) return const SizedBox.shrink();
+                final safeCategoryId = categories.any((category) => category.id == _categoryId) ? _categoryId : categories.first.id;
                 return DropdownButtonFormField<int>(
-                  initialValue: _categoryId ?? categories.first.id,
+                  initialValue: safeCategoryId,
                   decoration: const InputDecoration(labelText: 'Categoria', border: OutlineInputBorder()),
                   items: categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
                   onChanged: (val) {
@@ -253,13 +276,22 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
             const SizedBox(height: 16),
             Consumer(
               builder: (context, ref, child) {
-                final projects = ref.watch(projectsProvider).where((p) => p.status != 'completed' && p.status != 'canceled').toList();
+                final allProjects = ref.watch(projectsProvider);
+                final projectItems = allProjects
+                    .where((p) => p.status != 'completed' && p.status != 'canceled' || p.id == _projectId)
+                    .toList();
+                final safeProjectId = projectItems.any((project) => project.id == _projectId) ? _projectId : null;
+                if (safeProjectId != _projectId) _projectStepId = null;
+
                 return DropdownButtonFormField<int>(
-                  initialValue: _projectId,
+                  initialValue: safeProjectId,
                   decoration: const InputDecoration(labelText: 'Vincular ao Projeto (Opcional)', border: OutlineInputBorder()),
                   items: [
                     const DropdownMenuItem<int>(value: null, child: Text('Nenhum projeto')),
-                    ...projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))),
+                    ...projectItems.map((p) {
+                      final inactive = p.status == 'completed' || p.status == 'canceled';
+                      return DropdownMenuItem(value: p.id, child: Text(inactive ? '${p.name} (${p.status})' : p.name));
+                    }),
                   ],
                   onChanged: (val) {
                     setState(() {
@@ -274,13 +306,18 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
               const SizedBox(height: 16),
               Consumer(
                 builder: (context, ref, child) {
-                  final steps = ref.watch(projectStepsProvider(_projectId!)).where((s) => s.status != 'completed' && s.status != 'canceled').toList();
+                  final allSteps = ref.watch(projectStepsProvider(_projectId!));
+                  final stepItems = allSteps.where((s) => s.status != 'completed' && s.status != 'canceled' || s.id == _projectStepId).toList();
+                  final safeStepId = stepItems.any((step) => step.id == _projectStepId) ? _projectStepId : null;
                   return DropdownButtonFormField<int>(
-                    initialValue: _projectStepId,
+                    initialValue: safeStepId,
                     decoration: const InputDecoration(labelText: 'Etapa do Projeto (Opcional)', border: OutlineInputBorder()),
                     items: [
                       const DropdownMenuItem<int>(value: null, child: Text('Sem etapa específica')),
-                      ...steps.map((s) => DropdownMenuItem<int>(value: s.id, child: Text(s.title))),
+                      ...stepItems.map((s) {
+                        final inactive = s.status == 'completed' || s.status == 'canceled';
+                        return DropdownMenuItem<int>(value: s.id, child: Text(inactive ? '${s.title} (${s.status})' : s.title));
+                      }),
                     ],
                     onChanged: (val) => setState(() => _projectStepId = val),
                   );
