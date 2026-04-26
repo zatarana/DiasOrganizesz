@@ -29,6 +29,7 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
   bool _generateInstallments = false;
   bool _remindInstallments = false;
   bool _isAutoCalculating = false;
+  bool _installmentWasAutoCalculated = true;
 
   @override
   void initState() {
@@ -48,28 +49,72 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
       if (widget.debt!.installmentAmount != null) _installmentAmountController.text = widget.debt!.installmentAmount!.toStringAsFixed(2);
       if (widget.debt!.startDate != null) _startDate = DateTime.parse(widget.debt!.startDate!);
       if (widget.debt!.firstDueDate != null) _firstDueDate = DateTime.parse(widget.debt!.firstDueDate!);
+      _installmentWasAutoCalculated = false;
     }
 
     _amountController.addListener(_recalculateAuto);
     _installmentsController.addListener(_recalculateAuto);
+    _installmentAmountController.addListener(() {
+      if (!_isAutoCalculating) _installmentWasAutoCalculated = false;
+    });
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descriptionController.dispose();
+    _amountController.dispose();
+    _installmentsController.dispose();
+    _installmentAmountController.dispose();
+    _creditorController.dispose();
+    _notesController.dispose();
+    super.dispose();
   }
 
   void _recalculateAuto() {
     if (_isAutoCalculating) return;
 
-    final amount = double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0;
+    final amount = _parseMoney(_amountController.text);
     final instCount = int.tryParse(_installmentsController.text) ?? 0;
 
-    if (amount > 0 && instCount > 0 && _installmentAmountController.text.isEmpty) {
+    if (amount > 0 && instCount > 0 && (_installmentAmountController.text.isEmpty || _installmentWasAutoCalculated)) {
       _isAutoCalculating = true;
       _installmentAmountController.text = (amount / instCount).toStringAsFixed(2);
+      _installmentWasAutoCalculated = true;
       _isAutoCalculating = false;
     }
   }
 
+  double _parseMoney(String text) => double.tryParse(text.replaceAll(',', '.')) ?? 0.0;
+
+  double _roundCents(double value) => double.parse(value.toStringAsFixed(2));
+
+  DateTime _safeMonthlyDueDate(DateTime firstDate, int monthOffset) {
+    final targetMonth = firstDate.month + monthOffset;
+    final base = DateTime(firstDate.year, targetMonth, 1);
+    final lastDay = DateUtils.getDaysInMonth(base.year, base.month);
+    final day = firstDate.day > lastDay ? lastDay : firstDate.day;
+    return DateTime(base.year, base.month, day);
+  }
+
+  List<double> _buildInstallmentAmounts(double total, int count, double typedAmount) {
+    if (count <= 0) return const [];
+    final amounts = <double>[];
+    double accumulated = 0;
+
+    for (int i = 0; i < count; i++) {
+      final isLast = i == count - 1;
+      final value = isLast ? _roundCents(total - accumulated) : _roundCents(typedAmount);
+      amounts.add(value < 0 ? 0 : value);
+      accumulated += value;
+    }
+
+    return amounts;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final categories = ref.watch(financialCategoriesProvider).where((c) => c.type == 'expense').toList();
+    final categories = ref.watch(financialCategoriesProvider).where((c) => c.type == 'expense' || c.type == 'both').toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -78,9 +123,9 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
           if (widget.debt != null)
             IconButton(
               icon: const Icon(Icons.delete),
-              onPressed: () {
-                ref.read(debtsProvider.notifier).removeDebt(widget.debt!.id!);
-                Navigator.pop(context);
+              onPressed: () async {
+                await ref.read(debtsProvider.notifier).removeDebt(widget.debt!.id!);
+                if (context.mounted) Navigator.pop(context);
               },
             )
         ],
@@ -153,7 +198,7 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
               if (widget.debt == null) ...[
                 SwitchListTile(
                   title: const Text('Gerar parcelas no Financeiro?'),
-                  subtitle: const Text('Cria automaticamente despesas no módulo Financeiro para esta dívida. Você pode fazer isso depois ou pagar manualmente.'),
+                  subtitle: const Text('Cria automaticamente despesas no módulo Financeiro para esta dívida.'),
                   value: _generateInstallments,
                   onChanged: (v) => setState(() => _generateInstallments = v),
                 ),
@@ -208,11 +253,11 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
     );
   }
 
-  void _saveDebt() async {
+  Future<void> _saveDebt() async {
     final name = _nameController.text.trim();
-    final amount = double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0;
+    final amount = _roundCents(_parseMoney(_amountController.text));
     final installments = int.tryParse(_installmentsController.text) ?? 0;
-    final instAmount = double.tryParse(_installmentAmountController.text.replaceAll(',', '.')) ?? 0;
+    final instAmount = _roundCents(_parseMoney(_installmentAmountController.text));
 
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O nome é obrigatório.')));
@@ -222,28 +267,30 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O valor total deve ser maior que zero.')));
       return;
     }
-    if (_generateInstallments) {
-      if (installments <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O número de parcelas deve ser maior que zero para gerar no financeiro.')));
-        return;
-      }
-      if (instAmount <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O valor da parcela deve ser maior que zero para gerar no financeiro.')));
-        return;
-      }
-    }
     if (_selectedCategoryId == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A categoria financeira é obrigatória.')));
       return;
     }
+    if (_generateInstallments || installments > 0 || instAmount > 0) {
+      if (installments <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe a quantidade de parcelas.')));
+        return;
+      }
+      if (instAmount <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe o valor da parcela.')));
+        return;
+      }
+    }
 
-    final expectedTotal = instAmount * installments;
+    final expectedTotal = _roundCents(instAmount * installments);
     if (installments > 0 && instAmount > 0 && (expectedTotal - amount).abs() > 0.05) {
       final confirm = await showDialog<bool>(
         context: context,
         builder: (c) => AlertDialog(
           title: const Text('Atenção aos Valores'),
-          content: Text('O valor total (R\$ ${amount.toStringAsFixed(2)}) não bate com o valor das parcelas (R\$ ${expectedTotal.toStringAsFixed(2)}). Deseja continuar assim mesmo?'),
+          content: Text(
+            'O valor total (R\$ ${amount.toStringAsFixed(2)}) não bate com o valor das parcelas (R\$ ${expectedTotal.toStringAsFixed(2)}). A última parcela será ajustada automaticamente para fechar o total. Deseja continuar?',
+          ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Corrigir')),
             ElevatedButton(onPressed: () => Navigator.pop(c, true), child: const Text('Continuar')),
@@ -271,17 +318,17 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
     );
 
     if (widget.debt == null) {
-      final helper = ref.read(dbProvider);
-      final id = await helper.createDebt(debt.toMap());
-      ref.read(debtsProvider.notifier).loadDebts();
+      await ref.read(debtsProvider.notifier).addDebt(debt);
+      final createdDebt = ref.read(debtsProvider).firstWhere((d) => d.name == name && d.createdAt == debt.createdAt);
 
       if (_generateInstallments && installments > 0) {
+        final amounts = _buildInstallmentAmounts(amount, installments, instAmount);
         for (int i = 0; i < installments; i++) {
-          final due = DateTime(_firstDueDate.year, _firstDueDate.month + i, _firstDueDate.day);
-
+          final due = _safeMonthlyDueDate(_firstDueDate, i);
+          final now = DateTime.now().toIso8601String();
           final transaction = FinancialTransaction(
             title: '$name (Parcela ${i + 1}/$installments)',
-            amount: instAmount,
+            amount: amounts[i],
             type: 'expense',
             categoryId: _selectedCategoryId,
             transactionDate: due.toIso8601String(),
@@ -290,18 +337,17 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
             reminderEnabled: _remindInstallments,
             isFixed: false,
             recurrenceType: 'none',
-            debtId: id,
+            debtId: createdDebt.id,
             installmentNumber: i + 1,
             totalInstallments: installments,
-            createdAt: DateTime.now().toIso8601String(),
-            updatedAt: DateTime.now().toIso8601String(),
+            createdAt: now,
+            updatedAt: now,
           );
-          await helper.createTransaction(transaction);
+          await ref.read(transactionsProvider.notifier).addTransaction(transaction);
         }
-        ref.read(transactionsProvider.notifier).loadTransactions();
       }
     } else {
-      ref.read(debtsProvider.notifier).updateDebt(debt);
+      await ref.read(debtsProvider.notifier).updateDebt(debt);
     }
 
     if (mounted) Navigator.pop(context);
