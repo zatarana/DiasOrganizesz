@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/backup/backup_service.dart';
 import '../../core/notifications/notification_service.dart';
+import '../../data/database/finance_planning_store.dart';
 import '../../domain/providers.dart';
 import 'categories_screen.dart';
 import '../finance/finance_categories_screen.dart';
@@ -19,7 +20,9 @@ class SettingsScreen extends ConsumerWidget {
 
   Future<void> _resetCoreData(WidgetRef ref) async {
     await NotificationService().cancelAllNotifications();
-    await ref.read(dbProvider).resetCoreData();
+    final dbHelper = ref.read(dbProvider);
+    await dbHelper.resetCoreData();
+    await FinancePlanningStore.resetPlanningData(await dbHelper.database);
     await ref.read(tasksProvider.notifier).loadTasks();
     await ref.read(transactionsProvider.notifier).loadTransactions();
     await ref.read(debtsProvider.notifier).loadDebts();
@@ -255,7 +258,7 @@ class SettingsScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.warning, color: Colors.red),
             title: const Text('Resetar dados principais', style: TextStyle(color: Colors.red)),
-            subtitle: const Text('Apaga tarefas, finanças, dívidas, projetos e etapas. Faça backup antes.'),
+            subtitle: const Text('Apaga tarefas, finanças, dívidas, projetos, contas, orçamentos e metas. Faça backup antes.'),
             onTap: () => _confirmResetCoreData(context, ref),
           ),
           const Divider(),
@@ -426,7 +429,7 @@ class SettingsScreen extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Resetar dados principais?'),
-        content: const Text('Isto apagará tarefas, movimentações financeiras, dívidas, projetos e etapas. Categorias e configurações serão mantidas. Recomenda-se exportar um backup JSON antes.'),
+        content: const Text('Isto apagará tarefas, movimentações financeiras, dívidas, projetos, etapas, contas, orçamentos e metas. Categorias e configurações serão mantidas. Recomenda-se exportar um backup JSON antes.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           TextButton(
