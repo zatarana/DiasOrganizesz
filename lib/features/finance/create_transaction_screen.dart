@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../domain/providers.dart';
 import '../../data/models/transaction_model.dart';
-import '../../data/models/financial_category_model.dart';
 
 class CreateTransactionScreen extends ConsumerStatefulWidget {
   final FinancialTransaction? transaction;
@@ -27,8 +26,6 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   bool _isFixed = false;
   String _recurrenceType = 'none';
   int? _categoryId;
-  bool _reminderEnabled = false;
-      _reminderEnabled = widget.transaction!.reminderEnabled;
   bool _reminderEnabled = false;
 
   // Available Payment Methods
@@ -149,12 +146,6 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                      border: const OutlineInputBorder(),
                      hintText: _type == 'expense' ? 'Desconto por pagar antecipado' : 'Desconto concedido',
                    ),
-              SwitchListTile(
-                title: const Text('Ativar lembrete local'),
-                subtitle: const Text('Para vencimento/receita prevista'),
-                value: _reminderEnabled,
-                onChanged: (_dueDate != null || _type == 'income') ? (v) => setState(() => _reminderEnabled = v) : null,
-              ),
                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
                  ),
               ],
@@ -242,7 +233,6 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                 },
               ),
               const SizedBox(height: 16),
-                      reminderEnabled: _reminderEnabled,
               TextField(
                 controller: _notesController,
                 decoration: const InputDecoration(labelText: 'Observações (Opcional)', border: OutlineInputBorder()),

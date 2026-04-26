@@ -5,43 +5,7 @@ import '../projects/projects_screen.dart';
 import '../calendar/calendar_screen.dart';
 import '../statistics/stats_screen.dart';
 import '../settings/settings_screen.dart';
-import '../settings/categories_screen.dart';
-          ListTile(
-            leading: const Icon(Icons.calendar_month),
-            title: const Text('Calendário'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const CalendarScreen()));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.category),
-            title: const Text('Categorias'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen()));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.pie_chart),
-            title: const Text('Estatísticas'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const StatsScreen()));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.settings),
-            title: const Text('Configurações'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
-            },
-          ),
-import '../calendar/calendar_screen.dart';
-import '../statistics/stats_screen.dart';
-import '../settings/settings_screen.dart';
-import '../settings/categories_screen.dart';
+import '../categories/categories_screen.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
