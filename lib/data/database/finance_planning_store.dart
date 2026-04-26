@@ -5,6 +5,8 @@ import '../models/financial_account_model.dart';
 import '../models/financial_goal_model.dart';
 
 class FinancePlanningStore {
+  static bool _indexesEnsured = false;
+
   static Future<void> ensureTables(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS financial_accounts (
@@ -49,6 +51,24 @@ class FinancePlanningStore {
       )
     ''');
     await _addColumnIfMissing(db, 'financial_goals', 'accountId INTEGER');
+    await _ensureIndexes(db);
+  }
+
+  static Future<void> _ensureIndexes(Database db) async {
+    if (_indexesEnsured) return;
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_accounts_archived_name ON financial_accounts(isArchived, name)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_goals_status_account ON financial_goals(status, accountId)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_budgets_month_category ON budgets(month, categoryId, isArchived)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_status_account ON transactions(status, accountId)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_due_date ON transactions(dueDate)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_paid_date ON transactions(paidDate)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_category_status ON transactions(categoryId, status)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_debt_status ON transactions(debtId, status)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_tasks_date_status_parent ON tasks(date, status, parentTaskId)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_tasks_project_step_status ON tasks(projectId, projectStepId, status)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_project_steps_project_order ON project_steps(projectId, orderIndex)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_projects_status_end ON projects(status, endDate)');
+    _indexesEnsured = true;
   }
 
   static Future<void> _addColumnIfMissing(Database db, String table, String columnSql) async {
