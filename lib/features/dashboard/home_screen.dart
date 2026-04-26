@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+
 import '../../domain/providers.dart';
+import '../calendar/calendar_screen.dart';
+import '../categories/categories_screen.dart';
+import '../debts/debts_screen.dart';
+import '../finance/finance_screen.dart';
+import '../projects/projects_screen.dart';
+import '../settings/settings_screen.dart';
+import '../statistics/stats_screen.dart';
 import '../tasks/create_task_screen.dart';
 import '../tasks/task_list_screen.dart';
-import '../calendar/calendar_screen.dart';
-import '../settings/settings_screen.dart';
-import '../settings/categories_screen.dart';
-import '../statistics/stats_screen.dart';
-import '../finance/finance_screen.dart';
-import '../debts/debts_screen.dart';
-import '../projects/projects_screen.dart';
 import 'app_drawer.dart';
-import 'package:intl/intl.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -34,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final showFab = _currentIndex == 0 || _currentIndex == 1;
+
     return Scaffold(
       body: _pages[_currentIndex],
       floatingActionButton: showFab
@@ -76,55 +78,50 @@ class MoreScreen extends StatelessWidget {
           const ListTile(
             title: Text('Acesso rápido', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
           ),
-          ListTile(
-            leading: const Icon(Icons.money_off),
-            title: const Text('Dívidas'),
-            subtitle: const Text('Acesse rapidamente suas dívidas e parcelas'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtsScreen())),
+          _MoreTile(
+            icon: Icons.money_off,
+            title: 'Dívidas',
+            subtitle: 'Acesse rapidamente suas dívidas e parcelas',
+            page: const DebtsScreen(),
           ),
           const Divider(),
           const ListTile(
             title: Text('Outros recursos', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
           ),
-          ListTile(
-            leading: const Icon(Icons.calendar_month),
-            title: const Text('Calendário'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CalendarScreen())),
-          ),
-          ListTile(
-            leading: const Icon(Icons.category),
-            title: const Text('Categorias'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesScreen())),
-          ),
-          ListTile(
-            leading: const Icon(Icons.pie_chart),
-            title: const Text('Estatísticas'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StatsScreen())),
-          ),
-          ListTile(
-            leading: const Icon(Icons.settings),
-            title: const Text('Configurações'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
-          ),
+          _MoreTile(icon: Icons.calendar_month, title: 'Calendário', page: const CalendarScreen()),
+          _MoreTile(icon: Icons.category, title: 'Categorias', page: const CategoriesScreen()),
+          _MoreTile(icon: Icons.pie_chart, title: 'Estatísticas', page: const StatsScreen()),
+          _MoreTile(icon: Icons.settings, title: 'Configurações', page: const SettingsScreen()),
         ],
       ),
     );
   }
 }
 
-class TaskDashboard extends ConsumerStatefulWidget {
-  const TaskDashboard({super.key});
+class _MoreTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final Widget page;
 
-  @override
-  ConsumerState<TaskDashboard> createState() => _TaskDashboardState();
-}
-
-class _TaskDashboardState extends ConsumerState<TaskDashboard> {
-  bool _temporaryUnlock = false;
+  const _MoreTile({required this.icon, required this.title, this.subtitle, required this.page});
 
   @override
   Widget build(BuildContext context) {
-    final ref = this.ref;
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(title),
+      subtitle: subtitle == null ? null : Text(subtitle!),
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => page)),
+    );
+  }
+}
+
+class TaskDashboard extends ConsumerWidget {
+  const TaskDashboard({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final tasks = ref.watch(tasksProvider);
     final transactions = ref.watch(transactionsProvider);
     final projects = ref.watch(projectsProvider);
@@ -132,84 +129,36 @@ class _TaskDashboardState extends ConsumerState<TaskDashboard> {
     final appSettings = ref.watch(appSettingsProvider);
 
     final currency = appSettings[AppSettingKeys.defaultCurrency] ?? 'BRL';
-    final showFinancial = (appSettings[AppSettingKeys.homeShowFinancialValues] ?? 'true') == 'true';
-    final privacyHide = (appSettings[AppSettingKeys.privacyHideHomeValues] ?? 'false') == 'true';
-    final discreteMode = (appSettings[AppSettingKeys.financeDiscreteMode] ?? 'false') == 'true';
-    final visualLock = (appSettings[AppSettingKeys.financeVisualLock] ?? 'false') == 'true';
-    final showProjectsCard = (appSettings[AppSettingKeys.homeShowProjectsCard] ?? 'true') == 'true';
-    final shouldMask = !showFinancial || privacyHide || discreteMode || (visualLock && !_temporaryUnlock);
+    final hideValues = (appSettings[AppSettingKeys.privacyHideHomeValues] ?? 'false') == 'true' ||
+        (appSettings[AppSettingKeys.financeDiscreteMode] ?? 'false') == 'true' ||
+        (appSettings[AppSettingKeys.homeShowFinancialValues] ?? 'true') != 'true';
 
     final now = DateTime.now();
-    final todayStr = DateFormat('yyyy-MM-dd').format(now);
+    final today = DateFormat('yyyy-MM-dd').format(now);
+    final todayTasks = tasks.where((task) => task.date == today).toList();
+    final pendingTasks = tasks.where((task) => task.status == 'pendente').length;
+    final overdueTasks = tasks.where((task) => task.status == 'atrasada').length;
 
-    final todayTasks = tasks.where((t) => t.date == todayStr).toList();
-
-    final monthTransactions = transactions.where((t) {
-      final dt = DateTime.tryParse(t.transactionDate);
-      return dt != null && dt.year == now.year && dt.month == now.month && t.status != 'canceled';
+    final monthTransactions = transactions.where((transaction) {
+      final date = DateTime.tryParse(transaction.transactionDate);
+      return date != null && date.year == now.year && date.month == now.month && transaction.status != 'canceled';
     }).toList();
 
-    final receitasMes = monthTransactions.where((t) => t.type == 'income').fold<double>(0, (sum, t) => sum + t.amount);
-    final despesasMes = monthTransactions.where((t) => t.type == 'expense').fold<double>(0, (sum, t) => sum + t.amount);
-    final saldoPrevisto = receitasMes - despesasMes;
+    final income = monthTransactions.where((t) => t.type == 'income').fold<double>(0, (sum, t) => sum + t.amount);
+    final expenses = monthTransactions.where((t) => t.type == 'expense').fold<double>(0, (sum, t) => sum + t.amount);
+    final balance = income - expenses;
+    final openDebts = debts.where((debt) => debt.status != 'paid' && debt.status != 'canceled').length;
+    final activeProjects = projects.where((project) => project.status == 'active').length;
 
-    final receitasRealizadas = monthTransactions.where((t) => t.type == 'income' && t.status == 'paid').fold<double>(0, (sum, t) => sum + t.amount);
-    final despesasRealizadas = monthTransactions.where((t) => t.type == 'expense' && t.status == 'paid').fold<double>(0, (sum, t) => sum + t.amount);
-    final saldoRealizado = receitasRealizadas - despesasRealizadas;
-
-    final debtTransactions = transactions.where((t) => t.debtId != null && t.status != 'canceled').toList();
-    final totalDividas = debts.where((d) => d.status != 'paid' && d.status != 'canceled').fold<double>(0, (sum, d) => sum + d.totalAmount);
-    final pagoDividas = debtTransactions.where((t) => t.status == 'paid' && t.type == 'expense').fold<double>(0, (sum, t) => sum + t.amount);
-    final valorRestante = (totalDividas - pagoDividas).clamp(0, double.infinity);
-
-    final proximasParcelas = debtTransactions.where((t) {
-      final due = t.dueDate == null ? null : DateTime.tryParse(t.dueDate!);
-      return due != null && due.isAfter(now) && t.status != 'paid';
-    }).toList()
-      ..sort((a, b) => DateTime.parse(a.dueDate!).compareTo(DateTime.parse(b.dueDate!)));
-
-    final proximaParcela = proximasParcelas.isEmpty ? null : proximasParcelas.first;
-    final parcelasAtrasadas = debtTransactions.where((t) => t.status == 'overdue').length;
-
-    final projetosEmAndamento = projects.where((p) => p.status == 'active').length;
-    final projetosAtrasados = projects.where((p) {
-      if (p.status == 'completed' || p.status == 'canceled' || p.endDate == null) return false;
-      final end = DateTime.tryParse(p.endDate!);
-      return end != null && end.isBefore(now);
-    }).toList();
-
-    final projetosComPrazo = projects.where((p) {
-      if (p.status == 'completed' || p.status == 'canceled' || p.endDate == null) return false;
-      final end = DateTime.tryParse(p.endDate!);
-      return end != null && end.isAfter(now);
-    }).toList()
-      ..sort((a, b) => DateTime.parse(a.endDate!).compareTo(DateTime.parse(b.endDate!)));
-
-    final projetoMaisProximo = projetosComPrazo.isEmpty ? null : projetosComPrazo.first;
-    final mediaProgresso = projects.isEmpty ? 0.0 : projects.fold<double>(0, (sum, p) => sum + p.progress) / projects.length;
-
-    final tarefasAtrasadas = tasks.where((t) => t.status == 'atrasada').length;
-    final despesasVencidas = transactions.where((t) => t.type == 'expense' && t.status == 'overdue').length;
-    final parcelasVencidas = debtTransactions.where((t) => t.status == 'overdue').length;
-    final projetosPrazoVencido = projetosAtrasados.length;
-
-    String money(double value) {
-      if (shouldMask) return currency == 'USD' ? '\$ ******' : 'R\$ ******';
+    String money(num value) {
+      if (hideValues) return currency == 'USD' ? '\$ ******' : 'R\$ ******';
       final prefix = currency == 'USD' ? '\$' : 'R\$';
-      return '$prefix ${value.toStringAsFixed(2)}';
+      return '$prefix ${value.toDouble().toStringAsFixed(2)}';
     }
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('DiasOrganize', style: TextStyle(fontWeight: FontWeight.bold)),
-        actions: [
-          if (visualLock)
-            IconButton(
-              icon: Icon(_temporaryUnlock ? Icons.lock_open : Icons.lock),
-              tooltip: _temporaryUnlock ? 'Ocultar valores' : 'Revelar valores',
-              onPressed: () => setState(() => _temporaryUnlock = !_temporaryUnlock),
-            ),
-        ],
       ),
       drawer: const AppDrawer(),
       body: ListView(
@@ -221,65 +170,44 @@ class _TaskDashboardState extends ConsumerState<TaskDashboard> {
             physics: const NeverScrollableScrollPhysics(),
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: 1.1,
+            childAspectRatio: 1.15,
             children: [
               _DashboardSummaryCard(
                 title: 'Financeiro do mês',
                 icon: Icons.account_balance_wallet,
                 color: Colors.blue,
-                lines: [
-                  'Receitas: ${money(receitasMes)}',
-                  'Despesas: ${money(despesasMes)}',
-                  'Previsto: ${money(saldoPrevisto)}',
-                  'Realizado: ${money(saldoRealizado)}',
-                ],
+                lines: ['Receitas: ${money(income)}', 'Despesas: ${money(expenses)}', 'Saldo: ${money(balance)}'],
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceScreen())),
+              ),
+              _DashboardSummaryCard(
+                title: 'Tarefas',
+                icon: Icons.checklist,
+                color: Colors.green,
+                lines: ['Hoje: ${todayTasks.length}', 'Pendentes: $pendingTasks', 'Atrasadas: $overdueTasks'],
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskListScreen())),
               ),
               _DashboardSummaryCard(
                 title: 'Dívidas',
                 icon: Icons.money_off,
                 color: Colors.deepOrange,
-                lines: [
-                  'Total: ${money(totalDividas)}',
-                  'Restante: ${money(valorRestante)}',
-                  'Próxima: ${proximaParcela?.dueDate != null ? DateFormat('dd/MM').format(DateTime.parse(proximaParcela!.dueDate!)) : '-'}',
-                  'Atrasadas: $parcelasAtrasadas',
-                ],
+                lines: ['Em aberto: $openDebts', 'Parcelas: ${transactions.where((t) => t.debtId != null).length}'],
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtsScreen())),
               ),
-              if (showProjectsCard)
-                _DashboardSummaryCard(
-                  title: 'Projetos',
-                  icon: Icons.rocket_launch,
-                  color: Colors.purple,
-                  lines: [
-                    'Em andamento: $projetosEmAndamento',
-                    'Atrasados: ${projetosAtrasados.length}',
-                    'Prazo mais próximo: ${projetoMaisProximo?.name ?? '-'}',
-                    'Média progresso: ${mediaProgresso.toStringAsFixed(0)}%',
-                  ],
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProjectsScreen())),
-                ),
               _DashboardSummaryCard(
-                title: 'Alertas',
-                icon: Icons.warning_amber,
-                color: Colors.red,
-                lines: [
-                  'Tarefas atrasadas: $tarefasAtrasadas',
-                  'Despesas vencidas: $despesasVencidas',
-                  'Parcelas vencidas: $parcelasVencidas',
-                  'Projetos vencidos: $projetosPrazoVencido',
-                ],
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskListScreen())),
+                title: 'Projetos',
+                icon: Icons.rocket_launch,
+                color: Colors.purple,
+                lines: ['Ativos: $activeProjects', 'Total: ${projects.length}'],
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProjectsScreen())),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Tarefas de hoje', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              if (todayTasks.isNotEmpty) Text('${todayTasks.length} tarefa(s)'),
+              Text('${todayTasks.length}'),
             ],
           ),
           const SizedBox(height: 8),
@@ -289,19 +217,22 @@ class _TaskDashboardState extends ConsumerState<TaskDashboard> {
               child: Center(child: Text('Nenhuma tarefa para hoje! 🎉')),
             )
           else
-            ...todayTasks.map((t) => Card(
+            ...todayTasks.map((task) => Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
-                    title: Text(t.title, style: TextStyle(decoration: t.status == 'concluida' ? TextDecoration.lineThrough : null)),
-                    subtitle: Text('${t.priority.toUpperCase()} - ${t.status}'),
+                    title: Text(
+                      task.title,
+                      style: TextStyle(decoration: task.status == 'concluida' ? TextDecoration.lineThrough : null),
+                    ),
+                    subtitle: Text('${task.priority.toUpperCase()} - ${task.status}'),
                     trailing: Icon(
-                      t.status == 'concluida' ? Icons.check_circle : Icons.circle_outlined,
-                      color: t.status == 'concluida' ? Colors.green : Colors.grey,
+                      task.status == 'concluida' ? Icons.check_circle : Icons.circle_outlined,
+                      color: task.status == 'concluida' ? Colors.green : Colors.grey,
                     ),
                     onTap: () {
                       ref.read(tasksProvider.notifier).updateTask(
-                            t.copyWith(
-                              status: t.status == 'concluida' ? 'pendente' : 'concluida',
+                            task.copyWith(
+                              status: task.status == 'concluida' ? 'pendente' : 'concluida',
                               updatedAt: DateTime.now().toIso8601String(),
                             ),
                           );
@@ -351,10 +282,12 @@ class _DashboardSummaryCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 6),
-              ...lines.map((line) => Padding(
-                    padding: const EdgeInsets.only(bottom: 2),
-                    child: Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11)),
-                  )),
+              ...lines.map(
+                (line) => Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11)),
+                ),
+              ),
             ],
           ),
         ),
