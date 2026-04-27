@@ -284,11 +284,12 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(onPressed: () { FocusScope.of(ctx).unfocus(); Navigator.pop(ctx); }, child: const Text('Cancelar')),
           TextButton(
             onPressed: () {
               final title = titleController.text.trim();
               if (title.isEmpty) return;
+              FocusScope.of(ctx).unfocus();
               Navigator.pop(ctx, {'title': title, 'description': descriptionController.text.trim()});
             },
             child: const Text('Salvar'),
