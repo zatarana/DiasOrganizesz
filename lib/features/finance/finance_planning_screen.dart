@@ -9,6 +9,8 @@ import '../../data/models/financial_goal_model.dart';
 import '../../data/models/transaction_model.dart';
 import '../../domain/providers.dart';
 
+const String defaultFinancialAccountSettingKey = 'default_financial_account_id';
+
 class FinancePlanningScreen extends ConsumerStatefulWidget {
   const FinancePlanningScreen({super.key});
 
@@ -21,6 +23,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
   List<FinancialAccount> _accounts = [];
   List<Budget> _budgets = [];
   List<FinancialGoal> _goals = [];
+  int? _defaultAccountId;
 
   @override
   void initState() {
@@ -31,17 +34,31 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
   Future<void> _loadAll() async {
     if (!mounted) return;
     setState(() => _loading = true);
-    final db = await ref.read(dbProvider).database;
+    final dbHelper = ref.read(dbProvider);
+    final db = await dbHelper.database;
     final accounts = await FinancePlanningStore.getAccounts(db);
     final budgets = await FinancePlanningStore.getBudgets(db);
     final goals = await FinancePlanningStore.getGoals(db);
+    final defaultSetting = await dbHelper.getSetting(defaultFinancialAccountSettingKey);
+    final defaultAccountId = int.tryParse(defaultSetting?.value ?? '');
+    final validDefault = accounts.any((account) => account.id == defaultAccountId && !account.isArchived) ? defaultAccountId : null;
+    if (defaultAccountId != null && validDefault == null) {
+      await ref.read(appSettingsProvider.notifier).setValue(defaultFinancialAccountSettingKey, '');
+    }
     if (!mounted) return;
     setState(() {
       _accounts = accounts;
       _budgets = budgets;
       _goals = goals;
+      _defaultAccountId = validDefault;
       _loading = false;
     });
+  }
+
+  Future<void> _setDefaultAccount(int? accountId) async {
+    await ref.read(appSettingsProvider.notifier).setValue(defaultFinancialAccountSettingKey, accountId?.toString() ?? '');
+    if (!mounted) return;
+    setState(() => _defaultAccountId = accountId);
   }
 
   String _money(num value) => 'R\$ ${value.toDouble().toStringAsFixed(2)}';
@@ -118,15 +135,36 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
         if (_accounts.isEmpty)
           const _EmptyState(text: 'Nenhuma conta cadastrada ainda.')
         else
-          ..._accounts.map((account) => Card(
-                child: ListTile(
-                  leading: CircleAvatar(backgroundColor: Colors.blue.withValues(alpha: 0.12), child: Icon(_accountIcon(account.type), color: Colors.blue)),
-                  title: Text(account.name),
-                  subtitle: Text('${_accountTypeLabel(account.type)}${account.isArchived ? ' • arquivada' : ''}\nBase: ${_money(account.initialBalance)}'),
-                  trailing: Text(_money(account.currentBalance), style: const TextStyle(fontWeight: FontWeight.bold)),
-                  onTap: () => _showAccountDialog(account: account),
+          ..._accounts.map((account) {
+            final isDefault = account.id != null && account.id == _defaultAccountId;
+            return Card(
+              child: ListTile(
+                leading: CircleAvatar(backgroundColor: Colors.blue.withValues(alpha: 0.12), child: Icon(_accountIcon(account.type), color: Colors.blue)),
+                title: Row(
+                  children: [
+                    Expanded(child: Text(account.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    if (isDefault) const Chip(label: Text('Padrão'), visualDensity: VisualDensity.compact),
+                  ],
                 ),
-              )),
+                subtitle: Text('${_accountTypeLabel(account.type)}${account.isArchived ? ' • arquivada' : ''}\nBase: ${_money(account.initialBalance)}'),
+                trailing: SizedBox(
+                  width: 128,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Flexible(child: Text(_money(account.currentBalance), overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold))),
+                      IconButton(
+                        tooltip: isDefault ? 'Remover conta padrão' : 'Definir como padrão',
+                        icon: Icon(isDefault ? Icons.star : Icons.star_border, color: isDefault ? Colors.amber : null),
+                        onPressed: account.isArchived ? null : () => _setDefaultAccount(isDefault ? null : account.id),
+                      ),
+                    ],
+                  ),
+                ),
+                onTap: () => _showAccountDialog(account: account),
+              ),
+            );
+          }),
       ],
     );
   }
@@ -246,6 +284,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
     final balanceController = TextEditingController(text: account == null ? '' : account.initialBalance.toStringAsFixed(2));
     String type = account?.type ?? 'bank';
     bool archived = account?.isArchived ?? false;
+    bool makeDefault = account?.id != null && account!.id == _defaultAccountId;
 
     final saved = await showDialog<bool>(
       context: context,
@@ -270,7 +309,14 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
                   onChanged: (value) { if (value != null) setLocal(() => type = value); },
                   decoration: const InputDecoration(labelText: 'Tipo'),
                 ),
-                if (account != null) SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Arquivar'), value: archived, onChanged: (v) => setLocal(() => archived = v)),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Usar como conta padrão'),
+                  subtitle: const Text('Será selecionada automaticamente em receitas, despesas e pagamentos.'),
+                  value: makeDefault && !archived,
+                  onChanged: archived ? null : (v) => setLocal(() => makeDefault = v),
+                ),
+                if (account != null) SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Arquivar'), value: archived, onChanged: (v) => setLocal(() { archived = v; if (v) makeDefault = false; })),
               ],
             ),
           ),
@@ -286,7 +332,12 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
                 }
                 final now = DateTime.now().toIso8601String();
                 final data = FinancialAccount(id: account?.id, name: name, type: type, initialBalance: baseBalance, currentBalance: account?.currentBalance ?? baseBalance, isArchived: archived, createdAt: account?.createdAt ?? now, updatedAt: now);
-                await FinancePlanningStore.upsertAccount(await ref.read(dbProvider).database, data);
+                final savedId = await FinancePlanningStore.upsertAccount(await ref.read(dbProvider).database, data);
+                if (makeDefault && !archived) {
+                  await ref.read(appSettingsProvider.notifier).setValue(defaultFinancialAccountSettingKey, savedId.toString());
+                } else if (savedId == _defaultAccountId || archived) {
+                  await ref.read(appSettingsProvider.notifier).setValue(defaultFinancialAccountSettingKey, '');
+                }
                 if (!ctx.mounted) return;
                 FocusScope.of(ctx).unfocus();
                 Navigator.pop(ctx, true);
