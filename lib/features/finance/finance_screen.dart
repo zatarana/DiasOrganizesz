@@ -300,7 +300,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
                         final color = _safeCategoryColor(cat, transaction);
                         final expected = _expectedDate(transaction);
                         return ListTile(
-                          leading: CircleAvatar(backgroundColor: isCanceled ? Colors.grey.withOpacity(0.2) : color.withOpacity(0.2), child: Icon(transaction.type == 'income' ? Icons.arrow_upward : Icons.arrow_downward, color: isCanceled ? Colors.grey : color)),
+                          leading: CircleAvatar(backgroundColor: isCanceled ? Colors.grey.withValues(alpha: 0.2) : color.withValues(alpha: 0.2), child: Icon(transaction.type == 'income' ? Icons.arrow_upward : Icons.arrow_downward, color: isCanceled ? Colors.grey : color)),
                           title: Text(transaction.title, style: TextStyle(decoration: isCanceled ? TextDecoration.lineThrough : null, color: isCanceled ? Colors.grey : Colors.black87)),
                           subtitle: Text('${expected == null ? 'Sem data' : 'Venc./Prev.: ${DateFormat('dd/MM/yyyy').format(expected)}'}${cat != null ? ' • ${cat.name}' : ''}'),
                           trailing: Row(mainAxisSize: MainAxisSize.min, children: [Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [Text('R\$ ${transaction.amount.toStringAsFixed(2)}', style: TextStyle(color: isCanceled ? Colors.grey : (transaction.type == 'income' ? Colors.green : Colors.red), fontWeight: FontWeight.bold, decoration: isCanceled ? TextDecoration.lineThrough : null)), Text(isCanceled ? 'Cancelado' : (transaction.status == 'paid' ? 'Efetuado' : (transaction.status == 'overdue' ? 'Atrasado' : 'Pendente')), style: TextStyle(color: isCanceled ? Colors.grey : (transaction.status == 'paid' ? Colors.green : (transaction.status == 'overdue' ? Colors.red : Colors.orange)), fontSize: 12))]), Checkbox(value: isPaid, onChanged: isCanceled ? null : (val) { if (val != null) _togglePaid(transaction, val); })]),
@@ -334,7 +334,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
   }
 
   Widget _analysisChip(IconData icon, String label, Color color) {
-    return Container(constraints: const BoxConstraints(maxWidth: 320), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(12)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 18, color: color), const SizedBox(width: 6), Flexible(child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontWeight: FontWeight.w600)))]));
+    return Container(constraints: const BoxConstraints(maxWidth: 320), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), decoration: BoxDecoration(color: color.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(12)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 18, color: color), const SizedBox(width: 6), Flexible(child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontWeight: FontWeight.w600)))]));
   }
 
   Widget _buildStat(String label, double amount, Color color) {
