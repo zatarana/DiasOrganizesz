@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:sqflite/sqflite.dart';
 
 import '../models/budget_model.dart';
@@ -71,10 +73,24 @@ class FinancePlanningStore {
     _indexesEnsured = true;
   }
 
+  static bool _isDuplicateColumnError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('duplicate column name') || message.contains('duplicate column');
+  }
+
   static Future<void> _addColumnIfMissing(Database db, String table, String columnSql) async {
     try {
       await db.execute('ALTER TABLE $table ADD COLUMN $columnSql');
-    } catch (_) {}
+    } catch (error, stackTrace) {
+      if (_isDuplicateColumnError(error)) return;
+      developer.log(
+        'Falha inesperada ao adicionar coluna em $table: $columnSql',
+        name: 'FinancePlanningStore.migration',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
   }
 
   static double _asDouble(dynamic value) {
