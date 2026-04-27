@@ -18,7 +18,7 @@ void main() {
 
   const oldMethod = '''  Future<void> _addColumnIfMissing(Database db, String table, String columnSql) async {
     try {
-      await db.execute('ALTER TABLE $table ADD COLUMN $columnSql');
+      await db.execute('ALTER TABLE \$table ADD COLUMN \$columnSql');
     } catch (_) {}
   }
 ''';
