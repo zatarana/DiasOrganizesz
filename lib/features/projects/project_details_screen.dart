@@ -320,7 +320,8 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
           TextButton(
             onPressed: () async {
               if (session.id != null) await ref.read(projectStepsProvider(session.projectId).notifier).removeStep(session.id!);
-              if (ctx.mounted) Navigator.pop(ctx);
+              if (!ctx.mounted) return;
+              Navigator.pop(ctx);
             },
             child: const Text('Excluir', style: TextStyle(color: Colors.red)),
           ),
@@ -344,20 +345,20 @@ class _ProjectDetailsScreenState extends ConsumerState<ProjectDetailsScreen> {
           TextButton(
             onPressed: () async {
               if (project.id != null) await ref.read(projectsProvider.notifier).removeProject(project.id!, deleteLinkedTasks: false);
-              if (mounted) {
-                Navigator.pop(ctx);
-                Navigator.pop(context);
-              }
+              if (!ctx.mounted) return;
+              Navigator.pop(ctx);
+              if (!mounted) return;
+              Navigator.pop(context);
             },
             child: const Text('Manter tarefas'),
           ),
           TextButton(
             onPressed: () async {
               if (project.id != null) await ref.read(projectsProvider.notifier).removeProject(project.id!, deleteLinkedTasks: true);
-              if (mounted) {
-                Navigator.pop(ctx);
-                Navigator.pop(context);
-              }
+              if (!ctx.mounted) return;
+              Navigator.pop(ctx);
+              if (!mounted) return;
+              Navigator.pop(context);
             },
             child: const Text('Excluir tudo', style: TextStyle(color: Colors.red)),
           ),
