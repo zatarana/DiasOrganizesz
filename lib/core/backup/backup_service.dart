@@ -9,7 +9,6 @@ import '../../data/database/finance_planning_store.dart';
 
 class BackupService {
   static const int backupFormatVersion = 2;
-  static const int databaseSchemaVersion = 16;
 
   Future<String> exportJson(DatabaseHelper dbHelper) async {
     final db = await dbHelper.database;
@@ -36,7 +35,7 @@ class BackupService {
     final payload = <String, dynamic>{
       'app': 'DiasOrganize',
       'backupFormatVersion': backupFormatVersion,
-      'databaseVersion': databaseSchemaVersion,
+      'databaseVersion': DatabaseHelper.schemaVersion,
       'exportedAt': exportedAt.toIso8601String(),
       'warning': 'Arquivo de backup gerado automaticamente. Não edite se pretende restaurar futuramente.',
       'tables': tables,
