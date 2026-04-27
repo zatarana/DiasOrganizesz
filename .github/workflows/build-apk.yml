@@ -55,13 +55,32 @@ jobs:
             exit 1
           fi
 
+      - name: Preparar assinatura estável do APK
+        run: |
+          if [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ] || [ -z "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ] || [ -z "${{ secrets.ANDROID_KEY_ALIAS }}" ] || [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ]; then
+            echo "ERRO: os secrets de assinatura não estão configurados." >&2
+            echo "Configure ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS e ANDROID_KEY_PASSWORD." >&2
+            echo "Sem a mesma assinatura, o Android acusa conflito com o app já instalado." >&2
+            exit 1
+          fi
+
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/diasorganize-upload-keystore.p12
+          cat > android/key.properties <<EOF
+          storeFile=diasorganize-upload-keystore.p12
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          storeType=pkcs12
+          EOF
+          dart run tool/patch_android_release_signing.dart
+
       - name: Preparar versionamento automático do APK
         run: |
           BASE_VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
           BUILD_NUMBER=$((VERSION_CODE_OFFSET + GITHUB_RUN_NUMBER))
           echo "BUILD_NAME=$BASE_VERSION" >> "$GITHUB_ENV"
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
-          echo "APK_ARTIFACT_NAME=DiasOrganize-${BASE_VERSION}+${BUILD_NUMBER}-debug-apk" >> "$GITHUB_ENV"
+          echo "APK_ARTIFACT_NAME=DiasOrganize-${BASE_VERSION}+${BUILD_NUMBER}-signed-apk" >> "$GITHUB_ENV"
           echo "Versão Android gerada: versionName=$BASE_VERSION / versionCode=$BUILD_NUMBER"
 
       - name: Instalar dependências
@@ -73,8 +92,8 @@ jobs:
       - name: Executar testes
         run: flutter test
 
-      - name: Construir APK Debug instalável como atualização
-        run: flutter build apk --debug --build-name "$BUILD_NAME" --build-number "$BUILD_NUMBER"
+      - name: Construir APK assinado instalável como atualização
+        run: flutter build apk --release --build-name "$BUILD_NAME" --build-number "$BUILD_NUMBER"
 
       - name: Registrar informações do APK
         run: |
@@ -85,22 +104,25 @@ jobs:
           applicationId esperado: $STABLE_APPLICATION_ID
           versionName: $BUILD_NAME
           versionCode: $BUILD_NUMBER
-          assinatura: debug do workflow automático
+          assinatura: release estável via GitHub Secrets
           banco local esperado: diasorganize.db
 
           Para preservar dados ao atualizar:
           - instale este APK por cima do app atual;
           - não desinstale o app antigo;
           - mantenha o mesmo applicationId;
-          - mantenha a mesma assinatura;
+          - mantenha a mesma assinatura nos GitHub Secrets;
           - mantenha o mesmo nome/caminho do banco;
           - use apenas migrações não destrutivas.
+
+          Se aparecer conflito de pacote, o APK instalado no aparelho foi assinado com outra chave.
+          Nesse caso, exporte/backup os dados antes de desinstalar e reinstalar com esta assinatura estável.
           EOF
 
       - name: Preparar artifact
         run: |
           mkdir -p build/apk-artifact
-          cp build/app/outputs/flutter-apk/app-debug.apk "build/apk-artifact/${APK_ARTIFACT_NAME}.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk "build/apk-artifact/${APK_ARTIFACT_NAME}.apk"
           cp build/release-info/UPDATE_SAFETY.txt "build/apk-artifact/UPDATE_SAFETY-${BUILD_NAME}+${BUILD_NUMBER}.txt"
 
       - name: Fazer upload do APK
