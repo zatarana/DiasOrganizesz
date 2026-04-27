@@ -29,6 +29,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
   }
 
   Future<void> _loadAll() async {
+    if (!mounted) return;
     setState(() => _loading = true);
     final db = await ref.read(dbProvider).database;
     final accounts = await FinancePlanningStore.getAccounts(db);
@@ -246,7 +247,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
     String type = account?.type ?? 'bank';
     bool archived = account?.isArchived ?? false;
 
-    await showDialog(
+    final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) => AlertDialog(
@@ -274,7 +275,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+            TextButton(onPressed: () { FocusScope.of(ctx).unfocus(); Navigator.pop(ctx, false); }, child: const Text('Cancelar')),
             TextButton(
               onPressed: () async {
                 final name = nameController.text.trim();
@@ -286,8 +287,9 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
                 final now = DateTime.now().toIso8601String();
                 final data = FinancialAccount(id: account?.id, name: name, type: type, initialBalance: baseBalance, currentBalance: account?.currentBalance ?? baseBalance, isArchived: archived, createdAt: account?.createdAt ?? now, updatedAt: now);
                 await FinancePlanningStore.upsertAccount(await ref.read(dbProvider).database, data);
-                if (ctx.mounted) Navigator.pop(ctx);
-                await _loadAll();
+                if (!ctx.mounted) return;
+                FocusScope.of(ctx).unfocus();
+                Navigator.pop(ctx, true);
               },
               child: const Text('Salvar'),
             ),
@@ -297,6 +299,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
     );
     nameController.dispose();
     balanceController.dispose();
+    if (saved == true && mounted) await _loadAll();
   }
 
   Future<void> _showBudgetDialog({Budget? budget}) async {
