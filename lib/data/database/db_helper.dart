@@ -12,7 +12,7 @@ import '../models/task_model.dart';
 import '../models/transaction_model.dart';
 
 class DatabaseHelper {
-  static const int schemaVersion = 16;
+  static const int schemaVersion = 17;
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
 
@@ -29,7 +29,11 @@ class DatabaseHelper {
     final path = join(dbPath, filePath);
     await _copyLegacyDatabaseIfNeeded(dbPath, path);
 
-    return openDatabase(path, version: schemaVersion, onCreate: _createDB, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: schemaVersion, onConfigure: _onConfigure, onCreate: _createDB, onUpgrade: _onUpgrade);
+  }
+
+  Future<void> _onConfigure(Database db) async {
+    await db.execute('PRAGMA foreign_keys = ON');
   }
 
   Future<void> _copyLegacyDatabaseIfNeeded(String dbPath, String targetPath) async {
@@ -167,6 +171,214 @@ class DatabaseHelper {
       await _addColumnIfMissing(db, 'tasks', 'parentTaskId INTEGER');
       await _addColumnIfMissing(db, 'tasks', 'recurrenceType TEXT NOT NULL DEFAULT "none"');
     }
+    if (oldVersion < 17) {
+      await _migrateReferentialIntegrity(db);
+    }
+  }
+
+  Future<void> _migrateReferentialIntegrity(Database db) async {
+    await FinancePlanningStore.ensureTables(db);
+    await _ensureTaskColumns(db);
+
+    await db.rawUpdate('UPDATE tasks SET categoryId = NULL WHERE categoryId IS NOT NULL AND categoryId NOT IN (SELECT id FROM categories)');
+    await db.rawUpdate('UPDATE tasks SET projectId = NULL, projectStepId = NULL WHERE projectId IS NOT NULL AND projectId NOT IN (SELECT id FROM projects)');
+    await db.rawUpdate('UPDATE tasks SET projectStepId = NULL WHERE projectStepId IS NOT NULL AND projectStepId NOT IN (SELECT id FROM project_steps)');
+    await db.rawUpdate('UPDATE tasks SET parentTaskId = NULL WHERE parentTaskId IS NOT NULL AND parentTaskId NOT IN (SELECT id FROM tasks)');
+    await db.rawDelete('DELETE FROM project_steps WHERE projectId NOT IN (SELECT id FROM projects)');
+    await db.rawUpdate('UPDATE transactions SET categoryId = NULL WHERE categoryId IS NOT NULL AND categoryId NOT IN (SELECT id FROM financial_categories)');
+    await db.rawUpdate('UPDATE transactions SET debtId = NULL WHERE debtId IS NOT NULL AND debtId NOT IN (SELECT id FROM debts)');
+    await db.rawUpdate('UPDATE transactions SET accountId = NULL WHERE accountId IS NOT NULL AND accountId NOT IN (SELECT id FROM financial_accounts)');
+    await db.rawUpdate('UPDATE debts SET categoryId = NULL WHERE categoryId IS NOT NULL AND categoryId NOT IN (SELECT id FROM financial_categories)');
+    await db.rawUpdate('UPDATE budgets SET categoryId = NULL WHERE categoryId IS NOT NULL AND categoryId NOT IN (SELECT id FROM financial_categories)');
+    await db.rawUpdate('UPDATE financial_goals SET accountId = NULL WHERE accountId IS NOT NULL AND accountId NOT IN (SELECT id FROM financial_accounts)');
+
+    await _createReferentialIntegrityTriggers(db);
+  }
+
+  Future<void> _createReferentialIntegrityTriggers(Database db) async {
+    final statements = <String>[
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_tasks_category_valid_insert
+      BEFORE INSERT ON tasks
+      WHEN NEW.categoryId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM categories WHERE id = NEW.categoryId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid tasks.categoryId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_tasks_category_valid_update
+      BEFORE UPDATE OF categoryId ON tasks
+      WHEN NEW.categoryId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM categories WHERE id = NEW.categoryId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid tasks.categoryId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_tasks_project_valid_insert
+      BEFORE INSERT ON tasks
+      WHEN NEW.projectId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM projects WHERE id = NEW.projectId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid tasks.projectId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_tasks_project_valid_update
+      BEFORE UPDATE OF projectId ON tasks
+      WHEN NEW.projectId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM projects WHERE id = NEW.projectId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid tasks.projectId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_tasks_step_valid_insert
+      BEFORE INSERT ON tasks
+      WHEN NEW.projectStepId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM project_steps WHERE id = NEW.projectStepId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid tasks.projectStepId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_tasks_step_valid_update
+      BEFORE UPDATE OF projectStepId ON tasks
+      WHEN NEW.projectStepId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM project_steps WHERE id = NEW.projectStepId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid tasks.projectStepId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_tasks_parent_valid_insert
+      BEFORE INSERT ON tasks
+      WHEN NEW.parentTaskId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM tasks WHERE id = NEW.parentTaskId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid tasks.parentTaskId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_tasks_parent_valid_update
+      BEFORE UPDATE OF parentTaskId ON tasks
+      WHEN NEW.parentTaskId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM tasks WHERE id = NEW.parentTaskId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid tasks.parentTaskId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_project_steps_project_valid_insert
+      BEFORE INSERT ON project_steps
+      WHEN NOT EXISTS (SELECT 1 FROM projects WHERE id = NEW.projectId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid project_steps.projectId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_project_steps_project_valid_update
+      BEFORE UPDATE OF projectId ON project_steps
+      WHEN NOT EXISTS (SELECT 1 FROM projects WHERE id = NEW.projectId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid project_steps.projectId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_transactions_category_valid_insert
+      BEFORE INSERT ON transactions
+      WHEN NEW.categoryId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM financial_categories WHERE id = NEW.categoryId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid transactions.categoryId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_transactions_category_valid_update
+      BEFORE UPDATE OF categoryId ON transactions
+      WHEN NEW.categoryId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM financial_categories WHERE id = NEW.categoryId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid transactions.categoryId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_transactions_debt_valid_insert
+      BEFORE INSERT ON transactions
+      WHEN NEW.debtId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM debts WHERE id = NEW.debtId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid transactions.debtId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_transactions_debt_valid_update
+      BEFORE UPDATE OF debtId ON transactions
+      WHEN NEW.debtId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM debts WHERE id = NEW.debtId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid transactions.debtId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_transactions_account_valid_insert
+      BEFORE INSERT ON transactions
+      WHEN NEW.accountId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM financial_accounts WHERE id = NEW.accountId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid transactions.accountId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_transactions_account_valid_update
+      BEFORE UPDATE OF accountId ON transactions
+      WHEN NEW.accountId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM financial_accounts WHERE id = NEW.accountId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid transactions.accountId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_debts_category_valid_insert
+      BEFORE INSERT ON debts
+      WHEN NEW.categoryId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM financial_categories WHERE id = NEW.categoryId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid debts.categoryId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_debts_category_valid_update
+      BEFORE UPDATE OF categoryId ON debts
+      WHEN NEW.categoryId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM financial_categories WHERE id = NEW.categoryId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid debts.categoryId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_budgets_category_valid_insert
+      BEFORE INSERT ON budgets
+      WHEN NEW.categoryId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM financial_categories WHERE id = NEW.categoryId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid budgets.categoryId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_budgets_category_valid_update
+      BEFORE UPDATE OF categoryId ON budgets
+      WHEN NEW.categoryId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM financial_categories WHERE id = NEW.categoryId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid budgets.categoryId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_goals_account_valid_insert
+      BEFORE INSERT ON financial_goals
+      WHEN NEW.accountId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM financial_accounts WHERE id = NEW.accountId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid financial_goals.accountId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_goals_account_valid_update
+      BEFORE UPDATE OF accountId ON financial_goals
+      WHEN NEW.accountId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM financial_accounts WHERE id = NEW.accountId)
+      BEGIN SELECT RAISE(ABORT, 'Invalid financial_goals.accountId'); END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_delete_category_cleanup_tasks
+      AFTER DELETE ON categories
+      BEGIN UPDATE tasks SET categoryId = NULL WHERE categoryId = OLD.id; END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_delete_fin_category_cleanup
+      AFTER DELETE ON financial_categories
+      BEGIN
+        UPDATE transactions SET categoryId = NULL WHERE categoryId = OLD.id;
+        UPDATE debts SET categoryId = NULL WHERE categoryId = OLD.id;
+        UPDATE budgets SET categoryId = NULL WHERE categoryId = OLD.id;
+      END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_delete_project_cleanup
+      AFTER DELETE ON projects
+      BEGIN
+        UPDATE tasks SET projectId = NULL, projectStepId = NULL WHERE projectId = OLD.id;
+        DELETE FROM project_steps WHERE projectId = OLD.id;
+      END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_delete_project_step_cleanup
+      AFTER DELETE ON project_steps
+      BEGIN UPDATE tasks SET projectStepId = NULL WHERE projectStepId = OLD.id; END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_delete_task_cleanup_subtasks
+      AFTER DELETE ON tasks
+      BEGIN UPDATE tasks SET parentTaskId = NULL WHERE parentTaskId = OLD.id; END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_delete_debt_cleanup_transactions
+      AFTER DELETE ON debts
+      BEGIN UPDATE transactions SET debtId = NULL WHERE debtId = OLD.id; END
+      """,
+      """
+      CREATE TRIGGER IF NOT EXISTS trg_delete_account_cleanup
+      AFTER DELETE ON financial_accounts
+      BEGIN
+        UPDATE transactions SET accountId = NULL WHERE accountId = OLD.id;
+        UPDATE financial_goals SET accountId = NULL WHERE accountId = OLD.id;
+      END
+      """,
+    ];
+
+    for (final statement in statements) {
+      await db.execute(statement);
+    }
   }
 
   Future<void> _ensureTaskColumns(Database db) async {
@@ -196,10 +408,10 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT NOT NULL,
         description TEXT,
-        categoryId INTEGER,
-        projectId INTEGER,
-        projectStepId INTEGER,
-        parentTaskId INTEGER,
+        categoryId INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+        projectId INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+        projectStepId INTEGER REFERENCES project_steps(id) ON DELETE SET NULL,
+        parentTaskId INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
         priority TEXT NOT NULL,
         date TEXT,
         time TEXT,
@@ -232,15 +444,15 @@ class DatabaseHelper {
         transactionDate TEXT NOT NULL,
         dueDate TEXT,
         paidDate TEXT,
-        categoryId INTEGER,
-        accountId INTEGER,
+        categoryId INTEGER REFERENCES financial_categories(id) ON DELETE SET NULL,
+        accountId INTEGER REFERENCES financial_accounts(id) ON DELETE SET NULL,
         paymentMethod TEXT,
         status TEXT NOT NULL,
         reminderEnabled INTEGER NOT NULL DEFAULT 0,
         isFixed INTEGER NOT NULL DEFAULT 0,
         recurrenceType TEXT NOT NULL DEFAULT 'none',
         notes TEXT,
-        debtId INTEGER,
+        debtId INTEGER REFERENCES debts(id) ON DELETE SET NULL,
         installmentNumber INTEGER,
         totalInstallments INTEGER,
         discountAmount REAL DEFAULT 0,
@@ -262,7 +474,7 @@ class DatabaseHelper {
         installmentAmount REAL,
         startDate TEXT,
         firstDueDate TEXT,
-        categoryId INTEGER,
+        categoryId INTEGER REFERENCES financial_categories(id) ON DELETE SET NULL,
         creditorName TEXT,
         status TEXT NOT NULL,
         notes TEXT,
@@ -276,6 +488,7 @@ class DatabaseHelper {
     await db.insert('categories', {'name': 'Trabalho', 'color': '0xFFFF9800', 'icon': 'work', 'createdAt': now});
     await db.insert('categories', {'name': 'Estudo', 'color': '0xFF4CAF50', 'icon': 'school', 'createdAt': now});
     await _seedFinancialCategories(db);
+    await _migrateReferentialIntegrity(db);
   }
 
   Future<void> _createProjectsTable(Database db) async {
@@ -304,7 +517,7 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS project_steps (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        projectId INTEGER NOT NULL,
+        projectId INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
         title TEXT NOT NULL,
         description TEXT,
         orderIndex INTEGER NOT NULL DEFAULT 0,
