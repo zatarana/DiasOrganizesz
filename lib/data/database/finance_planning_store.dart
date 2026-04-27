@@ -156,15 +156,15 @@ class FinancePlanningStore {
     return rows.map(FinancialGoal.fromMap).toList();
   }
 
-  static Future<void> upsertAccount(Database db, FinancialAccount account) async {
+  static Future<int> upsertAccount(Database db, FinancialAccount account) async {
     await ensureTables(db);
     if (account.id == null) {
-      await db.insert('financial_accounts', account.copyWith(currentBalance: account.initialBalance).toMap());
-    } else {
-      await db.update('financial_accounts', account.toMap(), where: 'id = ?', whereArgs: [account.id]);
-      await recalculateAccountBalance(db, account.id!);
-      if (account.isArchived) await clearGoalAccountLinks(db, account.id!);
+      return db.insert('financial_accounts', account.copyWith(currentBalance: account.initialBalance).toMap());
     }
+    await db.update('financial_accounts', account.toMap(), where: 'id = ?', whereArgs: [account.id]);
+    await recalculateAccountBalance(db, account.id!);
+    if (account.isArchived) await clearGoalAccountLinks(db, account.id!);
+    return account.id!;
   }
 
   static Future<void> upsertBudget(Database db, Budget budget) async {
