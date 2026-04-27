@@ -6,6 +6,8 @@ import '../../data/models/financial_account_model.dart';
 import '../../domain/providers.dart';
 import '../../data/models/transaction_model.dart';
 
+const String defaultFinancialAccountSettingKey = 'default_financial_account_id';
+
 class CreateTransactionScreen extends ConsumerStatefulWidget {
   final FinancialTransaction? transaction;
   const CreateTransactionScreen({super.key, this.transaction});
@@ -80,13 +82,19 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   }
 
   Future<void> _loadAccounts() async {
-    final db = await ref.read(dbProvider).database;
+    final dbHelper = ref.read(dbProvider);
+    final db = await dbHelper.database;
     final accounts = await FinancePlanningStore.getAccounts(db);
+    final defaultAccountSetting = await dbHelper.getSetting(defaultFinancialAccountSettingKey);
+    final defaultAccountId = int.tryParse(defaultAccountSetting?.value ?? '');
     if (!mounted) return;
     setState(() {
       _accounts = accounts;
       _loadingAccounts = false;
       if (_accountId != null && !_accounts.any((account) => account.id == _accountId)) _accountId = null;
+      if (_accountId == null && defaultAccountId != null && _accounts.any((account) => account.id == defaultAccountId && !account.isArchived)) {
+        _accountId = defaultAccountId;
+      }
     });
   }
 
