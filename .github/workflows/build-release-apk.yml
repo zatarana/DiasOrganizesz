@@ -1,0 +1,93 @@
+name: Build DiasOrganize Release APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_notes:
+        description: 'Notas da versão/changelog manual opcional'
+        required: false
+        type: string
+
+jobs:
+  release:
+    name: Build signed release APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Instalar dependências
+        run: flutter pub get
+
+      - name: Validar código
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Executar testes
+        run: flutter test
+
+      - name: Preparar assinatura Android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
+            echo "Secrets de assinatura ausentes. Configure ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS e ANDROID_KEY_PASSWORD."
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=app/upload-keystore.jks
+          EOF
+
+      - name: Extrair versão do pubspec
+        id: version
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | tr '+' '-')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Versão: $VERSION"
+
+      - name: Gerar changelog
+        run: |
+          mkdir -p build/release-notes
+          echo "# DiasOrganize ${{ steps.version.outputs.version }}" > build/release-notes/CHANGELOG.md
+          echo "" >> build/release-notes/CHANGELOG.md
+          if [ -n "${{ inputs.release_notes }}" ]; then
+            echo "${{ inputs.release_notes }}" >> build/release-notes/CHANGELOG.md
+            echo "" >> build/release-notes/CHANGELOG.md
+          fi
+          echo "## Commits recentes" >> build/release-notes/CHANGELOG.md
+          git log -20 --pretty=format:'- %s (%h)' >> build/release-notes/CHANGELOG.md
+
+      - name: Construir APK Release assinado
+        run: flutter build apk --release
+
+      - name: Preparar artifact
+        run: |
+          mkdir -p build/release-artifacts
+          cp build/app/outputs/flutter-apk/app-release.apk build/release-artifacts/DiasOrganize-${{ steps.version.outputs.version }}-release.apk
+          cp build/release-notes/CHANGELOG.md build/release-artifacts/CHANGELOG-${{ steps.version.outputs.version }}.md
+
+      - name: Fazer upload do APK Release
+        uses: actions/upload-artifact@v4
+        with:
+          name: DiasOrganize-${{ steps.version.outputs.version }}-release
+          path: build/release-artifacts/
