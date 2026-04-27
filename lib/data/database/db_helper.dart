@@ -12,6 +12,7 @@ import '../models/task_model.dart';
 import '../models/transaction_model.dart';
 
 class DatabaseHelper {
+  static const int schemaVersion = 16;
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
 
@@ -28,7 +29,7 @@ class DatabaseHelper {
     final path = join(dbPath, filePath);
     await _copyLegacyDatabaseIfNeeded(dbPath, path);
 
-    return openDatabase(path, version: 16, onCreate: _createDB, onUpgrade: _onUpgrade);
+    return openDatabase(path, version: schemaVersion, onCreate: _createDB, onUpgrade: _onUpgrade);
   }
 
   Future<void> _copyLegacyDatabaseIfNeeded(String dbPath, String targetPath) async {
