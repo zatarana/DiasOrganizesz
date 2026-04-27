@@ -1,0 +1,5 @@
+package com.diasorganize.app
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity : FlutterActivity()
