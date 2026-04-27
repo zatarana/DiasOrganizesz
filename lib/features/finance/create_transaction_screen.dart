@@ -250,7 +250,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<int>(
-                value: safeCategoryId,
+                initialValue: safeCategoryId,
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Sem Categoria')),
                   ...categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
@@ -260,7 +260,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<int>(
-                value: safeAccountId,
+                initialValue: safeAccountId,
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Sem conta')),
                   ...selectableAccounts.map((account) => DropdownMenuItem(value: account.id, child: Text('${account.name}${account.isArchived ? ' (arquivada)' : ''}'))),
@@ -274,7 +274,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: _selectedPaymentMethod,
+                initialValue: _selectedPaymentMethod,
                 items: [
                   const DropdownMenuItem(value: null, child: Text('Forma de Pagamento (Nenhuma)')),
                   ..._paymentMethods.map((m) => DropdownMenuItem(value: m, child: Text(m.toUpperCase()))),
@@ -284,7 +284,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: _status,
+                initialValue: _status,
                 items: const [
                   DropdownMenuItem(value: 'pending', child: Text('Pendente')),
                   DropdownMenuItem(value: 'paid', child: Text('Efetuado / Pago')),
