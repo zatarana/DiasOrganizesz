@@ -5,6 +5,8 @@ import '../../domain/providers.dart';
 import '../../data/models/debt_model.dart';
 import '../../data/models/transaction_model.dart';
 
+enum DebtEntryMode { total, installments }
+
 class CreateDebtScreen extends ConsumerStatefulWidget {
   final Debt? debt;
   const CreateDebtScreen({super.key, this.debt});
@@ -26,6 +28,7 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
   DateTime _firstDueDate = DateTime.now().add(const Duration(days: 30));
   int? _selectedCategoryId;
 
+  DebtEntryMode _entryMode = DebtEntryMode.total;
   bool _generateInstallments = false;
   bool _remindInstallments = false;
   bool _isAutoCalculating = false;
@@ -55,7 +58,10 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
     _amountController.addListener(_recalculateAuto);
     _installmentsController.addListener(_recalculateAuto);
     _installmentAmountController.addListener(() {
-      if (!_isAutoCalculating) _installmentWasAutoCalculated = false;
+      if (!_isAutoCalculating) {
+        _installmentWasAutoCalculated = false;
+        if (_entryMode == DebtEntryMode.installments) setState(() {});
+      }
     });
   }
 
@@ -76,18 +82,55 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
 
     final amount = _parseMoney(_amountController.text);
     final instCount = int.tryParse(_installmentsController.text) ?? 0;
+    final instAmount = _parseMoney(_installmentAmountController.text);
 
-    if (amount > 0 && instCount > 0 && (_installmentAmountController.text.isEmpty || _installmentWasAutoCalculated)) {
+    if (_entryMode == DebtEntryMode.total) {
+      if (amount > 0 && instCount > 0 && (_installmentAmountController.text.isEmpty || _installmentWasAutoCalculated)) {
+        _isAutoCalculating = true;
+        _installmentAmountController.text = (amount / instCount).toStringAsFixed(2);
+        _installmentWasAutoCalculated = true;
+        _isAutoCalculating = false;
+      }
+    } else if (_entryMode == DebtEntryMode.installments && instCount > 0 && instAmount > 0) {
       _isAutoCalculating = true;
-      _installmentAmountController.text = (amount / instCount).toStringAsFixed(2);
-      _installmentWasAutoCalculated = true;
+      _amountController.text = _roundCents(instCount * instAmount).toStringAsFixed(2);
       _isAutoCalculating = false;
     }
+
+    if (mounted) setState(() {});
+  }
+
+  void _setEntryMode(DebtEntryMode mode) {
+    if (_entryMode == mode) return;
+    setState(() {
+      _entryMode = mode;
+      _installmentWasAutoCalculated = true;
+      if (mode == DebtEntryMode.installments) {
+        final installments = int.tryParse(_installmentsController.text) ?? 0;
+        final installmentAmount = _parseMoney(_installmentAmountController.text);
+        if (installments > 0 && installmentAmount > 0) {
+          _amountController.text = _roundCents(installments * installmentAmount).toStringAsFixed(2);
+        } else {
+          _amountController.clear();
+        }
+      } else {
+        _recalculateAuto();
+      }
+    });
   }
 
   double _parseMoney(String text) => double.tryParse(text.replaceAll(',', '.')) ?? 0.0;
 
   double _roundCents(double value) => double.parse(value.toStringAsFixed(2));
+
+  double _calculatedTotal() {
+    if (_entryMode == DebtEntryMode.installments) {
+      final installments = int.tryParse(_installmentsController.text) ?? 0;
+      final installmentAmount = _parseMoney(_installmentAmountController.text);
+      return _roundCents(installments * installmentAmount);
+    }
+    return _roundCents(_parseMoney(_amountController.text));
+  }
 
   DateTime _safeMonthlyDueDate(DateTime firstDate, int monthOffset) {
     final targetMonth = firstDate.month + monthOffset;
@@ -101,10 +144,11 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
     if (count <= 0) return const [];
     final amounts = <double>[];
     double accumulated = 0;
+    final baseAmount = typedAmount > 0 ? typedAmount : _roundCents(total / count);
 
     for (int i = 0; i < count; i++) {
       final isLast = i == count - 1;
-      final value = isLast ? _roundCents(total - accumulated) : _roundCents(typedAmount);
+      final value = isLast ? _roundCents(total - accumulated) : _roundCents(baseAmount);
       amounts.add(value < 0 ? 0 : value);
       accumulated += value;
     }
@@ -140,6 +184,7 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
   Widget build(BuildContext context) {
     final categories = ref.watch(financialCategoriesProvider).where((c) => c.type == 'expense' || c.type == 'both').toList();
     final safeCategoryId = categories.any((category) => category.id == _selectedCategoryId) ? _selectedCategoryId : null;
+    final totalPreview = _calculatedTotal();
 
     return Scaffold(
       appBar: AppBar(
@@ -165,30 +210,101 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
                 decoration: const InputDecoration(labelText: 'Nome da dívida (Ex: Cartão, Empréstimo)', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 16),
-              TextField(
-                controller: _amountController,
-                decoration: const InputDecoration(labelText: 'Valor Total (R\$)', border: OutlineInputBorder()),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              SegmentedButton<DebtEntryMode>(
+                segments: const [
+                  ButtonSegment(value: DebtEntryMode.total, label: Text('Valor total'), icon: Icon(Icons.payments_outlined)),
+                  ButtonSegment(value: DebtEntryMode.installments, label: Text('Parcelas'), icon: Icon(Icons.format_list_numbered)),
+                ],
+                selected: {_entryMode},
+                onSelectionChanged: (selection) => _setEntryMode(selection.first),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _entryMode == DebtEntryMode.total
+                    ? 'Cadastre a dívida informando o valor total. Se gerar parcelas, o app calcula o valor aproximado de cada uma.'
+                    : 'Cadastre a dívida pela quantidade de parcelas e pelo valor de cada parcela. O total será calculado automaticamente.',
+                style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
               ),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _installmentsController,
-                      decoration: const InputDecoration(labelText: 'Qtde Parcelas', border: OutlineInputBorder()),
-                      keyboardType: TextInputType.number,
-                    ),
+              if (_entryMode == DebtEntryMode.total) ...[
+                TextField(
+                  controller: _amountController,
+                  decoration: const InputDecoration(labelText: 'Valor Total (R\$)', border: OutlineInputBorder()),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _installmentsController,
+                  decoration: const InputDecoration(
+                    labelText: 'Qtde Parcelas (opcional)',
+                    helperText: 'Obrigatória apenas se você gerar parcelas no Financeiro.',
+                    border: OutlineInputBorder(),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: TextField(
-                      controller: _installmentAmountController,
-                      decoration: const InputDecoration(labelText: 'Valor da Parcela', border: OutlineInputBorder()),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: TextInputType.number,
+                ),
+                if (_installmentsController.text.trim().isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _installmentAmountController,
+                    readOnly: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Valor estimado da parcela',
+                      helperText: 'Calculado a partir do valor total informado.',
+                      border: OutlineInputBorder(),
                     ),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   ),
                 ],
+              ] else ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _installmentsController,
+                        decoration: const InputDecoration(labelText: 'Qtde Parcelas', border: OutlineInputBorder()),
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextField(
+                        controller: _installmentAmountController,
+                        decoration: const InputDecoration(labelText: 'Valor da Parcela', border: OutlineInputBorder()),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _amountController,
+                  readOnly: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Valor total calculado (R\$)',
+                    helperText: 'Quantidade de parcelas × valor da parcela.',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Card(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.calculate_outlined, color: Theme.of(context).colorScheme.onPrimaryContainer),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Valor total da dívida: R\$ ${totalPreview.toStringAsFixed(2)}',
+                          style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onPrimaryContainer),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<int>(
@@ -277,7 +393,7 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
 
   Future<void> _saveDebt() async {
     final name = _nameController.text.trim();
-    final amount = _roundCents(_parseMoney(_amountController.text));
+    final amount = _calculatedTotal();
     final installments = int.tryParse(_installmentsController.text) ?? 0;
     final instAmount = _roundCents(_parseMoney(_installmentAmountController.text));
     final categories = ref.read(financialCategoriesProvider).where((c) => c.type == 'expense' || c.type == 'both').toList();
@@ -287,15 +403,20 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O nome é obrigatório.')));
       return;
     }
-    if (amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O valor total deve ser maior que zero.')));
-      return;
-    }
     if (safeCategoryId == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A categoria financeira é obrigatória.')));
       return;
     }
-    if (_generateInstallments || installments > 0 || instAmount > 0) {
+    if (_entryMode == DebtEntryMode.total) {
+      if (amount <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O valor total deve ser maior que zero.')));
+        return;
+      }
+      if (_generateInstallments && installments <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe a quantidade de parcelas para gerar no Financeiro.')));
+        return;
+      }
+    } else {
       if (installments <= 0) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe a quantidade de parcelas.')));
         return;
@@ -304,32 +425,21 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe o valor da parcela.')));
         return;
       }
+      if (amount <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O valor total calculado deve ser maior que zero.')));
+        return;
+      }
     }
 
-    final expectedTotal = _roundCents(instAmount * installments);
-    if (installments > 0 && instAmount > 0 && (expectedTotal - amount).abs() > 0.05) {
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (c) => AlertDialog(
-          title: const Text('Atenção aos Valores'),
-          content: Text(
-            'O valor total (R\$ ${amount.toStringAsFixed(2)}) não bate com o valor das parcelas (R\$ ${expectedTotal.toStringAsFixed(2)}). A última parcela será ajustada automaticamente para fechar o total. Deseja continuar?',
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Corrigir')),
-            ElevatedButton(onPressed: () => Navigator.pop(c, true), child: const Text('Continuar')),
-          ],
-        ),
-      );
-      if (confirm != true) return;
-    }
+    final normalizedInstallmentCount = installments > 0 ? installments : null;
+    final normalizedInstallmentAmount = normalizedInstallmentCount == null ? null : _roundCents(amount / normalizedInstallmentCount);
 
     final debt = Debt(
       id: widget.debt?.id,
       name: name,
       totalAmount: amount,
-      installmentCount: installments > 0 ? installments : null,
-      installmentAmount: instAmount > 0 ? instAmount : null,
+      installmentCount: normalizedInstallmentCount,
+      installmentAmount: normalizedInstallmentAmount,
       startDate: _startDate.toIso8601String(),
       firstDueDate: _firstDueDate.toIso8601String(),
       categoryId: safeCategoryId,
@@ -345,13 +455,13 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
       await ref.read(debtsProvider.notifier).addDebt(debt);
       final createdDebt = ref.read(debtsProvider).firstWhere((d) => d.name == name && d.createdAt == debt.createdAt);
 
-      if (_generateInstallments && installments > 0) {
-        final amounts = _buildInstallmentAmounts(amount, installments, instAmount);
-        for (int i = 0; i < installments; i++) {
+      if (_generateInstallments && normalizedInstallmentCount != null) {
+        final amounts = _buildInstallmentAmounts(amount, normalizedInstallmentCount, normalizedInstallmentAmount ?? 0);
+        for (int i = 0; i < normalizedInstallmentCount; i++) {
           final due = _safeMonthlyDueDate(_firstDueDate, i);
           final now = DateTime.now().toIso8601String();
           final transaction = FinancialTransaction(
-            title: '$name (Parcela ${i + 1}/$installments)',
+            title: '$name (Parcela ${i + 1}/$normalizedInstallmentCount)',
             amount: amounts[i],
             type: 'expense',
             categoryId: safeCategoryId,
@@ -363,7 +473,7 @@ class _CreateDebtScreenState extends ConsumerState<CreateDebtScreen> {
             recurrenceType: 'none',
             debtId: createdDebt.id,
             installmentNumber: i + 1,
-            totalInstallments: installments,
+            totalInstallments: normalizedInstallmentCount,
             createdAt: now,
             updatedAt: now,
           );
