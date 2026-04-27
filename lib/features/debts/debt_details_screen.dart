@@ -273,10 +273,10 @@ class _DebtDetailsScreenState extends ConsumerState<DebtDetailsScreen> {
           TextButton(
             onPressed: () async {
               if (debt.id != null) await ref.read(debtsProvider.notifier).removeDebt(debt.id!);
-              if (mounted) {
-                Navigator.pop(ctx);
-                Navigator.pop(context);
-              }
+              if (!ctx.mounted) return;
+              Navigator.pop(ctx);
+              if (!mounted) return;
+              Navigator.pop(context);
             },
             child: const Text('Excluir', style: TextStyle(color: Colors.red)),
           ),
