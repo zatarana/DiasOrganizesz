@@ -58,7 +58,7 @@ double _projectProgress(List<Task> tasks) {
 void main() {
   group('Database/versioning', () {
     test('schema version is centralized and current', () {
-      expect(DatabaseHelper.schemaVersion, 16);
+      expect(DatabaseHelper.schemaVersion, 17);
     });
 
     test('backup metadata can reference the database schema version', () {
@@ -71,7 +71,7 @@ void main() {
 
       final decoded = jsonDecode(payload) as Map<String, dynamic>;
       expect(decoded['databaseVersion'], DatabaseHelper.schemaVersion);
-      expect(decoded['databaseVersion'], 16);
+      expect(decoded['databaseVersion'], 17);
     });
   });
 
