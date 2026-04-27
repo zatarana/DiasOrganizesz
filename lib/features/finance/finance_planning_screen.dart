@@ -95,13 +95,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
         ),
         body: _loading
             ? const Center(child: CircularProgressIndicator())
-            : TabBarView(
-                children: [
-                  _accountsTab(totalBalance),
-                  _budgetsTab(),
-                  _goalsTab(totalTarget, totalSaved),
-                ],
-              ),
+            : TabBarView(children: [_accountsTab(totalBalance), _budgetsTab(), _goalsTab(totalTarget, totalSaved)]),
       ),
     );
   }
@@ -119,7 +113,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
         else
           ..._accounts.map((account) => Card(
                 child: ListTile(
-                  leading: CircleAvatar(backgroundColor: Colors.blue.withOpacity(0.12), child: Icon(_accountIcon(account.type), color: Colors.blue)),
+                  leading: CircleAvatar(backgroundColor: Colors.blue.withValues(alpha: 0.12), child: Icon(_accountIcon(account.type), color: Colors.blue)),
                   title: Text(account.name),
                   subtitle: Text('${_accountTypeLabel(account.type)}${account.isArchived ? ' • arquivada' : ''}\nBase: ${_money(account.initialBalance)}'),
                   trailing: Text(_money(account.currentBalance), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -233,7 +227,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
   Widget _summaryCard(String title, String value, IconData icon, Color color) {
     return Card(
       child: ListTile(
-        leading: CircleAvatar(backgroundColor: color.withOpacity(0.12), child: Icon(icon, color: color)),
+        leading: CircleAvatar(backgroundColor: color.withValues(alpha: 0.12), child: Icon(icon, color: color)),
         title: Text(title),
         trailing: Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
       ),
@@ -258,7 +252,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
                 TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nome da conta')),
                 TextField(controller: balanceController, decoration: const InputDecoration(labelText: 'Saldo inicial/base', helperText: 'O saldo atual será calculado com as transações pagas desta conta.'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
                 DropdownButtonFormField<String>(
-                  value: type,
+                  initialValue: type,
                   items: const [
                     DropdownMenuItem(value: 'bank', child: Text('Banco')),
                     DropdownMenuItem(value: 'wallet', child: Text('Carteira/Dinheiro')),
@@ -315,7 +309,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nome')),
               TextField(controller: limitController, decoration: const InputDecoration(labelText: 'Limite mensal'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
-              DropdownButtonFormField<int>(value: categoryId, items: [const DropdownMenuItem<int>(value: null, child: Text('Todas as categorias')), ...categories.map((c) => DropdownMenuItem<int>(value: c.id, child: Text(c.name)))], onChanged: (value) => setLocal(() => categoryId = value), decoration: const InputDecoration(labelText: 'Categoria')),
+              DropdownButtonFormField<int>(initialValue: categoryId, items: [const DropdownMenuItem<int>(value: null, child: Text('Todas as categorias')), ...categories.map((c) => DropdownMenuItem<int>(value: c.id, child: Text(c.name)))], onChanged: (value) => setLocal(() => categoryId = value), decoration: const InputDecoration(labelText: 'Categoria')),
               TextField(controller: monthController, decoration: const InputDecoration(labelText: 'Mês (AAAA-MM)')),
             ]),
           ),
@@ -368,9 +362,9 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
               TextField(controller: descriptionController, decoration: const InputDecoration(labelText: 'Descrição')),
               TextField(controller: targetController, decoration: const InputDecoration(labelText: 'Valor-alvo'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
               TextField(controller: currentController, decoration: const InputDecoration(labelText: 'Valor atual/manual'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
-              DropdownButtonFormField<int>(value: accountId, items: [const DropdownMenuItem<int>(value: null, child: Text('Sem conta vinculada')), ...selectableAccounts.map((a) => DropdownMenuItem<int>(value: a.id, child: Text(a.name)))], onChanged: (value) => setLocal(() => accountId = value), decoration: const InputDecoration(labelText: 'Conta para aportes')),
+              DropdownButtonFormField<int>(initialValue: accountId, items: [const DropdownMenuItem<int>(value: null, child: Text('Sem conta vinculada')), ...selectableAccounts.map((a) => DropdownMenuItem<int>(value: a.id, child: Text(a.name)))], onChanged: (value) => setLocal(() => accountId = value), decoration: const InputDecoration(labelText: 'Conta para aportes')),
               OutlinedButton.icon(onPressed: () async { final picked = await showDatePicker(context: context, initialDate: targetDate ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100)); if (picked != null) setLocal(() => targetDate = picked); }, icon: const Icon(Icons.event), label: Text(targetDate == null ? 'Definir prazo' : _safeDateLabel(targetDate!.toIso8601String()))),
-              DropdownButtonFormField<String>(value: status, items: const [DropdownMenuItem(value: 'active', child: Text('Ativa')), DropdownMenuItem(value: 'completed', child: Text('Concluída')), DropdownMenuItem(value: 'paused', child: Text('Pausada')), DropdownMenuItem(value: 'canceled', child: Text('Cancelada'))], onChanged: (value) { if (value != null) setLocal(() => status = value); }, decoration: const InputDecoration(labelText: 'Status')),
+              DropdownButtonFormField<String>(initialValue: status, items: const [DropdownMenuItem(value: 'active', child: Text('Ativa')), DropdownMenuItem(value: 'completed', child: Text('Concluída')), DropdownMenuItem(value: 'paused', child: Text('Pausada')), DropdownMenuItem(value: 'canceled', child: Text('Cancelada'))], onChanged: (value) { if (value != null) setLocal(() => status = value); }, decoration: const InputDecoration(labelText: 'Status')),
             ]),
           ),
           actions: [
