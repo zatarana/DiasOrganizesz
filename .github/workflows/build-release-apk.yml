@@ -10,7 +10,7 @@ on:
 
 jobs:
   release:
-    name: Build signed release APK
+    name: Build release APK
     runs-on: ubuntu-latest
     steps:
       - name: Checkout código
@@ -47,8 +47,10 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
-            echo "Secrets de assinatura ausentes. Configure ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS e ANDROID_KEY_PASSWORD."
-            exit 1
+            echo "SIGNING_MODE=debug-signed" >> "$GITHUB_ENV"
+            echo "Secrets de assinatura ausentes. O APK será gerado para teste usando assinatura debug."
+            echo "Para distribuição real, configure ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS e ANDROID_KEY_PASSWORD."
+            exit 0
           fi
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
           cat > android/key.properties <<EOF
@@ -57,6 +59,7 @@ jobs:
           keyAlias=$ANDROID_KEY_ALIAS
           storeFile=app/upload-keystore.jks
           EOF
+          echo "SIGNING_MODE=signed" >> "$GITHUB_ENV"
 
       - name: Extrair versão do pubspec
         id: version
@@ -70,6 +73,12 @@ jobs:
           mkdir -p build/release-notes
           echo "# DiasOrganize ${{ steps.version.outputs.version }}" > build/release-notes/CHANGELOG.md
           echo "" >> build/release-notes/CHANGELOG.md
+          echo "Modo de assinatura: $SIGNING_MODE" >> build/release-notes/CHANGELOG.md
+          echo "" >> build/release-notes/CHANGELOG.md
+          if [ "$SIGNING_MODE" = "debug-signed" ]; then
+            echo "> Este APK é apenas para teste. Não use como build oficial de loja/distribuição pública." >> build/release-notes/CHANGELOG.md
+            echo "" >> build/release-notes/CHANGELOG.md
+          fi
           if [ -n "${{ inputs.release_notes }}" ]; then
             echo "${{ inputs.release_notes }}" >> build/release-notes/CHANGELOG.md
             echo "" >> build/release-notes/CHANGELOG.md
@@ -77,17 +86,17 @@ jobs:
           echo "## Commits recentes" >> build/release-notes/CHANGELOG.md
           git log -20 --pretty=format:'- %s (%h)' >> build/release-notes/CHANGELOG.md
 
-      - name: Construir APK Release assinado
+      - name: Construir APK Release
         run: flutter build apk --release
 
       - name: Preparar artifact
         run: |
           mkdir -p build/release-artifacts
-          cp build/app/outputs/flutter-apk/app-release.apk build/release-artifacts/DiasOrganize-${{ steps.version.outputs.version }}-release.apk
-          cp build/release-notes/CHANGELOG.md build/release-artifacts/CHANGELOG-${{ steps.version.outputs.version }}.md
+          cp build/app/outputs/flutter-apk/app-release.apk build/release-artifacts/DiasOrganize-${{ steps.version.outputs.version }}-$SIGNING_MODE-release.apk
+          cp build/release-notes/CHANGELOG.md build/release-artifacts/CHANGELOG-${{ steps.version.outputs.version }}-$SIGNING_MODE.md
 
       - name: Fazer upload do APK Release
         uses: actions/upload-artifact@v4
         with:
-          name: DiasOrganize-${{ steps.version.outputs.version }}-release
+          name: DiasOrganize-${{ steps.version.outputs.version }}-${{ env.SIGNING_MODE }}-release
           path: build/release-artifacts/
