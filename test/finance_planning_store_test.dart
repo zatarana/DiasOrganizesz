@@ -9,7 +9,7 @@ Future<Database> openTestDatabase() async {
   databaseFactory = databaseFactoryFfi;
   final db = await databaseFactory.openDatabase(inMemoryDatabasePath);
   await db.execute('''
-    CREATE TABLE transactions (
+    CREATE TABLE IF NOT EXISTS transactions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
       description TEXT,
@@ -39,7 +39,7 @@ Future<Database> openTestDatabase() async {
     )
   ''');
   await db.execute('''
-    CREATE TABLE tasks (
+    CREATE TABLE IF NOT EXISTS tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
       status TEXT NOT NULL,
@@ -50,14 +50,14 @@ Future<Database> openTestDatabase() async {
     )
   ''');
   await db.execute('''
-    CREATE TABLE projects (
+    CREATE TABLE IF NOT EXISTS projects (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       status TEXT NOT NULL,
       endDate TEXT
     )
   ''');
   await db.execute('''
-    CREATE TABLE project_steps (
+    CREATE TABLE IF NOT EXISTS project_steps (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       projectId INTEGER NOT NULL,
       orderIndex INTEGER NOT NULL DEFAULT 0
