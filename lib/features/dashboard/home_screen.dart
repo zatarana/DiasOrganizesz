@@ -85,17 +85,15 @@ class MoreScreen extends StatelessWidget {
 class _MoreTile extends StatelessWidget {
   final IconData icon;
   final String title;
-  final String? subtitle;
   final Widget page;
 
-  const _MoreTile({required this.icon, required this.title, this.subtitle, required this.page});
+  const _MoreTile({required this.icon, required this.title, required this.page});
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
       leading: Icon(icon),
       title: Text(title),
-      subtitle: subtitle == null ? null : Text(subtitle!),
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => page)),
     );
   }
