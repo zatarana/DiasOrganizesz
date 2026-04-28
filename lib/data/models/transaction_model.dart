@@ -8,6 +8,7 @@ class FinancialTransaction {
   final String? dueDate;
   final String? paidDate;
   final int? categoryId;
+  final int? subcategoryId;
   final int? accountId;
   final String? paymentMethod;
   final String status; // 'pending', 'paid', 'overdue', 'canceled'
@@ -36,6 +37,7 @@ class FinancialTransaction {
     this.dueDate,
     this.paidDate,
     this.categoryId,
+    this.subcategoryId,
     this.accountId,
     this.paymentMethod,
     required this.status,
@@ -68,6 +70,8 @@ class FinancialTransaction {
     bool clearPaidDate = false,
     int? categoryId,
     bool clearCategoryId = false,
+    int? subcategoryId,
+    bool clearSubcategoryId = false,
     int? accountId,
     bool clearAccountId = false,
     String? paymentMethod,
@@ -104,6 +108,7 @@ class FinancialTransaction {
       dueDate: clearDueDate ? null : (dueDate ?? this.dueDate),
       paidDate: clearPaidDate ? null : (paidDate ?? this.paidDate),
       categoryId: clearCategoryId ? null : (categoryId ?? this.categoryId),
+      subcategoryId: clearSubcategoryId ? null : (subcategoryId ?? this.subcategoryId),
       accountId: clearAccountId ? null : (accountId ?? this.accountId),
       paymentMethod: clearPaymentMethod ? null : (paymentMethod ?? this.paymentMethod),
       status: status ?? this.status,
@@ -135,6 +140,7 @@ class FinancialTransaction {
       'dueDate': dueDate,
       'paidDate': paidDate,
       'categoryId': categoryId,
+      'subcategoryId': subcategoryId,
       'accountId': accountId,
       'paymentMethod': paymentMethod,
       'status': status,
@@ -187,6 +193,7 @@ class FinancialTransaction {
       dueDate: map['dueDate'],
       paidDate: map['paidDate'],
       categoryId: map['categoryId'],
+      subcategoryId: map['subcategoryId'],
       accountId: map['accountId'],
       paymentMethod: map['paymentMethod'],
       status: mappedStatus,
