@@ -100,13 +100,31 @@ class FinanceTransactionRules {
     return result;
   }
 
+  static Map<int?, double> paidExpensesBySubcategoryForMonth(List<FinancialTransaction> transactions, DateTime month) {
+    final result = <int?, double>{};
+    for (final transaction in transactions) {
+      if (!countsInReports(transaction)) continue;
+      if (transaction.status != 'paid' || transaction.type != 'expense') continue;
+      if (!isPaidInMonth(transaction, month)) continue;
+      result[transaction.subcategoryId] = (result[transaction.subcategoryId] ?? 0) + transaction.amount;
+    }
+    return result;
+  }
+
   static int overdueExpensesForMonth(List<FinancialTransaction> transactions, DateTime month, {DateTime? now}) {
     return transactions
         .where((transaction) => countsInTotals(transaction) && transaction.type == 'expense' && isExpectedInMonth(transaction, month) && isOverdue(transaction, now: now))
         .length;
   }
 
-  static bool matchesText(FinancialTransaction transaction, String query, {String? categoryName, String? debtName, String? creditorName}) {
+  static bool matchesText(
+    FinancialTransaction transaction,
+    String query, {
+    String? categoryName,
+    String? subcategoryName,
+    String? debtName,
+    String? creditorName,
+  }) {
     if (query.trim().isEmpty) return true;
     final q = query.trim().toLowerCase();
     final fields = [
@@ -116,6 +134,7 @@ class FinanceTransactionRules {
       transaction.tags ?? '',
       transaction.paymentMethod ?? '',
       categoryName ?? '',
+      subcategoryName ?? '',
       debtName ?? '',
       creditorName ?? '',
       transaction.installmentNumber == null ? '' : 'parcela ${transaction.installmentNumber}/${transaction.totalInstallments ?? ''}',
