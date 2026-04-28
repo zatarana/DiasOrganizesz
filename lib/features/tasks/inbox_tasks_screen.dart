@@ -29,7 +29,7 @@ class _InboxTasksScreenState extends ConsumerState<InboxTasksScreen> {
   }
 
   String _quickAddDefaultPriority() {
-    final settings = ref.read(appSettingsProvider);
+    final settings = ref.read(taskSettingsProvider);
     final value = settings[TaskSettingsKeys.quickAddDefaultPriority] ?? TaskSettingsDefaults.quickAddDefaultPriority;
     if (value == 'alta' || value == 'media' || value == 'baixa') return value;
     return TaskSettingsDefaults.quickAddDefaultPriority;
@@ -61,7 +61,7 @@ class _InboxTasksScreenState extends ConsumerState<InboxTasksScreen> {
   @override
   Widget build(BuildContext context) {
     final tasks = ref.watch(tasksProvider);
-    final settings = ref.watch(appSettingsProvider);
+    final settings = ref.watch(taskSettingsProvider);
     final sortKey = settings[TaskSettingsKeys.defaultSort] ?? TaskSettingsDefaults.defaultSort;
     final categories = ref.watch(categoriesProvider);
     final projects = ref.watch(projectsProvider).where((project) => project.status != 'canceled' && project.status != 'completed').toList();
