@@ -12,7 +12,7 @@ import '../models/task_model.dart';
 import '../models/transaction_model.dart';
 
 class DatabaseHelper {
-  static const int schemaVersion = 16;
+  static const int schemaVersion = 17;
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
 
@@ -37,6 +37,7 @@ class DatabaseHelper {
     if (await target.exists()) return;
 
     const legacyNames = [
+      'diasorganize_v16.db',
       'diasorganize_v15.db',
       'diasorganize_v14.db',
       'diasorganize_v13.db',
@@ -167,11 +168,23 @@ class DatabaseHelper {
       await _addColumnIfMissing(db, 'tasks', 'parentTaskId INTEGER');
       await _addColumnIfMissing(db, 'tasks', 'recurrenceType TEXT NOT NULL DEFAULT "none"');
     }
+    if (oldVersion < 17) {
+      await _ensureFinancialTransactionColumns(db);
+    }
   }
 
   Future<void> _ensureTaskColumns(Database db) async {
     await _addColumnIfMissing(db, 'tasks', 'parentTaskId INTEGER');
     await _addColumnIfMissing(db, 'tasks', 'recurrenceType TEXT NOT NULL DEFAULT "none"');
+  }
+
+  Future<void> _ensureFinancialTransactionColumns(Database db) async {
+    await _addColumnIfMissing(db, 'transactions', 'accountId INTEGER');
+    await _addColumnIfMissing(db, 'transactions', 'reminderEnabled INTEGER NOT NULL DEFAULT 0');
+    await _addColumnIfMissing(db, 'transactions', 'tags TEXT');
+    await _addColumnIfMissing(db, 'transactions', 'ignoreInTotals INTEGER NOT NULL DEFAULT 0');
+    await _addColumnIfMissing(db, 'transactions', 'ignoreInReports INTEGER NOT NULL DEFAULT 0');
+    await _addColumnIfMissing(db, 'transactions', 'ignoreInMonthlySavings INTEGER NOT NULL DEFAULT 0');
   }
 
   Future<void> _addColumnIfMissing(Database db, String table, String columnSql) async {
@@ -240,6 +253,10 @@ class DatabaseHelper {
         isFixed INTEGER NOT NULL DEFAULT 0,
         recurrenceType TEXT NOT NULL DEFAULT 'none',
         notes TEXT,
+        tags TEXT,
+        ignoreInTotals INTEGER NOT NULL DEFAULT 0,
+        ignoreInReports INTEGER NOT NULL DEFAULT 0,
+        ignoreInMonthlySavings INTEGER NOT NULL DEFAULT 0,
         debtId INTEGER,
         installmentNumber INTEGER,
         totalInstallments INTEGER,
@@ -454,7 +471,7 @@ class DatabaseHelper {
   Future<List<FinancialTransaction>> getTransactions() async {
     final db = await instance.database;
     await FinancePlanningStore.ensureTables(db);
-    await _addColumnIfMissing(db, 'transactions', 'accountId INTEGER');
+    await _ensureFinancialTransactionColumns(db);
     final result = await db.query('transactions', orderBy: 'transactionDate DESC');
     return result.map((json) => FinancialTransaction.fromMap(json)).toList();
   }
@@ -462,7 +479,7 @@ class DatabaseHelper {
   Future<FinancialTransaction> createTransaction(FinancialTransaction transaction) async {
     final db = await instance.database;
     await FinancePlanningStore.ensureTables(db);
-    await _addColumnIfMissing(db, 'transactions', 'accountId INTEGER');
+    await _ensureFinancialTransactionColumns(db);
     final sanitized = await _sanitizeAccountLink(db, transaction);
     late int id;
     await db.transaction((txn) async {
@@ -475,7 +492,7 @@ class DatabaseHelper {
   Future<int> updateTransaction(FinancialTransaction transaction) async {
     final db = await instance.database;
     await FinancePlanningStore.ensureTables(db);
-    await _addColumnIfMissing(db, 'transactions', 'accountId INTEGER');
+    await _ensureFinancialTransactionColumns(db);
     final oldRows = await db.query('transactions', where: 'id = ?', whereArgs: [transaction.id], limit: 1);
     if (oldRows.isEmpty) return 0;
     final oldTransaction = FinancialTransaction.fromMap(oldRows.first);
@@ -491,7 +508,7 @@ class DatabaseHelper {
   Future<int> deleteTransaction(int id) async {
     final db = await instance.database;
     await FinancePlanningStore.ensureTables(db);
-    await _addColumnIfMissing(db, 'transactions', 'accountId INTEGER');
+    await _ensureFinancialTransactionColumns(db);
     final oldRows = await db.query('transactions', where: 'id = ?', whereArgs: [id], limit: 1);
     FinancialTransaction? oldTransaction;
     if (oldRows.isNotEmpty) oldTransaction = FinancialTransaction.fromMap(oldRows.first);
