@@ -5,7 +5,6 @@ import '../../data/database/finance_planning_store.dart';
 import '../../data/models/budget_model.dart';
 import '../../data/models/financial_category_model.dart';
 import '../../data/models/financial_subcategory_model.dart';
-import '../../data/models/transaction_model.dart';
 import '../../domain/providers.dart';
 import 'finance_budget_rules.dart';
 
