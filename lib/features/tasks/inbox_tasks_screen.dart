@@ -28,6 +28,13 @@ class _InboxTasksScreenState extends ConsumerState<InboxTasksScreen> {
     super.dispose();
   }
 
+  String _quickAddDefaultPriority() {
+    final settings = ref.read(appSettingsProvider);
+    final value = settings[TaskSettingsKeys.quickAddDefaultPriority] ?? TaskSettingsDefaults.quickAddDefaultPriority;
+    if (value == 'alta' || value == 'media' || value == 'baixa') return value;
+    return TaskSettingsDefaults.quickAddDefaultPriority;
+  }
+
   Future<void> _quickAdd() async {
     final title = _quickController.text.trim();
     if (title.isEmpty) {
@@ -39,7 +46,7 @@ class _InboxTasksScreenState extends ConsumerState<InboxTasksScreen> {
     await ref.read(tasksProvider.notifier).addTask(
           Task(
             title: title,
-            priority: 'media',
+            priority: _quickAddDefaultPriority(),
             status: 'pendente',
             reminderEnabled: false,
             createdAt: now,
