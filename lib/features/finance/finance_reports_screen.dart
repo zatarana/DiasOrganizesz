@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'finance_budgets_screen.dart';
 import 'finance_category_report_screen.dart';
 import 'finance_debit_credit_screen.dart';
+import 'finance_export_screen.dart';
 import 'finance_monthly_evolution_screen.dart';
 import 'finance_planned_vs_realized_report_screen.dart';
 import 'finance_subcategory_report_screen.dart';
@@ -31,6 +32,13 @@ class FinanceReportsScreen extends StatelessWidget {
             title: 'Débito vs crédito',
             subtitle: 'Compare gastos diretos, compras no cartão e pagamentos de fatura.',
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceDebitCreditScreen())),
+          ),
+          const SizedBox(height: 8),
+          _ReportNavigationCard(
+            icon: Icons.file_download_outlined,
+            title: 'Exportação CSV',
+            subtitle: 'Gere CSV de transações, evolução mensal e débito vs crédito.',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceExportScreen())),
           ),
           const SizedBox(height: 8),
           _ReportNavigationCard(
@@ -137,9 +145,10 @@ class _ComingSoonCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Próximos relatórios', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text('Próximos recursos', style: TextStyle(fontWeight: FontWeight.bold)),
             SizedBox(height: 8),
-            Text('• Exportação futura em CSV/PDF'),
+            Text('• Exportação futura em PDF'),
+            Text('• Gráficos visuais com biblioteca dedicada'),
           ],
         ),
       ),
