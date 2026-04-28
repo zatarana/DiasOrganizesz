@@ -100,6 +100,29 @@ void main() {
   text = text.replaceAll('withOpacity(0.18)', 'withValues(alpha: 0.18)');
   text = text.replaceAll('withOpacity(0.2)', 'withValues(alpha: 0.2)');
 
+  text = text.replaceAll(
+    '''    final paidExpenseRatio = despesasPrevistas <= 0 ? 0.0 : (despesasPagas / despesasPrevistas).clamp(0.0, 1.0).toDouble();
+    final categoryTotals = _paidExpensesByCategory(allTransactions, _selectedMonth).entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final topCategoryEntry = categoryTotals.isEmpty ? null : categoryTotals.first;
+    final topCategory = topCategoryEntry == null ? null : _categoryOf(allCategories, topCategoryEntry.key);
+''',
+    '''    final visibleReceitasPagas = filtered.where((t) => t.status == 'paid' && t.type == 'income').fold<double>(0, (sum, t) => sum + t.amount);
+    final visibleDespesasPagas = filtered.where((t) => t.status == 'paid' && t.type == 'expense').fold<double>(0, (sum, t) => sum + t.amount);
+    final visibleDespesasPrevistas = filtered.where((t) => t.status != 'canceled' && t.type == 'expense').fold<double>(0, (sum, t) => sum + t.amount);
+    final paidExpenseRatio = visibleDespesasPrevistas <= 0 ? 0.0 : (visibleDespesasPagas / visibleDespesasPrevistas).clamp(0.0, 1.0).toDouble();
+    final visibleCategoryTotals = <int?, double>{};
+    for (final transaction in filtered) {
+      if (transaction.status != 'paid' || transaction.type != 'expense') continue;
+      visibleCategoryTotals[transaction.categoryId] = (visibleCategoryTotals[transaction.categoryId] ?? 0) + transaction.amount;
+    }
+    final categoryTotals = visibleCategoryTotals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final topCategoryEntry = categoryTotals.isEmpty ? null : categoryTotals.first;
+    final topCategory = topCategoryEntry == null ? null : _categoryOf(allCategories, topCategoryEntry.key);
+''',
+  );
+
+  text = text.replaceAll('paidExpenses: despesasPagas,\n                        paidIncomes: receitasPagas,', 'paidExpenses: visibleDespesasPagas,\n                        paidIncomes: visibleReceitasPagas,');
+
   final debtStart = text.indexOf('  Widget _buildDebtBridgeCard(FinanceDebtSnapshot snapshot) {');
   final debtEnd = text.indexOf('  Widget _buildTransactionTile(', debtStart);
   if (debtStart != -1 && debtEnd != -1) {
