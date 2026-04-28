@@ -17,7 +17,7 @@ class FinanceScreenFilters {
     required this.filterType,
     required this.filterStatus,
     required this.filterCategory,
-    required this.filterSubcategory,
+    this.filterSubcategory,
     required this.searchQuery,
   });
 
