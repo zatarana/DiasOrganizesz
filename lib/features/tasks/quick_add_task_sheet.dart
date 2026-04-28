@@ -134,7 +134,7 @@ class _QuickAddTaskSheetState extends ConsumerState<QuickAddTaskSheet> {
   }
 
   String _defaultPriority() {
-    final settings = ref.read(appSettingsProvider);
+    final settings = ref.read(taskSettingsProvider);
     final value = settings[TaskSettingsKeys.quickAddDefaultPriority] ?? TaskSettingsDefaults.quickAddDefaultPriority;
     if (value == 'alta' || value == 'media' || value == 'baixa') return value;
     return TaskSettingsDefaults.quickAddDefaultPriority;
@@ -142,7 +142,7 @@ class _QuickAddTaskSheetState extends ConsumerState<QuickAddTaskSheet> {
 
   DateTime? _fallbackDate() {
     if (widget.contextData.selectedDate != null) return widget.contextData.selectedDate;
-    final settings = ref.read(appSettingsProvider);
+    final settings = ref.read(taskSettingsProvider);
     final inboxAsDefault = settings[TaskSettingsKeys.inboxAsDefaultCapture] ?? TaskSettingsDefaults.inboxAsDefaultCapture;
     if (inboxAsDefault == 'false') return DateTime.now();
     return null;
@@ -170,7 +170,6 @@ class _QuickAddTaskSheetState extends ConsumerState<QuickAddTaskSheet> {
     }
 
     final now = DateTime.now().toIso8601String();
-    final isSubtask = widget.contextData.parentTaskId != null;
     final task = Task(
       title: parsed.title.trim(),
       date: parsed.date == null ? null : DateFormat('yyyy-MM-dd').format(parsed.date!),
@@ -182,7 +181,7 @@ class _QuickAddTaskSheetState extends ConsumerState<QuickAddTaskSheet> {
       priority: parsed.priority,
       status: 'pendente',
       reminderEnabled: false,
-      recurrenceType: isSubtask ? 'none' : 'none',
+      recurrenceType: 'none',
       createdAt: now,
       updatedAt: now,
     );
