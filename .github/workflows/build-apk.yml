@@ -38,6 +38,25 @@ jobs:
       - name: Aplicar melhorias UX da aba Finanças
         run: dart run tool/patch_finance_screen_ux.dart
 
+      - name: Validar melhorias UX da aba Finanças
+        run: |
+          echo "Validando patch de UX da aba Finanças..."
+          grep -q "NumberFormat.currency(locale: 'pt_BR'" lib/features/finance/finance_screen.dart
+          grep -q "Dismissible(" lib/features/finance/finance_screen.dart
+          grep -q "_buildFilterButton" lib/features/finance/finance_screen.dart
+          grep -q "showModalBottomSheet" lib/features/finance/finance_screen.dart
+          grep -q "PopupMenuButton<String>" lib/features/finance/finance_screen.dart
+
+          if grep -q "Contas e metas')))," lib/features/finance/finance_screen.dart; then
+            echo "ERRO: botões redundantes de navegação ainda aparecem no corpo da tela." >&2
+            exit 1
+          fi
+
+          if grep -q "withOpacity" lib/features/finance/finance_screen.dart; then
+            echo "ERRO: uso depreciado de withOpacity ainda aparece na aba Finanças." >&2
+            exit 1
+          fi
+
       - name: Validar identidade e dados locais
         run: |
           echo "Validando applicationId estável: $STABLE_APPLICATION_ID"
