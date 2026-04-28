@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/providers.dart';
 import '../../data/models/financial_category_model.dart';
 import '../../core/utils/icon_mapper.dart';
+import 'finance_subcategories_screen.dart';
 
 class FinanceCategoriesScreen extends ConsumerWidget {
   const FinanceCategoriesScreen({super.key});
@@ -23,16 +24,26 @@ class FinanceCategoriesScreen extends ConsumerWidget {
                 final cat = categories[index];
                 final color = _safeColor(cat.color);
 
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: color.withValues(alpha: 0.2),
-                    child: Icon(IconMapper.fromName(cat.icon), color: color),
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: color.withValues(alpha: 0.2),
+                      child: Icon(IconMapper.fromName(cat.icon), color: color),
+                    ),
+                    title: Text(cat.name),
+                    subtitle: Text('${cat.type == 'income' ? 'Receita' : (cat.type == 'expense' ? 'Despesa' : 'Misto')} • toque para editar'),
+                    trailing: IconButton(
+                      tooltip: 'Subcategorias',
+                      icon: const Icon(Icons.account_tree_outlined),
+                      onPressed: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => FinanceSubcategoriesScreen(category: cat)));
+                      },
+                    ),
+                    onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => CreateFinanceCategoryScreen(category: cat)));
+                    },
                   ),
-                  title: Text(cat.name),
-                  subtitle: Text(cat.type == 'income' ? 'Receita' : (cat.type == 'expense' ? 'Despesa' : 'Misto')),
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => CreateFinanceCategoryScreen(category: cat)));
-                  },
                 );
               },
             ),
@@ -107,7 +118,7 @@ class _CreateFinanceCategoryScreenState extends ConsumerState<CreateFinanceCateg
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Excluir categoria financeira?'),
-        content: Text('Movimentações e dívidas vinculadas a "${category!.name}" ficarão sem categoria. Deseja continuar?'),
+        content: Text('Movimentações, subcategorias, orçamentos e dívidas vinculadas a "${category!.name}" ficarão sem categoria. Deseja continuar?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           TextButton(
@@ -166,6 +177,14 @@ class _CreateFinanceCategoryScreenState extends ConsumerState<CreateFinanceCateg
       appBar: AppBar(
         title: Text(widget.category == null ? 'Nova Categoria' : 'Editar Categoria'),
         actions: [
+          if (widget.category?.id != null)
+            IconButton(
+              tooltip: 'Subcategorias',
+              icon: const Icon(Icons.account_tree_outlined),
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => FinanceSubcategoriesScreen(category: widget.category!)));
+              },
+            ),
           if (widget.category != null)
             IconButton(
               icon: const Icon(Icons.delete),
@@ -218,6 +237,17 @@ class _CreateFinanceCategoryScreenState extends ConsumerState<CreateFinanceCateg
               }).toList(),
             ),
             const Spacer(),
+            if (widget.category?.id != null) ...[
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+                onPressed: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => FinanceSubcategoriesScreen(category: widget.category!)));
+                },
+                icon: const Icon(Icons.account_tree_outlined),
+                label: const Text('Gerenciar subcategorias'),
+              ),
+              const SizedBox(height: 8),
+            ],
             ElevatedButton(
               style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
               onPressed: _save,
