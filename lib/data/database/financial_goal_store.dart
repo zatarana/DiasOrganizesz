@@ -14,6 +14,7 @@ class FinancialGoalStore {
         targetAmount REAL NOT NULL,
         currentAmount REAL NOT NULL DEFAULT 0,
         accountId INTEGER,
+        projectId INTEGER,
         targetDate TEXT,
         status TEXT NOT NULL DEFAULT 'active',
         color TEXT NOT NULL DEFAULT '0xFF4CAF50',
@@ -24,6 +25,7 @@ class FinancialGoalStore {
       )
     ''');
     await _addColumnIfMissing(db, 'financial_goals', 'isArchived INTEGER NOT NULL DEFAULT 0');
+    await _addColumnIfMissing(db, 'financial_goals', 'projectId INTEGER');
     await _ensureIndexes(db);
   }
 
@@ -31,6 +33,7 @@ class FinancialGoalStore {
     if (_indexesEnsured) return;
     await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_goals_status_archived ON financial_goals(status, isArchived)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_goals_target_date ON financial_goals(targetDate)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_goals_project ON financial_goals(projectId, isArchived)');
     _indexesEnsured = true;
   }
 
@@ -46,6 +49,17 @@ class FinancialGoalStore {
       'financial_goals',
       where: includeArchived ? null : 'isArchived = 0',
       orderBy: 'isArchived ASC, status ASC, targetDate IS NULL ASC, targetDate ASC, name ASC',
+    );
+    return rows.map(FinancialGoal.fromMap).toList();
+  }
+
+  static Future<List<FinancialGoal>> getGoalsForProject(Database db, int projectId, {bool includeArchived = false}) async {
+    await ensureTables(db);
+    final rows = await db.query(
+      'financial_goals',
+      where: includeArchived ? 'projectId = ?' : 'projectId = ? AND isArchived = 0',
+      whereArgs: [projectId],
+      orderBy: 'status ASC, targetDate IS NULL ASC, targetDate ASC, name ASC',
     );
     return rows.map(FinancialGoal.fromMap).toList();
   }
