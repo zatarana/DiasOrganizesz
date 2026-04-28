@@ -7,7 +7,12 @@ import '../projects/projects_screen.dart';
 import '../statistics/stats_screen.dart';
 import 'create_task_screen.dart';
 import 'inbox_tasks_screen.dart';
+import 'quick_add_task_button.dart';
+import 'task_categories_overview_screen.dart';
+import 'task_kanban_screen.dart';
 import 'task_list_screen.dart';
+import 'task_priority_matrix_screen.dart';
+import 'task_search_screen.dart';
 import 'task_smart_list_screen.dart';
 import 'task_smart_rules.dart';
 import 'today_tasks_screen.dart';
@@ -29,7 +34,16 @@ class TasksEntryScreen extends ConsumerWidget {
     final completedCount = tasks.where((task) => TaskSmartRules.isCompleted(task) && TaskSmartRules.isParentTask(task)).length;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Tarefas')),
+      appBar: AppBar(
+        title: const Text('Tarefas'),
+        actions: [
+          IconButton(
+            tooltip: 'Criação completa',
+            icon: const Icon(Icons.edit_note),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateTaskScreen())),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -98,6 +112,41 @@ class TasksEntryScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
           _EntrySection(
+            title: 'Visões avançadas',
+            subtitle: 'Busque, reorganize e visualize tarefas em formatos diferentes.',
+            children: [
+              _EntryCard(
+                icon: Icons.manage_search,
+                title: 'Buscar e filtrar',
+                subtitle: 'Pesquisa por texto, status, prioridade e escopo.',
+                color: Colors.cyan,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskSearchScreen())),
+              ),
+              _EntryCard(
+                icon: Icons.category,
+                title: 'Listas e categorias',
+                subtitle: 'Categorias atuais como listas visuais de tarefas.',
+                color: Colors.amber,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskCategoriesOverviewScreen())),
+              ),
+              _EntryCard(
+                icon: Icons.view_kanban,
+                title: 'Kanban',
+                subtitle: 'Colunas de atrasadas, pendentes e concluídas.',
+                color: Colors.deepPurple,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskKanbanScreen())),
+              ),
+              _EntryCard(
+                icon: Icons.grid_view,
+                title: 'Matriz de prioridade',
+                subtitle: 'Cruza prioridade e data para decisão rápida.',
+                color: Colors.brown,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskPriorityMatrixScreen())),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _EntrySection(
             title: 'Visões e módulos conectados',
             subtitle: 'Mantenha tarefas conectadas ao restante do app.',
             children: [
@@ -143,11 +192,7 @@ class TasksEntryScreen extends ConsumerWidget {
           const SizedBox(height: 80),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateTaskScreen())),
-        icon: const Icon(Icons.add),
-        label: const Text('Nova tarefa'),
-      ),
+      floatingActionButton: const QuickAddTaskButton(label: 'Quick Add'),
     );
   }
 
