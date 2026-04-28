@@ -9,6 +9,7 @@ class FinancialGoal {
   final String status;
   final String color;
   final String icon;
+  final bool isArchived;
   final String createdAt;
   final String updatedAt;
 
@@ -23,6 +24,7 @@ class FinancialGoal {
     this.status = 'active',
     this.color = '0xFF4CAF50',
     this.icon = 'flag',
+    this.isArchived = false,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -41,6 +43,7 @@ class FinancialGoal {
     String? status,
     String? color,
     String? icon,
+    bool? isArchived,
     String? createdAt,
     String? updatedAt,
   }) {
@@ -55,6 +58,7 @@ class FinancialGoal {
       status: status ?? this.status,
       color: color ?? this.color,
       icon: icon ?? this.icon,
+      isArchived: isArchived ?? this.isArchived,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -71,6 +75,7 @@ class FinancialGoal {
         'status': status,
         'color': color,
         'icon': icon,
+        'isArchived': isArchived ? 1 : 0,
         'createdAt': createdAt,
         'updatedAt': updatedAt,
       };
@@ -80,6 +85,14 @@ class FinancialGoal {
       if (value is num) return value.toDouble();
       return double.tryParse('$value') ?? 0.0;
     }
+
+    bool asBool(dynamic value) {
+      if (value is bool) return value;
+      if (value is num) return value == 1;
+      final normalized = '$value'.toLowerCase();
+      return normalized == 'true' || normalized == '1';
+    }
+
     return FinancialGoal(
       id: map['id'],
       name: map['name'] ?? 'Meta sem nome',
@@ -91,6 +104,7 @@ class FinancialGoal {
       status: map['status'] ?? 'active',
       color: map['color'] ?? '0xFF4CAF50',
       icon: map['icon'] ?? 'flag',
+      isArchived: asBool(map['isArchived']),
       createdAt: map['createdAt'] ?? DateTime.now().toIso8601String(),
       updatedAt: map['updatedAt'] ?? DateTime.now().toIso8601String(),
     );
