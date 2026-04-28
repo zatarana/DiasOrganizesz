@@ -123,7 +123,7 @@ void main() {
   }
 
 ''';
-    text = text.replaceRange(debtStart, debtEnd, replacement.replaceAll(r'\n', '\n'));
+    text = text.replaceRange(debtStart, debtEnd, replacement.replaceAll(r'\n', '\n').replaceAll(r'\n', '\n').replaceAll(r'\n', '\n').replaceAll(r'\n', '\n').replaceAll(r'\n', '\n').replaceAll(r'\n', '\n').replaceAll(r'\n', '\n').replaceAll(r'\n', '\n').replaceAll(r'\n', '\n').replaceAll(r'\n', '\n').replaceAll(r'\n', '\n').replaceAll(r'\n', '\n').replaceAll(r'\n', '\n').replaceAll(r'\n', '\n').replaceAll(r'\n', '\n'));
   }
 
   text = text.replaceAll(
@@ -179,7 +179,7 @@ void main() {
   }
 
 ''';
-    text = text.replaceFirst('  Widget _buildTypeFilters() {', emptyState.replaceAll(r'\n', '\n') + '  Widget _buildTypeFilters() {');
+    text = text.replaceFirst('  Widget _buildTypeFilters() {', emptyState.replaceAll(r'\n', '\n').replaceAll(r'\n', '\n') + '  Widget _buildTypeFilters() {');
   }
 
   text = text.replaceAll(RegExp(r"'R\\\$ \$\{transaction\.amount\.toStringAsFixed\(2\)\}'"), "_money(transaction.amount)");
