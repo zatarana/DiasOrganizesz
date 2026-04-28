@@ -12,6 +12,7 @@ import 'task_categories_overview_screen.dart';
 import 'task_kanban_screen.dart';
 import 'task_list_screen.dart';
 import 'task_priority_matrix_screen.dart';
+import 'task_productivity_stats_screen.dart';
 import 'task_search_screen.dart';
 import 'task_smart_list_screen.dart';
 import 'task_smart_rules.dart';
@@ -182,9 +183,16 @@ class TasksEntryScreen extends ConsumerWidget {
               ),
               _EntryCard(
                 icon: Icons.query_stats,
-                title: 'Estatísticas',
-                subtitle: 'Acompanhe produtividade e evolução geral.',
+                title: 'Produtividade',
+                subtitle: 'Estatísticas específicas de tarefas e conclusão.',
                 color: Colors.brown,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskProductivityStatsScreen())),
+              ),
+              _EntryCard(
+                icon: Icons.analytics,
+                title: 'Estatísticas gerais',
+                subtitle: 'Painel estatístico geral do aplicativo.',
+                color: Colors.grey,
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StatsScreen())),
               ),
             ],
