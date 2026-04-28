@@ -14,8 +14,9 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 - Dívidas foi removida como módulo solto de navegação e passou a pertencer à aba Finanças.
 - Contas, saldos, transferências, contas ignoradas nos totais e reajustes de saldo já possuem base estrutural.
 - Categorias, subcategorias, orçamentos avançados e relatórios financeiros principais já possuem base estrutural, telas e testes.
+- Cartões, faturas, compras no cartão, pagamento de fatura e movimentação de compra entre faturas já possuem base estrutural, telas e testes.
 - A aba Finanças está em reconstrução gradual para alcançar o escopo desejado.
-- Não há ainda cartões/faturas, anexos, gráficos visuais completos e exportação CSV/PDF.
+- Não há ainda anexos, gráficos visuais completos e exportação CSV/PDF.
 
 ## Princípios de implementação
 
@@ -160,12 +161,18 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 - Permitir mover despesa para próxima fatura.
 - Permitir pagamento de fatura a partir de conta.
 - Definir quando cartão vira dívida e quando permanece apenas fatura.
+- Criar tela inicial de cartões e faturas.
+- Criar formulário de compra no cartão.
+- Criar testes de store, compras, faturas, pagamentos e movimentação entre faturas.
 
 ### Critério de conclusão
 
 - Cartão terá fluxo próprio e não será misturado indevidamente com dívida parcelada.
+- Compra de cartão gerará despesa vinculada a fatura.
+- Pagamento de fatura afetará uma conta financeira sem virar dívida.
+- Compra poderá ser movida para outra fatura.
 
-**Status:** próxima fase.
+**Status:** concluída estruturalmente; pendente encaixe visual definitivo na aba principal de Finanças e validação de build.
 
 ## Fase 6 — Objetivos, economia mensal e planejamento
 
@@ -183,7 +190,7 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 
 - A aba Finanças mostrará não apenas o que aconteceu, mas também se o usuário está avançando.
 
-**Status:** pendente.
+**Status:** próxima fase.
 
 ## Fase 7 — Gráficos, relatórios e exportação
 
@@ -232,8 +239,8 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 | 2 | Novo modelo de transações | Em andamento avançado |
 | 3 | Contas, saldos e transferências | Concluída estruturalmente |
 | 4 | Categorias, subcategorias e orçamentos | Concluída estruturalmente |
-| 5 | Cartões e faturas | Próxima fase |
-| 6 | Objetivos e economia mensal | Pendente |
+| 5 | Cartões e faturas | Concluída estruturalmente |
+| 6 | Objetivos e economia mensal | Próxima fase |
 | 7 | Gráficos, relatórios e exportação | Parcialmente antecipada |
 | 8 | Refinamento UX/UI | Pendente |
 
