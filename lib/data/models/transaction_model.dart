@@ -23,6 +23,7 @@ class FinancialTransaction {
   final int? debtId;
   final int? creditCardId;
   final int? creditCardInvoiceId;
+  final int? creditCardPaymentInvoiceId;
   final int? installmentNumber;
   final int? totalInstallments;
   final double? discountAmount;
@@ -54,6 +55,7 @@ class FinancialTransaction {
     this.debtId,
     this.creditCardId,
     this.creditCardInvoiceId,
+    this.creditCardPaymentInvoiceId,
     this.installmentNumber,
     this.totalInstallments,
     this.discountAmount,
@@ -97,6 +99,8 @@ class FinancialTransaction {
     bool clearCreditCardId = false,
     int? creditCardInvoiceId,
     bool clearCreditCardInvoiceId = false,
+    int? creditCardPaymentInvoiceId,
+    bool clearCreditCardPaymentInvoiceId = false,
     int? installmentNumber,
     bool clearInstallmentNumber = false,
     int? totalInstallments,
@@ -131,6 +135,7 @@ class FinancialTransaction {
       debtId: clearDebtId ? null : (debtId ?? this.debtId),
       creditCardId: clearCreditCardId ? null : (creditCardId ?? this.creditCardId),
       creditCardInvoiceId: clearCreditCardInvoiceId ? null : (creditCardInvoiceId ?? this.creditCardInvoiceId),
+      creditCardPaymentInvoiceId: clearCreditCardPaymentInvoiceId ? null : (creditCardPaymentInvoiceId ?? this.creditCardPaymentInvoiceId),
       installmentNumber: clearInstallmentNumber ? null : (installmentNumber ?? this.installmentNumber),
       totalInstallments: clearTotalInstallments ? null : (totalInstallments ?? this.totalInstallments),
       discountAmount: clearDiscountAmount ? null : (discountAmount ?? this.discountAmount),
@@ -165,6 +170,7 @@ class FinancialTransaction {
       'debtId': debtId,
       'creditCardId': creditCardId,
       'creditCardInvoiceId': creditCardInvoiceId,
+      'creditCardPaymentInvoiceId': creditCardPaymentInvoiceId,
       'installmentNumber': installmentNumber,
       'totalInstallments': totalInstallments,
       'discountAmount': discountAmount,
@@ -220,6 +226,7 @@ class FinancialTransaction {
       debtId: map['debtId'],
       creditCardId: map['creditCardId'],
       creditCardInvoiceId: map['creditCardInvoiceId'],
+      creditCardPaymentInvoiceId: map['creditCardPaymentInvoiceId'],
       installmentNumber: map['installmentNumber'],
       totalInstallments: map['totalInstallments'],
       discountAmount: map['discountAmount'] == null ? null : asDouble(map['discountAmount']),
