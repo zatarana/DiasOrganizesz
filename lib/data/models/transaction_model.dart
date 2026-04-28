@@ -21,6 +21,8 @@ class FinancialTransaction {
   final bool ignoreInReports;
   final bool ignoreInMonthlySavings;
   final int? debtId;
+  final int? creditCardId;
+  final int? creditCardInvoiceId;
   final int? installmentNumber;
   final int? totalInstallments;
   final double? discountAmount;
@@ -50,6 +52,8 @@ class FinancialTransaction {
     this.ignoreInReports = false,
     this.ignoreInMonthlySavings = false,
     this.debtId,
+    this.creditCardId,
+    this.creditCardInvoiceId,
     this.installmentNumber,
     this.totalInstallments,
     this.discountAmount,
@@ -89,6 +93,10 @@ class FinancialTransaction {
     bool? ignoreInMonthlySavings,
     int? debtId,
     bool clearDebtId = false,
+    int? creditCardId,
+    bool clearCreditCardId = false,
+    int? creditCardInvoiceId,
+    bool clearCreditCardInvoiceId = false,
     int? installmentNumber,
     bool clearInstallmentNumber = false,
     int? totalInstallments,
@@ -121,6 +129,8 @@ class FinancialTransaction {
       ignoreInReports: ignoreInReports ?? this.ignoreInReports,
       ignoreInMonthlySavings: ignoreInMonthlySavings ?? this.ignoreInMonthlySavings,
       debtId: clearDebtId ? null : (debtId ?? this.debtId),
+      creditCardId: clearCreditCardId ? null : (creditCardId ?? this.creditCardId),
+      creditCardInvoiceId: clearCreditCardInvoiceId ? null : (creditCardInvoiceId ?? this.creditCardInvoiceId),
       installmentNumber: clearInstallmentNumber ? null : (installmentNumber ?? this.installmentNumber),
       totalInstallments: clearTotalInstallments ? null : (totalInstallments ?? this.totalInstallments),
       discountAmount: clearDiscountAmount ? null : (discountAmount ?? this.discountAmount),
@@ -153,6 +163,8 @@ class FinancialTransaction {
       'ignoreInReports': ignoreInReports ? 1 : 0,
       'ignoreInMonthlySavings': ignoreInMonthlySavings ? 1 : 0,
       'debtId': debtId,
+      'creditCardId': creditCardId,
+      'creditCardInvoiceId': creditCardInvoiceId,
       'installmentNumber': installmentNumber,
       'totalInstallments': totalInstallments,
       'discountAmount': discountAmount,
@@ -206,6 +218,8 @@ class FinancialTransaction {
       ignoreInReports: asBool(map['ignoreInReports']),
       ignoreInMonthlySavings: asBool(map['ignoreInMonthlySavings']),
       debtId: map['debtId'],
+      creditCardId: map['creditCardId'],
+      creditCardInvoiceId: map['creditCardInvoiceId'],
       installmentNumber: map['installmentNumber'],
       totalInstallments: map['totalInstallments'],
       discountAmount: map['discountAmount'] == null ? null : asDouble(map['discountAmount']),
