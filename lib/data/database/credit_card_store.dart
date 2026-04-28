@@ -42,6 +42,7 @@ class CreditCardStore {
     ''');
     await _addColumnIfMissing(db, 'transactions', 'creditCardId INTEGER');
     await _addColumnIfMissing(db, 'transactions', 'creditCardInvoiceId INTEGER');
+    await _addColumnIfMissing(db, 'transactions', 'creditCardPaymentInvoiceId INTEGER');
     await _ensureIndexes(db);
   }
 
@@ -51,6 +52,7 @@ class CreditCardStore {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_credit_card_invoices_card_month ON credit_card_invoices(cardId, referenceMonth)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_credit_card_invoices_status_due ON credit_card_invoices(status, dueDate)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_credit_card_invoice ON transactions(creditCardId, creditCardInvoiceId)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_credit_card_payment_invoice ON transactions(creditCardPaymentInvoiceId)');
     _indexesEnsured = true;
   }
 
@@ -163,6 +165,69 @@ class CreditCardStore {
       where: 'id = ?',
       whereArgs: [invoiceId],
     );
+  }
+
+  static Future<int> payInvoice(
+    Database db, {
+    required int invoiceId,
+    required int paymentAccountId,
+    double? amount,
+    DateTime? paidDate,
+    String? notes,
+  }) async {
+    await ensureTables(db);
+    await recalculateInvoiceAmount(db, invoiceId);
+
+    final rows = await db.query('credit_card_invoices', where: 'id = ?', whereArgs: [invoiceId], limit: 1);
+    if (rows.isEmpty) throw ArgumentError('Fatura não encontrada.');
+    final invoice = CreditCardInvoice.fromMap(rows.first);
+    if (invoice.status == 'paid') throw ArgumentError('Esta fatura já está paga.');
+
+    final paymentAmount = amount ?? invoice.amount;
+    if (paymentAmount <= 0) throw ArgumentError('O valor de pagamento deve ser maior que zero.');
+    if (paymentAmount > invoice.amount) throw ArgumentError('O pagamento não pode ser maior que o valor da fatura.');
+
+    final paymentDate = paidDate ?? DateTime.now();
+    final now = DateTime.now().toIso8601String();
+    final paidAmount = invoice.paidAmount + paymentAmount;
+    final fullyPaid = paidAmount >= invoice.amount;
+
+    late int transactionId;
+    await db.transaction((txn) async {
+      transactionId = await txn.insert('transactions', {
+        'title': 'Pagamento de fatura ${invoice.referenceMonth}',
+        'description': 'Pagamento de fatura de cartão',
+        'amount': paymentAmount,
+        'type': 'expense',
+        'transactionDate': paymentDate.toIso8601String(),
+        'dueDate': invoice.dueDate,
+        'paidDate': paymentDate.toIso8601String(),
+        'accountId': paymentAccountId,
+        'paymentMethod': 'pagamento de fatura',
+        'status': 'paid',
+        'ignoreInReports': 1,
+        'ignoreInMonthlySavings': 1,
+        'creditCardPaymentInvoiceId': invoiceId,
+        'notes': notes,
+        'createdAt': now,
+        'updatedAt': now,
+      });
+      await txn.update(
+        'credit_card_invoices',
+        {
+          'paidAmount': paidAmount,
+          'status': fullyPaid ? 'paid' : 'partial',
+          'paymentAccountId': paymentAccountId,
+          'paidDate': fullyPaid ? paymentDate.toIso8601String() : null,
+          'notes': notes ?? invoice.notes,
+          'updatedAt': now,
+        },
+        where: 'id = ?',
+        whereArgs: [invoiceId],
+      );
+    });
+
+    return transactionId;
   }
 
   static Future<void> resetCardData(Database db) async {
