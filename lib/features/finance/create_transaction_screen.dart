@@ -24,6 +24,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   final _amountController = TextEditingController();
   final _notesController = TextEditingController();
   final _discountController = TextEditingController();
+  final _tagsController = TextEditingController();
 
   String _type = 'expense';
   DateTime _transactionDate = DateTime.now();
@@ -35,6 +36,9 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   int? _categoryId;
   int? _accountId;
   bool _reminderEnabled = false;
+  bool _ignoreInTotals = false;
+  bool _ignoreInReports = false;
+  bool _ignoreInMonthlySavings = false;
   bool _loadingAccounts = true;
   List<FinancialAccount> _accounts = [];
 
@@ -62,6 +66,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
       _titleController.text = template.title;
       _descriptionController.text = template.description ?? '';
       _notesController.text = template.notes ?? '';
+      _tagsController.text = template.tags ?? '';
       if (template.discountAmount != null && template.discountAmount! > 0) {
         _discountController.text = template.discountAmount!.toStringAsFixed(2);
       }
@@ -81,6 +86,9 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
       _reminderEnabled = template.reminderEnabled;
       _isFixed = template.debtId != null ? false : template.isFixed;
       _recurrenceType = template.debtId != null ? 'none' : template.recurrenceType;
+      _ignoreInTotals = template.ignoreInTotals;
+      _ignoreInReports = template.ignoreInReports;
+      _ignoreInMonthlySavings = template.ignoreInMonthlySavings;
       _categoryId = template.categoryId;
       _accountId = template.accountId;
     }
@@ -111,6 +119,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
     _amountController.dispose();
     _notesController.dispose();
     _discountController.dispose();
+    _tagsController.dispose();
     super.dispose();
   }
 
@@ -370,6 +379,25 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
               ),
               const SizedBox(height: 16),
               TextField(
+                controller: _tagsController,
+                decoration: const InputDecoration(
+                  labelText: 'Tags',
+                  hintText: 'Ex: essencial, casa, trabalho',
+                  helperText: 'Separe por vírgulas para facilitar filtros e relatórios futuros.',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _AdvancedTransactionOptions(
+                ignoreInTotals: _ignoreInTotals,
+                ignoreInReports: _ignoreInReports,
+                ignoreInMonthlySavings: _ignoreInMonthlySavings,
+                onIgnoreInTotalsChanged: (value) => setState(() => _ignoreInTotals = value),
+                onIgnoreInReportsChanged: (value) => setState(() => _ignoreInReports = value),
+                onIgnoreInMonthlySavingsChanged: (value) => setState(() => _ignoreInMonthlySavings = value),
+              ),
+              const SizedBox(height: 16),
+              TextField(
                 controller: _notesController,
                 decoration: const InputDecoration(labelText: 'Observações (Opcional)', border: OutlineInputBorder()),
                 maxLines: 3,
@@ -439,6 +467,10 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
       isFixed: _isDebtInstallment ? false : _isFixed,
       recurrenceType: _isDebtInstallment ? 'none' : _recurrenceType,
       notes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
+      tags: _tagsController.text.trim().isNotEmpty ? _tagsController.text.trim() : null,
+      ignoreInTotals: _ignoreInTotals,
+      ignoreInReports: _ignoreInReports,
+      ignoreInMonthlySavings: _ignoreInMonthlySavings,
       debtId: template?.debtId,
       installmentNumber: template?.installmentNumber,
       totalInstallments: template?.totalInstallments,
@@ -453,6 +485,53 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
       await ref.read(transactionsProvider.notifier).addTransaction(transaction);
     }
     if (mounted) Navigator.pop(context);
+  }
+}
+
+class _AdvancedTransactionOptions extends StatelessWidget {
+  final bool ignoreInTotals;
+  final bool ignoreInReports;
+  final bool ignoreInMonthlySavings;
+  final ValueChanged<bool> onIgnoreInTotalsChanged;
+  final ValueChanged<bool> onIgnoreInReportsChanged;
+  final ValueChanged<bool> onIgnoreInMonthlySavingsChanged;
+
+  const _AdvancedTransactionOptions({
+    required this.ignoreInTotals,
+    required this.ignoreInReports,
+    required this.ignoreInMonthlySavings,
+    required this.onIgnoreInTotalsChanged,
+    required this.onIgnoreInReportsChanged,
+    required this.onIgnoreInMonthlySavingsChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      title: const Text('Opções avançadas'),
+      subtitle: const Text('Controle como esta movimentação aparece nos cálculos'),
+      children: [
+        SwitchListTile(
+          title: const Text('Ignorar nos totais financeiros'),
+          subtitle: const Text('Não entra em saldos previstos, resumos e totais gerais.'),
+          value: ignoreInTotals,
+          onChanged: onIgnoreInTotalsChanged,
+        ),
+        SwitchListTile(
+          title: const Text('Ignorar em relatórios e gráficos'),
+          subtitle: const Text('Útil para lançamentos técnicos, ajustes ou movimentações que não quer analisar.'),
+          value: ignoreInReports,
+          onChanged: onIgnoreInReportsChanged,
+        ),
+        SwitchListTile(
+          title: const Text('Ignorar na economia mensal'),
+          subtitle: const Text('Não afeta cálculo de sobra/economia do mês.'),
+          value: ignoreInMonthlySavings,
+          onChanged: onIgnoreInMonthlySavingsChanged,
+        ),
+      ],
+    );
   }
 }
 
