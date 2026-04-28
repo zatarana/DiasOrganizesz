@@ -6,6 +6,7 @@ import '../calendar/calendar_screen.dart';
 import '../projects/projects_screen.dart';
 import '../statistics/stats_screen.dart';
 import 'create_task_screen.dart';
+import 'inbox_tasks_screen.dart';
 import 'task_list_screen.dart';
 import 'task_smart_list_screen.dart';
 import 'task_smart_rules.dart';
@@ -52,7 +53,7 @@ class TasksEntryScreen extends ConsumerWidget {
                 subtitle: 'Captura rápida sem data ou projeto para organizar depois.',
                 count: inboxCount,
                 color: Colors.teal,
-                onTap: () => _openSmartList(context, TaskSmartListType.inbox),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InboxTasksScreen())),
               ),
               _EntryCard(
                 icon: Icons.warning_amber,
