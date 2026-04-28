@@ -201,6 +201,23 @@ void main() {
     "filtered.isEmpty\n                  ? SliverToBoxAdapter(child: _buildEmptyTransactionsState())",
   );
 
+  if (!text.contains('_openFiltersSheet(')) {
+    text = text.replaceAll(
+      '''                      const SizedBox(height: 16),
+                      _buildTypeFilters(),
+                      const SizedBox(height: 8),
+                      _buildStatusFilters(),
+                      if (allCategories.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        _buildCategoryFilters(allCategories),
+                      ],
+''',
+      '''                      const SizedBox(height: 16),
+                      _buildFilterButton(allCategories),
+''',
+    );
+  }
+
   if (!text.contains('Widget _buildEmptyTransactionsState()')) {
     const emptyState = r'''  Widget _buildEmptyTransactionsState() {
     final hasFilters = _filterType != 'all' || _filterStatus != 'all' || _filterCategory != null || _searchController.text.trim().isNotEmpty;
@@ -250,6 +267,121 @@ void main() {
 
 ''';
     text = text.replaceFirst('  Widget _buildTypeFilters() {', _asDartSource(emptyState) + '  Widget _buildTypeFilters() {');
+  }
+
+  if (!text.contains('Widget _buildFilterButton(')) {
+    const filterSheet = r'''  Widget _buildFilterButton(List<FinancialCategory> categories) {
+    final activeCount = (_filterType != 'all' ? 1 : 0) + (_filterStatus != 'all' ? 1 : 0) + (_filterCategory != null ? 1 : 0);
+    final label = activeCount == 0 ? 'Filtros' : 'Filtros ($activeCount ativo${activeCount == 1 ? '' : 's'})';
+    return OutlinedButton.icon(
+      onPressed: () => _openFiltersSheet(categories),
+      icon: const Icon(Icons.tune),
+      label: Text(label),
+    );
+  }
+
+  void _openFiltersSheet(List<FinancialCategory> categories) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            Widget chip(String label, bool selected, VoidCallback onTap) {
+              return ChoiceChip(
+                label: Text(label),
+                selected: selected,
+                onSelected: (_) {
+                  onTap();
+                  setModalState(() {});
+                },
+              );
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          const Expanded(child: Text('Filtrar movimentações', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _filterType = 'all';
+                                _filterStatus = 'all';
+                                _filterCategory = null;
+                              });
+                              setModalState(() {});
+                            },
+                            child: const Text('Limpar'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('Tipo', style: TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          chip('Todos', _filterType == 'all', () => setState(() => _filterType = 'all')),
+                          chip('Receitas', _filterType == 'income', () => setState(() => _filterType = 'income')),
+                          chip('Despesas', _filterType == 'expense', () => setState(() => _filterType = 'expense')),
+                          chip('Dívidas', _filterType == 'debt', () => setState(() => _filterType = 'debt')),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('Status', style: TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          chip('Tudo', _filterStatus == 'all', () => setState(() => _filterStatus = 'all')),
+                          chip('Pago', _filterStatus == 'paid', () => setState(() => _filterStatus = 'paid')),
+                          chip('Pendente', _filterStatus == 'pending', () => setState(() => _filterStatus = 'pending')),
+                          chip('Atrasado', _filterStatus == 'overdue', () => setState(() => _filterStatus = 'overdue')),
+                        ],
+                      ),
+                      if (categories.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        const Text('Categoria', style: TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            chip('Todas', _filterCategory == null, () => setState(() => _filterCategory = null)),
+                            ...categories.map((category) => chip(category.name, _filterCategory == category.id, () => setState(() => _filterCategory = category.id))),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(sheetContext),
+                          child: const Text('Aplicar filtros'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+''';
+    text = text.replaceFirst('  Widget _buildTypeFilters() {', _asDartSource(filterSheet) + '  Widget _buildTypeFilters() {');
   }
 
   text = text.replaceAll(RegExp(r"'R\\\$ \$\{transaction\.amount\.toStringAsFixed\(2\)\}'"), "_money(transaction.amount)");
