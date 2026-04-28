@@ -15,6 +15,7 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 - Contas, saldos, transferências, contas ignoradas nos totais e reajustes de saldo já possuem base estrutural.
 - Categorias, subcategorias, orçamentos avançados e relatórios financeiros principais já possuem base estrutural, telas e testes.
 - Cartões, faturas, compras no cartão, pagamento de fatura e movimentação de compra entre faturas já possuem base estrutural, telas e testes.
+- Objetivos financeiros, economia mensal, sugestão de aporte e vínculo futuro com projetos já possuem base estrutural, tela e testes.
 - A aba Finanças está em reconstrução gradual para alcançar o escopo desejado.
 - Não há ainda anexos, gráficos visuais completos e exportação CSV/PDF.
 
@@ -184,13 +185,18 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 - Calcular economia mensal.
 - Permitir ignorar transações da economia mensal.
 - Mostrar progresso de metas.
+- Criar tela inicial de objetivos financeiros.
+- Criar atalho reutilizável de objetivos financeiros.
 - Preparar integração futura com Projetos quando houver orçamento de projeto.
+- Criar testes de store, regras, economia mensal e vínculo com projetos.
 
 ### Critério de conclusão
 
 - A aba Finanças mostrará não apenas o que aconteceu, mas também se o usuário está avançando.
+- Objetivos financeiros terão fluxo próprio, progresso calculável e sugestão de aporte mensal.
+- Objetivos poderão ser vinculados futuramente a projetos sem acoplamento rígido.
 
-**Status:** próxima fase.
+**Status:** concluída estruturalmente; pendente encaixe visual definitivo na aba principal de Finanças e validação de build.
 
 ## Fase 7 — Gráficos, relatórios e exportação
 
@@ -209,7 +215,7 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 
 - O usuário conseguirá analisar padrões e não apenas cadastrar lançamentos.
 
-**Status:** parcialmente antecipada pela Fase 4; pendente gráficos visuais completos e exportação.
+**Status:** próxima fase; parcialmente antecipada pela Fase 4.
 
 ## Fase 8 — Refinamento de UX/UI
 
@@ -240,8 +246,8 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 | 3 | Contas, saldos e transferências | Concluída estruturalmente |
 | 4 | Categorias, subcategorias e orçamentos | Concluída estruturalmente |
 | 5 | Cartões e faturas | Concluída estruturalmente |
-| 6 | Objetivos e economia mensal | Próxima fase |
-| 7 | Gráficos, relatórios e exportação | Parcialmente antecipada |
+| 6 | Objetivos e economia mensal | Concluída estruturalmente |
+| 7 | Gráficos, relatórios e exportação | Próxima fase / parcialmente antecipada |
 | 8 | Refinamento UX/UI | Pendente |
 
 ## Observação importante
