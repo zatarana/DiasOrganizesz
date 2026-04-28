@@ -1,8 +1,8 @@
 # Roadmap de reconstrução da aba Finanças
 
-Este roadmap define como a aba **Finanças** será reconstruída tomando como referência funcional o manual do Minhas Finanças, mas preservando o core do DiasOrganize: tarefas, calendário, projetos, configurações, home, banco local e a aba Dívidas.
+Este roadmap define como a aba **Finanças** foi reconstruída tomando como referência funcional o manual do Minhas Finanças, mas preservando o core do DiasOrganize: tarefas, calendário, projetos, configurações, home, banco local e a aba Dívidas.
 
-A diretriz é transformar Finanças em um módulo central e completo. Dívidas existe dentro de Finanças como área própria, mas continua aparecendo separadamente na tela inicial como card/resumo rápido.
+A diretriz foi transformar Finanças em um módulo central e completo. Dívidas existe dentro de Finanças como área própria, mas continua aparecendo separadamente na tela inicial como card/resumo rápido.
 
 ## Estado atual identificado
 
@@ -20,6 +20,8 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 - Objetivos financeiros, economia mensal, sugestão de aporte e vínculo futuro com projetos já possuem base estrutural, tela e testes.
 - Evolução mensal, débito vs crédito, central de relatórios e exportação CSV já possuem base estrutural, telas e testes.
 - A Central Financeira (`FinanceHubScreen`) organiza recursos por visão/planejamento, compromissos/meios de pagamento e análise/exportação.
+- Foi criado workflow de CI Flutter para `flutter pub get`, `flutter analyze` e `flutter test`.
+- Foi feita correção preventiva de compatibilidade em `FinancialGoal.toMap()` para evitar conflito entre stores antigos e novos.
 - Não há ainda anexos, exportação PDF e gráficos visuais com biblioteca dedicada.
 
 ## Princípios de implementação
@@ -75,7 +77,7 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 - Dívidas não aparece mais como módulo solto fora de Finanças.
 - O pagamento de uma parcela altera o resumo de Finanças e de Dívidas.
 
-**Status:** concluída estruturalmente; pendente refinamento visual e validação de build.
+**Status:** concluída estruturalmente; pendente validação completa de build.
 
 ## Fase 2 — Novo modelo funcional de transações
 
@@ -101,7 +103,7 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 - Receitas e despesas terão base de dados pronta para relatórios, gráficos e resumo avançado.
 - As regras principais terão testes básicos.
 
-**Status:** em andamento avançado; pendente conexão completa da tela principal ao provider novo.
+**Status:** concluída estruturalmente; pendente validação completa de build e unificação final com provider novo.
 
 ## Fase 3 — Contas, saldos e transferências
 
@@ -123,7 +125,7 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 - O usuário conseguirá controlar carteira, banco, caixinha, investimento e movimentações entre elas.
 - O saldo será recalculável com base em saldo inicial, transações pagas, transferências e reajustes.
 
-**Status:** concluída estruturalmente; pendente refinamento visual e validação de build.
+**Status:** concluída estruturalmente; pendente validação completa de build.
 
 ## Fase 4 — Categorias, subcategorias e orçamentos
 
@@ -151,7 +153,7 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 - Orçamentos poderão ser gerais, por categoria ou por subcategoria.
 - Relatórios principais estarão isolados em telas próprias e com regras testadas.
 
-**Status:** concluída estruturalmente; pendente encaixe visual definitivo na tela principal de Finanças/Planejamento e validação de build.
+**Status:** concluída estruturalmente; pendente validação completa de build.
 
 ## Fase 5 — Cartões e faturas
 
@@ -176,7 +178,7 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 - Pagamento de fatura afetará uma conta financeira sem virar dívida.
 - Compra poderá ser movida para outra fatura.
 
-**Status:** concluída estruturalmente; pendente encaixe visual definitivo na aba principal de Finanças e validação de build.
+**Status:** concluída estruturalmente; pendente validação completa de build.
 
 ## Fase 6 — Objetivos, economia mensal e planejamento
 
@@ -199,7 +201,7 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 - Objetivos financeiros terão fluxo próprio, progresso calculável e sugestão de aporte mensal.
 - Objetivos poderão ser vinculados futuramente a projetos sem acoplamento rígido.
 
-**Status:** concluída estruturalmente; pendente encaixe visual definitivo na aba principal de Finanças e validação de build.
+**Status:** concluída estruturalmente; pendente validação completa de build.
 
 ## Fase 7 — Gráficos, relatórios e exportação
 
@@ -222,7 +224,7 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 - A Central de Relatórios terá visões reais para evolução mensal, categoria, subcategoria, previsto x realizado, débito vs crédito e exportação CSV.
 - A exportação CSV poderá ser gerada e copiada sem depender de permissões de arquivo.
 
-**Status:** concluída estruturalmente; pendente exportação PDF, gráficos com biblioteca dedicada, encaixe visual definitivo na aba principal de Finanças e validação de build.
+**Status:** concluída estruturalmente; pendente exportação PDF, gráficos com biblioteca dedicada e validação completa de build.
 
 ## Fase 8 — Refinamento de UX/UI
 
@@ -243,14 +245,18 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 - Melhorar formulários compactos e avançados.
 - Evitar excesso visual no celular.
 - Encaixar de forma definitiva os atalhos estruturais criados nas fases 3 a 7.
+- Criar workflow de CI para análise e testes.
+- Corrigir compatibilidade de `FinancialGoal` entre stores antigos e novos.
 
 ### Critério de conclusão
 
 - A aba será poderosa sem parecer uma planilha jogada dentro do app.
 - A navegação principal de Finanças deve abrir uma entrada limpa e compreensível.
 - A Home deve preservar card separado de Dívidas, mas direcionar para a experiência financeira integrada.
+- O fluxo antigo de movimentações deve continuar acessível.
+- As correções estruturais devem ser protegidas por testes quando possível.
 
-**Status:** em andamento avançado; pendente validação de build e refinamentos finais.
+**Status:** concluída estruturalmente; pendente validação completa de build em ambiente Flutter/GitHub Actions.
 
 ## Progresso geral
 
@@ -258,14 +264,14 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 |---|---|---|
 | 0 | Planejamento e proteção do core | Concluída |
 | 1 | Finanças enxerga Dívidas | Concluída estruturalmente |
-| 2 | Novo modelo de transações | Em andamento avançado |
+| 2 | Novo modelo de transações | Concluída estruturalmente |
 | 3 | Contas, saldos e transferências | Concluída estruturalmente |
 | 4 | Categorias, subcategorias e orçamentos | Concluída estruturalmente |
 | 5 | Cartões e faturas | Concluída estruturalmente |
 | 6 | Objetivos e economia mensal | Concluída estruturalmente |
 | 7 | Gráficos, relatórios e exportação | Concluída estruturalmente |
-| 8 | Refinamento UX/UI | Em andamento avançado |
+| 8 | Refinamento UX/UI | Concluída estruturalmente |
 
 ## Observação importante
 
-A reconstrução deve ser feita em partes pequenas, testáveis e reversíveis. A aba Finanças mudou profundamente, mas o app não deve perder o funcionamento atual de tarefas, projetos, calendário, dívidas e configurações.
+A reconstrução foi feita em partes pequenas, testáveis e reversíveis. A aba Finanças mudou profundamente, mas o app preserva o funcionamento atual de tarefas, projetos, calendário, dívidas e configurações. A pendência mais importante agora é rodar a validação completa em ambiente Flutter, especialmente `flutter analyze` e `flutter test`, usando o workflow criado.
