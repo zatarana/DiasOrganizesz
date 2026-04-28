@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../data/models/task_model.dart';
 import '../../domain/providers.dart';
+import 'task_settings_screen.dart';
 
 class QuickAddTaskContext {
   final DateTime? selectedDate;
@@ -33,13 +34,18 @@ class QuickAddTaskParserResult {
 class QuickAddTaskParser {
   const QuickAddTaskParser._();
 
-  static QuickAddTaskParserResult parse(String input, {DateTime? now, DateTime? fallbackDate}) {
+  static QuickAddTaskParserResult parse(
+    String input, {
+    DateTime? now,
+    DateTime? fallbackDate,
+    String defaultPriority = 'media',
+  }) {
     final base = now ?? DateTime.now();
     final today = DateTime(base.year, base.month, base.day);
     var text = input.trim().replaceAll(RegExp(r'\s+'), ' ');
     var date = fallbackDate == null ? null : DateTime(fallbackDate.year, fallbackDate.month, fallbackDate.day);
     String? time;
-    var priority = 'media';
+    var priority = _safePriority(defaultPriority);
 
     final lower = text.toLowerCase();
     if (lower.contains('#alta') || lower.contains('!alta') || lower.contains(' prioridade alta')) {
@@ -75,6 +81,11 @@ class QuickAddTaskParser {
 
     text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
     return QuickAddTaskParserResult(title: text, date: date, time: time, priority: priority);
+  }
+
+  static String _safePriority(String value) {
+    if (value == 'alta' || value == 'media' || value == 'baixa') return value;
+    return 'media';
   }
 
   static String _removeTokens(String input, List<String> tokens) {
@@ -122,14 +133,37 @@ class _QuickAddTaskSheetState extends ConsumerState<QuickAddTaskSheet> {
     super.dispose();
   }
 
+  String _defaultPriority() {
+    final settings = ref.read(appSettingsProvider);
+    final value = settings[TaskSettingsKeys.quickAddDefaultPriority] ?? TaskSettingsDefaults.quickAddDefaultPriority;
+    if (value == 'alta' || value == 'media' || value == 'baixa') return value;
+    return TaskSettingsDefaults.quickAddDefaultPriority;
+  }
+
+  DateTime? _fallbackDate() {
+    if (widget.contextData.selectedDate != null) return widget.contextData.selectedDate;
+    final settings = ref.read(appSettingsProvider);
+    final inboxAsDefault = settings[TaskSettingsKeys.inboxAsDefaultCapture] ?? TaskSettingsDefaults.inboxAsDefaultCapture;
+    if (inboxAsDefault == 'false') return DateTime.now();
+    return null;
+  }
+
+  QuickAddTaskParserResult _parseCurrentText() {
+    return QuickAddTaskParser.parse(
+      _controller.text,
+      fallbackDate: _fallbackDate(),
+      defaultPriority: _defaultPriority(),
+    );
+  }
+
   void _updatePreview() {
     setState(() {
-      _preview = QuickAddTaskParser.parse(_controller.text, fallbackDate: widget.contextData.selectedDate);
+      _preview = _parseCurrentText();
     });
   }
 
   Future<void> _save() async {
-    final parsed = QuickAddTaskParser.parse(_controller.text, fallbackDate: widget.contextData.selectedDate);
+    final parsed = _parseCurrentText();
     if (parsed.title.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Digite o título da tarefa.')));
       return;
@@ -161,7 +195,7 @@ class _QuickAddTaskSheetState extends ConsumerState<QuickAddTaskSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final parsed = _preview ?? QuickAddTaskParser.parse(_controller.text, fallbackDate: widget.contextData.selectedDate);
+    final parsed = _preview ?? _parseCurrentText();
     return Padding(
       padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: MediaQuery.of(context).viewInsets.bottom + 16),
       child: SingleChildScrollView(
