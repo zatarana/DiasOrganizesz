@@ -1,5 +1,6 @@
 import '../../data/models/debt_model.dart';
 import '../../data/models/transaction_model.dart';
+import 'finance_transaction_rules.dart';
 
 class FinanceDebtSnapshot {
   final double totalDebt;
@@ -50,7 +51,7 @@ class FinanceDebtSnapshot {
       if (debt.status == 'canceled') continue;
 
       final linkedTransactions = transactions
-          .where((transaction) => transaction.debtId == debt.id && transaction.status != 'canceled')
+          .where((transaction) => transaction.debtId == debt.id && FinanceTransactionRules.countsInTotals(transaction))
           .toList();
 
       final paidOrAbatedForDebt = linkedTransactions
@@ -68,11 +69,9 @@ class FinanceDebtSnapshot {
       }
 
       for (final transaction in linkedTransactions) {
-        final expected = _expectedDate(transaction);
-        final paid = _paidDate(transaction);
-        final expectedInMonth = _isSameMonth(expected, selectedMonth);
-        final paidInSelectedMonth = transaction.status == 'paid' &&
-            (_isSameMonth(paid, selectedMonth) || (paid == null && expectedInMonth));
+        final expected = FinanceTransactionRules.expectedDate(transaction);
+        final expectedInMonth = FinanceTransactionRules.isSameMonth(expected, selectedMonth);
+        final paidInSelectedMonth = FinanceTransactionRules.isPaidInMonth(transaction, selectedMonth);
 
         if (expectedInMonth && transaction.status != 'paid') {
           dueInMonth += transaction.amount;
@@ -82,7 +81,7 @@ class FinanceDebtSnapshot {
           paidInMonth += transaction.amount + (transaction.discountAmount ?? 0);
         }
 
-        if (_isOverdueDebtInstallment(transaction, today)) {
+        if (FinanceTransactionRules.isOverdue(transaction, now: today)) {
           overdueAmount += transaction.amount;
           overdueInstallments++;
         }
@@ -106,28 +105,5 @@ class FinanceDebtSnapshot {
       overdueInstallments: overdueInstallments,
       nextDueDate: nextDueDate,
     );
-  }
-
-  static DateTime? _expectedDate(FinancialTransaction transaction) {
-    return DateTime.tryParse(transaction.dueDate ?? transaction.transactionDate);
-  }
-
-  static DateTime? _paidDate(FinancialTransaction transaction) {
-    return transaction.paidDate == null ? null : DateTime.tryParse(transaction.paidDate!);
-  }
-
-  static bool _isSameMonth(DateTime? date, DateTime month) {
-    return date != null && date.month == month.month && date.year == month.year;
-  }
-
-  static bool _isOverdueDebtInstallment(FinancialTransaction transaction, DateTime today) {
-    if (transaction.status == 'paid' || transaction.status == 'canceled') return false;
-    if (transaction.status == 'overdue') return true;
-
-    final expected = _expectedDate(transaction);
-    if (expected == null) return false;
-
-    final due = DateTime(expected.year, expected.month, expected.day);
-    return due.isBefore(today);
   }
 }
