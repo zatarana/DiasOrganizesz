@@ -69,8 +69,8 @@ class FinancialGoalStore {
     if (goal.name.trim().isEmpty) throw ArgumentError('O nome do objetivo é obrigatório.');
     if (goal.targetAmount <= 0) throw ArgumentError('O valor alvo deve ser maior que zero.');
     if (goal.currentAmount < 0) throw ArgumentError('O valor atual não pode ser negativo.');
-    if (goal.id == null) return db.insert('financial_goals', goal.toMap());
-    await db.update('financial_goals', goal.toMap(), where: 'id = ?', whereArgs: [goal.id]);
+    if (goal.id == null) return db.insert('financial_goals', goal.toMap(includeExtendedFields: true));
+    await db.update('financial_goals', goal.toMap(includeExtendedFields: true), where: 'id = ?', whereArgs: [goal.id]);
     return goal.id!;
   }
 
