@@ -42,6 +42,11 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   bool _ignoreInReports = false;
   bool _ignoreInMonthlySavings = false;
   bool _loadingAccounts = true;
+  bool _isSaving = false;
+  String? _titleError;
+  String? _amountError;
+  String? _discountError;
+  String? _accountError;
   List<FinancialAccount> _accounts = [];
   List<FinancialSubcategory> _subcategories = [];
 
@@ -152,6 +157,13 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
     return null;
   }
 
+  void _clearValidationErrors() {
+    _titleError = null;
+    _amountError = null;
+    _discountError = null;
+    _accountError = null;
+  }
+
   void _setType(String value) {
     if (_isDebtInstallment) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Parcelas de dívida permanecem como despesa.')));
@@ -213,6 +225,17 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
     final selectableSubcategories = _selectableSubcategories(safeCategoryId);
     final safeSubcategoryId = selectableSubcategories.any((subcategory) => subcategory.id == _subcategoryId) ? _subcategoryId : null;
     final safeAccountId = selectableAccounts.any((account) => account.id == _accountId) ? _accountId : null;
+    final statusItems = _isEditing
+        ? const [
+            DropdownMenuItem(value: 'pending', child: Text('Pendente')),
+            DropdownMenuItem(value: 'paid', child: Text('Efetuado / Pago')),
+            DropdownMenuItem(value: 'overdue', child: Text('Em Atraso')),
+            DropdownMenuItem(value: 'canceled', child: Text('Cancelado')),
+          ]
+        : const [
+            DropdownMenuItem(value: 'pending', child: Text('Pendente')),
+            DropdownMenuItem(value: 'paid', child: Text('Efetuado / Pago')),
+          ];
 
     return Scaffold(
       appBar: AppBar(
@@ -253,7 +276,11 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                   labelText: 'Título',
                   border: const OutlineInputBorder(),
                   helperText: _isDebtInstallment ? 'Esta movimentação é uma parcela vinculada à aba Dívidas.' : null,
+                  errorText: _titleError,
                 ),
+                onChanged: (_) {
+                  if (_titleError != null) setState(() => _titleError = null);
+                },
               ),
               const SizedBox(height: 16),
               TextField(
@@ -265,23 +292,33 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
               TextField(
                 controller: _amountController,
                 decoration: InputDecoration(
-                  labelText: 'Valor (R\$)',
+                  labelText: 'Valor',
+                  prefixText: 'R\$ ',
                   border: const OutlineInputBorder(),
                   helperText: _isDebtInstallment ? 'Alterar o valor afeta o abatimento e o saldo restante da dívida.' : null,
+                  errorText: _amountError,
                 ),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (_) {
+                  if (_amountError != null) setState(() => _amountError = null);
+                },
               ),
               if (_status == 'paid') ...[
                 const SizedBox(height: 16),
                 TextField(
                   controller: _discountController,
                   decoration: InputDecoration(
-                    labelText: _isDebtInstallment ? 'Desconto / Abatimento extra (R\$)' : 'Desconto / Economia gerada (R\$)',
+                    labelText: _isDebtInstallment ? 'Desconto / Abatimento extra' : 'Desconto / Economia gerada',
+                    prefixText: 'R\$ ',
                     border: const OutlineInputBorder(),
                     hintText: _isDebtInstallment ? 'Ex: desconto por antecipar parcela' : (_type == 'expense' ? 'Desconto por pagar antecipado' : 'Desconto concedido'),
                     helperText: _isDebtInstallment ? 'O desconto também abate o saldo restante da dívida.' : null,
+                    errorText: _discountError,
                   ),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (_) {
+                    if (_discountError != null) setState(() => _discountError = null);
+                  },
                 ),
               ],
               const SizedBox(height: 16),
@@ -359,11 +396,17 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                   const DropdownMenuItem(value: null, child: Text('Sem conta')),
                   ...selectableAccounts.map((account) => DropdownMenuItem(value: account.id, child: Text('${account.name}${account.isArchived ? ' (arquivada)' : ''}'))),
                 ],
-                onChanged: _loadingAccounts ? null : (v) => setState(() => _accountId = v),
+                onChanged: _loadingAccounts
+                    ? null
+                    : (v) => setState(() {
+                          _accountId = v;
+                          _accountError = null;
+                        }),
                 decoration: InputDecoration(
                   labelText: _status == 'paid' ? 'Conta utilizada (obrigatória)' : 'Conta vinculada',
                   border: const OutlineInputBorder(),
                   helperText: _status == 'paid' ? 'Transações pagas alteram o saldo da conta.' : 'Será usada quando a transação for paga.',
+                  errorText: _accountError,
                 ),
               ),
               const SizedBox(height: 16),
@@ -379,25 +422,26 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 initialValue: _status,
-                items: const [
-                  DropdownMenuItem(value: 'pending', child: Text('Pendente')),
-                  DropdownMenuItem(value: 'paid', child: Text('Efetuado / Pago')),
-                  DropdownMenuItem(value: 'overdue', child: Text('Em Atraso')),
-                  DropdownMenuItem(value: 'canceled', child: Text('Cancelado')),
-                ],
+                items: statusItems,
                 onChanged: (v) {
                   setState(() {
                     _status = v!;
+                    _accountError = null;
                     if (_status == 'paid') {
                       _paidDate ??= DateTime.now();
                     } else {
                       _paidDate = null;
                       _discountController.clear();
+                      _discountError = null;
                     }
                     if (!_canUseReminder()) _reminderEnabled = false;
                   });
                 },
-                decoration: const InputDecoration(labelText: 'Status Atual', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                  labelText: 'Status Atual',
+                  border: const OutlineInputBorder(),
+                  helperText: _isEditing ? null : 'Atraso é calculado automaticamente pelo vencimento.',
+                ),
               ),
               const SizedBox(height: 16),
               SwitchListTile(
@@ -441,8 +485,10 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
               const SizedBox(height: 32),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                onPressed: _save,
-                child: const Text('Salvar'),
+                onPressed: _isSaving ? null : _save,
+                child: _isSaving
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Salvar'),
               ),
             ],
           ),
@@ -452,27 +498,32 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   }
 
   Future<void> _save() async {
+    if (_isSaving) return;
+
     final amount = double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0;
     final discount = double.tryParse(_discountController.text.replaceAll(',', '.')) ?? 0.0;
     final template = widget.transaction;
     final selectableAccounts = _selectableAccounts();
     final effectiveType = _isDebtInstallment ? 'expense' : _type;
 
+    setState(_clearValidationErrors);
+
+    var hasError = false;
     if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O título é obrigatório.')));
-      return;
+      _titleError = 'Informe um título.';
+      hasError = true;
     }
     if (amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O valor deve ser maior que zero.')));
-      return;
+      _amountError = 'Informe um valor maior que zero.';
+      hasError = true;
     }
     if (discount < 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O desconto não pode ser negativo.')));
-      return;
+      _discountError = 'O desconto não pode ser negativo.';
+      hasError = true;
     }
     if (_status == 'paid' && _accountId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selecione uma conta para marcar a movimentação como paga/efetuada.')));
-      return;
+      _accountError = 'Selecione uma conta para marcar como pago.';
+      hasError = true;
     }
 
     final categories = ref.read(financialCategoriesProvider).where((c) => c.type == effectiveType || c.type == 'both').toList();
@@ -483,46 +534,57 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
     final canReminder = normalizedStatus != 'paid' && normalizedStatus != 'canceled' && (_dueDate != null || effectiveType == 'income');
 
     if (normalizedStatus == 'paid' && safeAccountId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A conta selecionada não está disponível. Escolha uma conta ativa.')));
+      _accountError = 'A conta selecionada não está disponível. Escolha uma conta ativa.';
+      hasError = true;
+    }
+
+    if (hasError) {
+      if (mounted) setState(() {});
       return;
     }
 
-    final transaction = FinancialTransaction(
-      id: _isEditing ? template?.id : null,
-      title: _titleController.text.trim(),
-      description: _descriptionController.text.trim().isNotEmpty ? _descriptionController.text.trim() : null,
-      amount: amount,
-      type: effectiveType,
-      transactionDate: _transactionDate.toIso8601String(),
-      dueDate: _dueDate?.toIso8601String(),
-      paidDate: normalizedStatus == 'paid' ? (_paidDate ?? DateTime.now()).toIso8601String() : null,
-      categoryId: safeCategoryId,
-      subcategoryId: safeSubcategoryId,
-      accountId: safeAccountId,
-      paymentMethod: _selectedPaymentMethod,
-      status: normalizedStatus,
-      reminderEnabled: canReminder && _reminderEnabled,
-      isFixed: _isDebtInstallment ? false : _isFixed,
-      recurrenceType: _isDebtInstallment ? 'none' : _recurrenceType,
-      notes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
-      tags: _tagsController.text.trim().isNotEmpty ? _tagsController.text.trim() : null,
-      ignoreInTotals: _ignoreInTotals,
-      ignoreInReports: _ignoreInReports,
-      ignoreInMonthlySavings: _ignoreInMonthlySavings,
-      debtId: template?.debtId,
-      installmentNumber: template?.installmentNumber,
-      totalInstallments: template?.totalInstallments,
-      discountAmount: normalizedStatus == 'paid' && discount > 0 ? discount : null,
-      createdAt: _isEditing ? template!.createdAt : DateTime.now().toIso8601String(),
-      updatedAt: DateTime.now().toIso8601String(),
-    );
+    if (mounted) setState(() => _isSaving = true);
 
-    if (_isEditing) {
-      await ref.read(transactionsProvider.notifier).updateTransaction(transaction);
-    } else {
-      await ref.read(transactionsProvider.notifier).addTransaction(transaction);
+    try {
+      final transaction = FinancialTransaction(
+        id: _isEditing ? template?.id : null,
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim().isNotEmpty ? _descriptionController.text.trim() : null,
+        amount: amount,
+        type: effectiveType,
+        transactionDate: _transactionDate.toIso8601String(),
+        dueDate: _dueDate?.toIso8601String(),
+        paidDate: normalizedStatus == 'paid' ? (_paidDate ?? DateTime.now()).toIso8601String() : null,
+        categoryId: safeCategoryId,
+        subcategoryId: safeSubcategoryId,
+        accountId: safeAccountId,
+        paymentMethod: _selectedPaymentMethod,
+        status: normalizedStatus,
+        reminderEnabled: canReminder && _reminderEnabled,
+        isFixed: _isDebtInstallment ? false : _isFixed,
+        recurrenceType: _isDebtInstallment ? 'none' : _recurrenceType,
+        notes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
+        tags: _tagsController.text.trim().isNotEmpty ? _tagsController.text.trim() : null,
+        ignoreInTotals: _ignoreInTotals,
+        ignoreInReports: _ignoreInReports,
+        ignoreInMonthlySavings: _ignoreInMonthlySavings,
+        debtId: template?.debtId,
+        installmentNumber: template?.installmentNumber,
+        totalInstallments: template?.totalInstallments,
+        discountAmount: normalizedStatus == 'paid' && discount > 0 ? discount : null,
+        createdAt: _isEditing ? template!.createdAt : DateTime.now().toIso8601String(),
+        updatedAt: DateTime.now().toIso8601String(),
+      );
+
+      if (_isEditing) {
+        await ref.read(transactionsProvider.notifier).updateTransaction(transaction);
+      } else {
+        await ref.read(transactionsProvider.notifier).addTransaction(transaction);
+      }
+      if (mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
-    if (mounted) Navigator.pop(context);
   }
 }
 
