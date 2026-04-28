@@ -4,6 +4,7 @@ import '../models/budget_model.dart';
 import '../models/financial_account_model.dart';
 import '../models/financial_balance_adjustment_model.dart';
 import '../models/financial_goal_model.dart';
+import '../models/financial_subcategory_model.dart';
 import '../models/financial_transfer_model.dart';
 
 class FinancePlanningStore {
@@ -21,6 +22,17 @@ class FinancePlanningStore {
         icon TEXT NOT NULL DEFAULT 'account_balance',
         isArchived INTEGER NOT NULL DEFAULT 0,
         ignoreInTotals INTEGER NOT NULL DEFAULT 0,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS financial_subcategories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        categoryId INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        isDefault INTEGER NOT NULL DEFAULT 0,
+        isArchived INTEGER NOT NULL DEFAULT 0,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       )
@@ -58,6 +70,7 @@ class FinancePlanningStore {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         categoryId INTEGER,
+        subcategoryId INTEGER,
         limitAmount REAL NOT NULL,
         month TEXT NOT NULL,
         isArchived INTEGER NOT NULL DEFAULT 0,
@@ -85,6 +98,9 @@ class FinancePlanningStore {
     await _addColumnIfMissing(db, 'financial_goals', 'accountId INTEGER');
     await _addColumnIfMissing(db, 'financial_transfers', 'notes TEXT');
     await _addColumnIfMissing(db, 'financial_transfers', 'ignoreInReports INTEGER NOT NULL DEFAULT 0');
+    await _addColumnIfMissing(db, 'budgets', 'subcategoryId INTEGER');
+    await _addColumnIfMissing(db, 'transactions', 'subcategoryId INTEGER');
+    await _ensureDefaultSubcategories(db);
     await _ensureIndexes(db);
   }
 
@@ -92,21 +108,46 @@ class FinancePlanningStore {
     if (_indexesEnsured) return;
     await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_accounts_archived_name ON financial_accounts(isArchived, name)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_accounts_total ON financial_accounts(isArchived, ignoreInTotals)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_subcategories_category_archived ON financial_subcategories(categoryId, isArchived, name)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_transfers_from_date ON financial_transfers(fromAccountId, transferDate)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_transfers_to_date ON financial_transfers(toAccountId, transferDate)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_balance_adjustments_account_date ON financial_balance_adjustments(accountId, adjustmentDate)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_goals_status_account ON financial_goals(status, accountId)');
-    await db.execute('CREATE INDEX IF NOT EXISTS idx_budgets_month_category ON budgets(month, categoryId, isArchived)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_budgets_month_category ON budgets(month, categoryId, subcategoryId, isArchived)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_status_account ON transactions(status, accountId)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_due_date ON transactions(dueDate)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_paid_date ON transactions(paidDate)');
-    await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_category_status ON transactions(categoryId, status)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_category_status ON transactions(categoryId, subcategoryId, status)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_debt_status ON transactions(debtId, status)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_tasks_date_status_parent ON tasks(date, status, parentTaskId)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_tasks_project_step_status ON tasks(projectId, projectStepId, status)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_project_steps_project_order ON project_steps(projectId, orderIndex)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_projects_status_end ON projects(status, endDate)');
     _indexesEnsured = true;
+  }
+
+  static Future<void> _ensureDefaultSubcategories(Database db) async {
+    final categories = await db.query('financial_categories', columns: ['id']);
+    final now = DateTime.now().toIso8601String();
+    for (final category in categories) {
+      final categoryId = category['id'];
+      if (categoryId is! int) continue;
+      final existing = Sqflite.firstIntValue(await db.rawQuery(
+            'SELECT COUNT(*) FROM financial_subcategories WHERE categoryId = ? AND isDefault = 1',
+            [categoryId],
+          )) ??
+          0;
+      if (existing == 0) {
+        await db.insert('financial_subcategories', {
+          'categoryId': categoryId,
+          'name': 'Outros',
+          'isDefault': 1,
+          'isArchived': 0,
+          'createdAt': now,
+          'updatedAt': now,
+        });
+      }
+    }
   }
 
   static Future<void> _addColumnIfMissing(Database db, String table, String columnSql) async {
@@ -197,6 +238,41 @@ class FinancePlanningStore {
     if (recalculateBeforeRead) await recalculateAllAccountBalances(db);
     final rows = await db.query('financial_accounts', orderBy: 'isArchived ASC, ignoreInTotals ASC, name ASC');
     return rows.map(FinancialAccount.fromMap).toList();
+  }
+
+  static Future<List<FinancialSubcategory>> getSubcategories(Database db, {int? categoryId, bool includeArchived = false}) async {
+    await ensureTables(db);
+    final clauses = <String>[];
+    final args = <Object?>[];
+    if (categoryId != null) {
+      clauses.add('categoryId = ?');
+      args.add(categoryId);
+    }
+    if (!includeArchived) clauses.add('isArchived = 0');
+    final rows = await db.query(
+      'financial_subcategories',
+      where: clauses.isEmpty ? null : clauses.join(' AND '),
+      whereArgs: args.isEmpty ? null : args,
+      orderBy: 'isDefault DESC, name ASC',
+    );
+    return rows.map(FinancialSubcategory.fromMap).toList();
+  }
+
+  static Future<int> upsertSubcategory(Database db, FinancialSubcategory subcategory) async {
+    await ensureTables(db);
+    if (subcategory.id == null) {
+      return db.insert('financial_subcategories', subcategory.toMap());
+    }
+    await db.update('financial_subcategories', subcategory.toMap(), where: 'id = ?', whereArgs: [subcategory.id]);
+    return subcategory.id!;
+  }
+
+  static Future<void> archiveSubcategory(Database db, int subcategoryId) async {
+    await ensureTables(db);
+    final now = DateTime.now().toIso8601String();
+    await db.update('financial_subcategories', {'isArchived': 1, 'updatedAt': now}, where: 'id = ?', whereArgs: [subcategoryId]);
+    await db.update('transactions', {'subcategoryId': null}, where: 'subcategoryId = ?', whereArgs: [subcategoryId]);
+    await db.update('budgets', {'subcategoryId': null}, where: 'subcategoryId = ?', whereArgs: [subcategoryId]);
   }
 
   static Future<List<FinancialTransfer>> getTransfers(Database db) async {
@@ -337,7 +413,8 @@ class FinancePlanningStore {
 
   static Future<void> clearCategoryLinks(Database db, int categoryId) async {
     await ensureTables(db);
-    await db.update('budgets', {'categoryId': null}, where: 'categoryId = ?', whereArgs: [categoryId]);
+    await db.update('budgets', {'categoryId': null, 'subcategoryId': null}, where: 'categoryId = ?', whereArgs: [categoryId]);
+    await db.update('financial_subcategories', {'isArchived': 1, 'updatedAt': DateTime.now().toIso8601String()}, where: 'categoryId = ?', whereArgs: [categoryId]);
   }
 
   static Future<void> clearGoalAccountLinks(Database db, int accountId) async {
@@ -360,6 +437,7 @@ class FinancePlanningStore {
     await db.delete('financial_accounts');
     await db.delete('financial_transfers');
     await db.delete('financial_balance_adjustments');
+    await db.delete('financial_subcategories');
     await db.delete('budgets');
     await db.delete('financial_goals');
   }
@@ -369,6 +447,7 @@ class FinancePlanningStore {
     await clearArchivedAccountGoalLinks(db);
     return {
       'financial_accounts': await db.query('financial_accounts', orderBy: 'id ASC'),
+      'financial_subcategories': await db.query('financial_subcategories', orderBy: 'id ASC'),
       'financial_transfers': await db.query('financial_transfers', orderBy: 'id ASC'),
       'financial_balance_adjustments': await db.query('financial_balance_adjustments', orderBy: 'id ASC'),
       'budgets': await db.query('budgets', orderBy: 'id ASC'),
