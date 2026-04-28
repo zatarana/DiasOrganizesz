@@ -9,7 +9,7 @@ Future<Database> openCreditCardTestDatabase() async {
   final db = await databaseFactory.openDatabase(inMemoryDatabasePath);
 
   await db.execute('''
-    CREATE TABLE transactions (
+    CREATE TABLE IF NOT EXISTS transactions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
       description TEXT,
@@ -132,8 +132,8 @@ void main() {
     test('upsertCard rejeita fechamento e vencimento fora de 1 a 28', () async {
       final db = await openCreditCardTestDatabase();
 
-      expect(() => CreditCardStore.upsertCard(db, card(closingDay: 0)), throwsArgumentError);
-      expect(() => CreditCardStore.upsertCard(db, card(dueDay: 29)), throwsArgumentError);
+      await expectLater(CreditCardStore.upsertCard(db, card(closingDay: 0)), throwsArgumentError);
+      await expectLater(CreditCardStore.upsertCard(db, card(dueDay: 29)), throwsArgumentError);
       await db.close();
     });
 
@@ -238,8 +238,8 @@ void main() {
       final db = await openCreditCardTestDatabase();
       final cardId = await CreditCardStore.upsertCard(db, card(isArchived: true));
 
-      expect(
-        () => CreditCardStore.createCardPurchase(db, cardId: cardId, title: 'Compra', amount: 10, purchaseDate: DateTime(2026, 4, 1)),
+      await expectLater(
+        CreditCardStore.createCardPurchase(db, cardId: cardId, title: 'Compra', amount: 10, purchaseDate: DateTime(2026, 4, 1)),
         throwsArgumentError,
       );
       await db.close();
@@ -284,8 +284,8 @@ void main() {
     test('payInvoice bloqueia pagamento maior que fatura', () async {
       final (db, _, invoiceId) = await seedCardInvoiceWithAmount(amount: 100);
 
-      expect(
-        () => CreditCardStore.payInvoice(db, invoiceId: invoiceId, paymentAccountId: 1, amount: 101),
+      await expectLater(
+        CreditCardStore.payInvoice(db, invoiceId: invoiceId, paymentAccountId: 1, amount: 101),
         throwsArgumentError,
       );
       await db.close();
@@ -296,8 +296,8 @@ void main() {
 
       await CreditCardStore.payInvoice(db, invoiceId: invoiceId, paymentAccountId: 1, paidDate: DateTime(2026, 4, 20));
 
-      expect(
-        () => CreditCardStore.payInvoice(db, invoiceId: invoiceId, paymentAccountId: 1, paidDate: DateTime(2026, 4, 21)),
+      await expectLater(
+        CreditCardStore.payInvoice(db, invoiceId: invoiceId, paymentAccountId: 1, paidDate: DateTime(2026, 4, 21)),
         throwsArgumentError,
       );
       await db.close();
