@@ -19,6 +19,7 @@ class FinancePlanningStore {
         color TEXT NOT NULL DEFAULT '0xFF2196F3',
         icon TEXT NOT NULL DEFAULT 'account_balance',
         isArchived INTEGER NOT NULL DEFAULT 0,
+        ignoreInTotals INTEGER NOT NULL DEFAULT 0,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       )
@@ -65,6 +66,7 @@ class FinancePlanningStore {
         updatedAt TEXT NOT NULL
       )
     ''');
+    await _addColumnIfMissing(db, 'financial_accounts', 'ignoreInTotals INTEGER NOT NULL DEFAULT 0');
     await _addColumnIfMissing(db, 'financial_goals', 'accountId INTEGER');
     await _addColumnIfMissing(db, 'financial_transfers', 'notes TEXT');
     await _addColumnIfMissing(db, 'financial_transfers', 'ignoreInReports INTEGER NOT NULL DEFAULT 0');
@@ -74,6 +76,7 @@ class FinancePlanningStore {
   static Future<void> _ensureIndexes(Database db) async {
     if (_indexesEnsured) return;
     await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_accounts_archived_name ON financial_accounts(isArchived, name)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_accounts_total ON financial_accounts(isArchived, ignoreInTotals)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_transfers_from_date ON financial_transfers(fromAccountId, transferDate)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_transfers_to_date ON financial_transfers(toAccountId, transferDate)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_goals_status_account ON financial_goals(status, accountId)');
@@ -163,7 +166,7 @@ class FinancePlanningStore {
   static Future<List<FinancialAccount>> getAccounts(Database db, {bool recalculateBeforeRead = false}) async {
     await ensureTables(db);
     if (recalculateBeforeRead) await recalculateAllAccountBalances(db);
-    final rows = await db.query('financial_accounts', orderBy: 'isArchived ASC, name ASC');
+    final rows = await db.query('financial_accounts', orderBy: 'isArchived ASC, ignoreInTotals ASC, name ASC');
     return rows.map(FinancialAccount.fromMap).toList();
   }
 
@@ -178,7 +181,7 @@ class FinancePlanningStore {
     final rows = await db.rawQuery('''
       SELECT COALESCE(SUM(currentBalance), 0) AS total
       FROM financial_accounts
-      WHERE isArchived = 0
+      WHERE isArchived = 0 AND ignoreInTotals = 0
     ''');
     return _asDouble(rows.first['total']);
   }
