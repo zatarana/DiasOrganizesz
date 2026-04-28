@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../../data/models/task_model.dart';
 import '../../domain/providers.dart';
 import 'create_task_screen.dart';
+import 'quick_add_task_button.dart';
+import 'quick_add_task_sheet.dart';
 import 'task_smart_rules.dart';
 
 class TodayTasksScreen extends ConsumerWidget {
@@ -34,7 +36,16 @@ class TodayTasksScreen extends ConsumerWidget {
     final allEmpty = overdueTasks.isEmpty && exactTodayTasks.isEmpty && noDateSuggestions.isEmpty;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Hoje')),
+      appBar: AppBar(
+        title: const Text('Hoje'),
+        actions: [
+          IconButton(
+            tooltip: 'Criação completa para hoje',
+            icon: const Icon(Icons.edit_note),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTaskScreen(selectedDate: now))),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
@@ -99,10 +110,9 @@ class TodayTasksScreen extends ConsumerWidget {
           ],
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CreateTaskScreen(selectedDate: now))),
-        icon: const Icon(Icons.add),
-        label: const Text('Tarefa hoje'),
+      floatingActionButton: QuickAddTaskButton(
+        label: 'Quick Add hoje',
+        contextData: QuickAddTaskContext(selectedDate: now),
       ),
     );
   }
