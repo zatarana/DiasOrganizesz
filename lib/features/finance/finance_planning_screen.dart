@@ -105,7 +105,8 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final totalBalance = _accounts.where((a) => !a.isArchived).fold<double>(0, (sum, account) => sum + account.currentBalance);
+    final totalBalance = _accounts.where((a) => !a.isArchived && !a.ignoreInTotals).fold<double>(0, (sum, account) => sum + account.currentBalance);
+    final ignoredBalance = _accounts.where((a) => !a.isArchived && a.ignoreInTotals).fold<double>(0, (sum, account) => sum + account.currentBalance);
     final activeGoals = _goals.where((goal) => goal.status != 'canceled').toList();
     final totalTarget = activeGoals.fold<double>(0, (sum, goal) => sum + goal.targetAmount);
     final totalSaved = activeGoals.fold<double>(0, (sum, goal) => sum + goal.currentAmount);
@@ -121,7 +122,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
             ? const Center(child: CircularProgressIndicator())
             : TabBarView(
                 children: [
-                  _accountsTab(totalBalance),
+                  _accountsTab(totalBalance, ignoredBalance),
                   _budgetsTab(),
                   _goalsTab(totalTarget, totalSaved),
                 ],
@@ -130,11 +131,15 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
     );
   }
 
-  Widget _accountsTab(double totalBalance) {
+  Widget _accountsTab(double totalBalance, double ignoredBalance) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         _summaryCard('Saldo total em contas', _money(totalBalance), Icons.account_balance_wallet, Colors.blue),
+        if (ignoredBalance != 0) ...[
+          const SizedBox(height: 8),
+          _summaryCard('Saldo fora dos totais', _money(ignoredBalance), Icons.visibility_off, Colors.grey),
+        ],
         const SizedBox(height: 12),
         Row(
           children: [
@@ -151,20 +156,21 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
             final isDefault = account.id != null && account.id == _defaultAccountId;
             return Card(
               child: ListTile(
-                leading: CircleAvatar(backgroundColor: Colors.blue.withValues(alpha: 0.12), child: Icon(_accountIcon(account.type), color: Colors.blue)),
+                leading: CircleAvatar(backgroundColor: Colors.blue.withValues(alpha: 0.12), child: Icon(account.ignoreInTotals ? Icons.visibility_off : _accountIcon(account.type), color: account.ignoreInTotals ? Colors.grey : Colors.blue)),
                 title: Row(
                   children: [
                     Expanded(child: Text(account.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
                     if (isDefault) const Chip(label: Text('Padrão'), visualDensity: VisualDensity.compact),
+                    if (account.ignoreInTotals) const Padding(padding: EdgeInsets.only(left: 4), child: Chip(label: Text('Fora total'), visualDensity: VisualDensity.compact)),
                   ],
                 ),
-                subtitle: Text('${_accountTypeLabel(account.type)}${account.isArchived ? ' • arquivada' : ''}\nBase: ${_money(account.initialBalance)}'),
+                subtitle: Text('${_accountTypeLabel(account.type)}${account.isArchived ? ' • arquivada' : ''}${account.ignoreInTotals ? ' • não soma no saldo total' : ''}\nBase: ${_money(account.initialBalance)}'),
                 trailing: SizedBox(
                   width: 128,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      Flexible(child: Text(_money(account.currentBalance), overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold))),
+                      Flexible(child: Text(_money(account.currentBalance), overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, color: account.ignoreInTotals ? Colors.grey : null))),
                       IconButton(
                         tooltip: isDefault ? 'Remover conta padrão' : 'Definir como padrão',
                         icon: Icon(isDefault ? Icons.star : Icons.star_border, color: isDefault ? Colors.amber : null),
@@ -296,6 +302,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
     final balanceController = TextEditingController(text: account == null ? '' : account.initialBalance.toStringAsFixed(2));
     String type = account?.type ?? 'bank';
     bool archived = account?.isArchived ?? false;
+    bool ignoreInTotals = account?.ignoreInTotals ?? false;
     bool makeDefault = account?.id != null && account!.id == _defaultAccountId;
 
     final saved = await showDialog<bool>(
@@ -308,7 +315,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nome da conta')),
-                TextField(controller: balanceController, decoration: const InputDecoration(labelText: 'Saldo inicial/base', helperText: 'O saldo atual será calculado com as transações pagas desta conta.'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+                TextField(controller: balanceController, decoration: const InputDecoration(labelText: 'Saldo inicial/base', helperText: 'O saldo atual será calculado com as transações pagas e transferências desta conta.'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
                 DropdownButtonFormField<String>(
                   initialValue: type,
                   items: const [
@@ -328,6 +335,13 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
                   value: makeDefault && !archived,
                   onChanged: archived ? null : (v) => setLocal(() => makeDefault = v),
                 ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Ignorar no saldo total'),
+                  subtitle: const Text('A conta continua existindo, mas não soma no saldo geral.'),
+                  value: ignoreInTotals,
+                  onChanged: archived ? null : (v) => setLocal(() => ignoreInTotals = v),
+                ),
                 if (account != null) SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Arquivar'), value: archived, onChanged: (v) => setLocal(() { archived = v; if (v) makeDefault = false; })),
               ],
             ),
@@ -343,7 +357,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
                   return;
                 }
                 final now = DateTime.now().toIso8601String();
-                final data = FinancialAccount(id: account?.id, name: name, type: type, initialBalance: baseBalance, currentBalance: account?.currentBalance ?? baseBalance, isArchived: archived, createdAt: account?.createdAt ?? now, updatedAt: now);
+                final data = FinancialAccount(id: account?.id, name: name, type: type, initialBalance: baseBalance, currentBalance: account?.currentBalance ?? baseBalance, isArchived: archived, ignoreInTotals: ignoreInTotals, createdAt: account?.createdAt ?? now, updatedAt: now);
                 final savedId = await FinancePlanningStore.upsertAccount(await ref.read(dbProvider).database, data);
                 if (makeDefault && !archived) {
                   await ref.read(appSettingsProvider.notifier).setValue(defaultFinancialAccountSettingKey, savedId.toString());
