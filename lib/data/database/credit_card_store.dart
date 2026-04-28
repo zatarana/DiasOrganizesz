@@ -167,6 +167,49 @@ class CreditCardStore {
     );
   }
 
+  static Future<int> createCardPurchase(
+    Database db, {
+    required int cardId,
+    required String title,
+    String? description,
+    required double amount,
+    required DateTime purchaseDate,
+    int? categoryId,
+    int? subcategoryId,
+    String? notes,
+    String? tags,
+  }) async {
+    await ensureTables(db);
+    if (amount <= 0) throw ArgumentError('O valor da compra deve ser maior que zero.');
+
+    final cardRows = await db.query('credit_cards', where: 'id = ? AND isArchived = 0', whereArgs: [cardId], limit: 1);
+    if (cardRows.isEmpty) throw ArgumentError('Cartão não encontrado ou arquivado.');
+    final card = CreditCard.fromMap(cardRows.first);
+    final invoice = await getOrCreateInvoice(db, card: card, month: DateTime(purchaseDate.year, purchaseDate.month, 1));
+    final now = DateTime.now().toIso8601String();
+
+    final transactionId = await db.insert('transactions', {
+      'title': title,
+      'description': description,
+      'amount': amount,
+      'type': 'expense',
+      'transactionDate': purchaseDate.toIso8601String(),
+      'dueDate': invoice.dueDate,
+      'categoryId': categoryId,
+      'subcategoryId': subcategoryId,
+      'paymentMethod': 'cartão de crédito',
+      'status': 'pending',
+      'notes': notes,
+      'tags': tags,
+      'creditCardId': cardId,
+      'creditCardInvoiceId': invoice.id,
+      'createdAt': now,
+      'updatedAt': now,
+    });
+    await recalculateInvoiceAmount(db, invoice.id!);
+    return transactionId;
+  }
+
   static Future<int> payInvoice(
     Database db, {
     required int invoiceId,
