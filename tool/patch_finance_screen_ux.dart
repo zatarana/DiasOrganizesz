@@ -27,7 +27,20 @@ void main() {
   if (!text.contains('void _refreshRealAccountBalance()')) {
     text = text.replaceFirst(
       '  @override\n  void dispose() {',
-      "  @override\n  void initState() {\n    super.initState();\n    _refreshRealAccountBalance();\n  }\n\n  void _refreshRealAccountBalance() {\n    _realAccountBalanceFuture = _loadRealAccountBalance();\n  }\n\n  void _refreshScreen() {\n    _refreshRealAccountBalance();\n    setState(() {});\n  }\n\n  @override\n  void dispose() {",
+      '  @override\n'
+      '  void initState() {\n'
+      '    super.initState();\n'
+      '    _refreshRealAccountBalance();\n'
+      '  }\n\n'
+      '  void _refreshRealAccountBalance() {\n'
+      '    _realAccountBalanceFuture = _loadRealAccountBalance();\n'
+      '  }\n\n'
+      '  void _refreshScreen() {\n'
+      '    _refreshRealAccountBalance();\n'
+      '    setState(() {});\n'
+      '  }\n\n'
+      '  @override\n'
+      '  void dispose() {',
     );
   }
 
@@ -41,7 +54,7 @@ void main() {
           IconButton(icon: const Icon(Icons.category), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceCategoriesScreen())), tooltip: 'Categorias'),
         ],
 ''',
-    r'''        actions: [
+    '''        actions: [
           IconButton(icon: const Icon(Icons.savings_outlined), onPressed: _openPlanning, tooltip: 'Contas e metas'),
           IconButton(icon: const Icon(Icons.payments_outlined), onPressed: _openDebts, tooltip: 'Dívidas'),
           PopupMenuButton<String>(
@@ -88,7 +101,7 @@ void main() {
   final debtStart = text.indexOf('  Widget _buildDebtBridgeCard(FinanceDebtSnapshot snapshot) {');
   final debtEnd = text.indexOf('  Widget _buildTransactionTile(', debtStart);
   if (debtStart != -1 && debtEnd != -1) {
-    final replacement = r'''  Widget _buildDebtBridgeCard(FinanceDebtSnapshot snapshot) {
+    const replacement = r'''  Widget _buildDebtBridgeCard(FinanceDebtSnapshot snapshot) {
     final subtitle = snapshot.hasOpenDebts
         ? '${snapshot.openDebtCount} dívida(s) aberta(s) · ${_money(snapshot.dueInMonth)} a vencer neste mês'
         : 'Nenhuma dívida aberta no momento.';
@@ -110,7 +123,7 @@ void main() {
   }
 
 ''';
-    text = text.replaceRange(debtStart, debtEnd, replacement);
+    text = text.replaceRange(debtStart, debtEnd, replacement.replaceAll(r'\n', '\n'));
   }
 
   text = text.replaceAll(
@@ -119,9 +132,7 @@ void main() {
   );
 
   if (!text.contains('Widget _buildEmptyTransactionsState()')) {
-    text = text.replaceFirst(
-      '  Widget _buildTypeFilters() {',
-      r'''  Widget _buildEmptyTransactionsState() {
+    const emptyState = r'''  Widget _buildEmptyTransactionsState() {
     final hasFilters = _filterType != 'all' || _filterStatus != 'all' || _filterCategory != null || _searchController.text.trim().isNotEmpty;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 96),
@@ -167,8 +178,8 @@ void main() {
     );
   }
 
-''',
-    );
+''';
+    text = text.replaceFirst('  Widget _buildTypeFilters() {', emptyState.replaceAll(r'\n', '\n') + '  Widget _buildTypeFilters() {');
   }
 
   text = text.replaceAll(RegExp(r"'R\\\$ \$\{transaction\.amount\.toStringAsFixed\(2\)\}'"), "_money(transaction.amount)");
