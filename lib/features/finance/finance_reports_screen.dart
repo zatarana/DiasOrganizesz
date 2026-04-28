@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'finance_budgets_screen.dart';
 import 'finance_category_report_screen.dart';
+import 'finance_debit_credit_screen.dart';
 import 'finance_monthly_evolution_screen.dart';
 import 'finance_planned_vs_realized_report_screen.dart';
 import 'finance_subcategory_report_screen.dart';
@@ -23,6 +24,13 @@ class FinanceReportsScreen extends StatelessWidget {
             title: 'Evolução mensal',
             subtitle: 'Compare receitas, despesas, resultado e economia mês a mês.',
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceMonthlyEvolutionScreen())),
+          ),
+          const SizedBox(height: 8),
+          _ReportNavigationCard(
+            icon: Icons.credit_score_outlined,
+            title: 'Débito vs crédito',
+            subtitle: 'Compare gastos diretos, compras no cartão e pagamentos de fatura.',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceDebitCreditScreen())),
           ),
           const SizedBox(height: 8),
           _ReportNavigationCard(
@@ -124,14 +132,13 @@ class _ComingSoonCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       color: Colors.grey.withValues(alpha: 0.08),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
+      child: const Padding(
+        padding: EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
+          children: [
             Text('Próximos relatórios', style: TextStyle(fontWeight: FontWeight.bold)),
             SizedBox(height: 8),
-            Text('• Visão débito vs crédito'),
             Text('• Exportação futura em CSV/PDF'),
           ],
         ),
