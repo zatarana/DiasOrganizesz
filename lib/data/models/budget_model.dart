@@ -2,6 +2,7 @@ class Budget {
   final int? id;
   final String name;
   final int? categoryId;
+  final int? subcategoryId;
   final double limitAmount;
   final String month;
   final bool isArchived;
@@ -12,6 +13,7 @@ class Budget {
     this.id,
     required this.name,
     this.categoryId,
+    this.subcategoryId,
     required this.limitAmount,
     required this.month,
     this.isArchived = false,
@@ -24,6 +26,8 @@ class Budget {
     String? name,
     int? categoryId,
     bool clearCategoryId = false,
+    int? subcategoryId,
+    bool clearSubcategoryId = false,
     double? limitAmount,
     String? month,
     bool? isArchived,
@@ -34,6 +38,7 @@ class Budget {
       id: id ?? this.id,
       name: name ?? this.name,
       categoryId: clearCategoryId ? null : (categoryId ?? this.categoryId),
+      subcategoryId: clearSubcategoryId ? null : (subcategoryId ?? this.subcategoryId),
       limitAmount: limitAmount ?? this.limitAmount,
       month: month ?? this.month,
       isArchived: isArchived ?? this.isArchived,
@@ -46,6 +51,7 @@ class Budget {
         'id': id,
         'name': name,
         'categoryId': categoryId,
+        'subcategoryId': subcategoryId,
         'limitAmount': limitAmount,
         'month': month,
         'isArchived': isArchived ? 1 : 0,
@@ -63,6 +69,7 @@ class Budget {
       id: map['id'],
       name: map['name'] ?? 'Orçamento sem nome',
       categoryId: map['categoryId'],
+      subcategoryId: map['subcategoryId'],
       limitAmount: asDouble(map['limitAmount']),
       month: map['month'] ?? DateTime.now().toIso8601String().substring(0, 7),
       isArchived: map['isArchived'] == 1,
