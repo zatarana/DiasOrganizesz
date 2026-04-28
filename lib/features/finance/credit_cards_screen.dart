@@ -8,6 +8,7 @@ import '../../data/models/credit_card_invoice_model.dart';
 import '../../data/models/credit_card_model.dart';
 import '../../data/models/financial_account_model.dart';
 import '../../domain/providers.dart';
+import 'create_card_purchase_screen.dart';
 
 class CreditCardsScreen extends ConsumerStatefulWidget {
   const CreditCardsScreen({super.key});
@@ -66,6 +67,14 @@ class _CreditCardsScreenState extends ConsumerState<CreditCardsScreen> {
   double _remainingInvoiceAmount(CreditCardInvoice invoice) {
     final remaining = invoice.amount - invoice.paidAmount;
     return remaining < 0 ? 0 : remaining;
+  }
+
+  Future<void> _openPurchase({CreditCard? card}) async {
+    final created = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => CreateCardPurchaseScreen(initialCard: card)),
+    );
+    if (created == true) await _loadAll();
   }
 
   Future<void> _createCurrentInvoice(CreditCard card) async {
@@ -279,7 +288,16 @@ class _CreditCardsScreenState extends ConsumerState<CreditCardsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Cartões e Faturas')),
+      appBar: AppBar(
+        title: const Text('Cartões e Faturas'),
+        actions: [
+          IconButton(
+            tooltip: 'Nova compra no cartão',
+            icon: const Icon(Icons.add_shopping_cart),
+            onPressed: () => _openPurchase(),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showCardDialog(),
         icon: const Icon(Icons.add),
@@ -305,6 +323,7 @@ class _CreditCardsScreenState extends ConsumerState<CreditCardsScreen> {
                           monthLabel: _monthLabel,
                           onEdit: () => _showCardDialog(card: card),
                           onCreateInvoice: () => _createCurrentInvoice(card),
+                          onCreatePurchase: () => _openPurchase(card: card),
                           onPayInvoice: _showPayInvoiceDialog,
                         )),
                   const SizedBox(height: 80),
@@ -385,9 +404,10 @@ class _CreditCardPanel extends StatelessWidget {
   final String Function(String month) monthLabel;
   final VoidCallback onEdit;
   final VoidCallback onCreateInvoice;
+  final VoidCallback onCreatePurchase;
   final Future<void> Function(CreditCardInvoice invoice) onPayInvoice;
 
-  const _CreditCardPanel({required this.card, required this.invoices, required this.money, required this.dateLabel, required this.monthLabel, required this.onEdit, required this.onCreateInvoice, required this.onPayInvoice});
+  const _CreditCardPanel({required this.card, required this.invoices, required this.money, required this.dateLabel, required this.monthLabel, required this.onEdit, required this.onCreateInvoice, required this.onCreatePurchase, required this.onPayInvoice});
 
   @override
   Widget build(BuildContext context) {
@@ -402,8 +422,10 @@ class _CreditCardPanel extends StatelessWidget {
           onSelected: (value) {
             if (value == 'edit') onEdit();
             if (value == 'invoice') onCreateInvoice();
+            if (value == 'purchase') onCreatePurchase();
           },
           itemBuilder: (context) => const [
+            PopupMenuItem(value: 'purchase', child: Text('Nova compra')),
             PopupMenuItem(value: 'edit', child: Text('Editar cartão')),
             PopupMenuItem(value: 'invoice', child: Text('Gerar fatura do mês')),
           ],
