@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../finance/finance_screen.dart';
-import '../debts/debts_screen.dart';
 import '../projects/projects_screen.dart';
 import '../calendar/calendar_screen.dart';
 import '../statistics/stats_screen.dart';
@@ -28,23 +27,15 @@ class AppDrawer extends StatelessWidget {
             title: const Text('Início (Resumo)'),
             onTap: () {
               Navigator.pop(context);
-              // Already at home mostly, but can navigate to root
             },
           ),
           ListTile(
             leading: const Icon(Icons.attach_money),
             title: const Text('Finanças'),
+            subtitle: const Text('Receitas, despesas, contas, metas e dívidas'),
             onTap: () {
               Navigator.pop(context);
               Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceScreen()));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.money_off),
-            title: const Text('Dívidas'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtsScreen()));
             },
           ),
           ListTile(
