@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../data/database/finance_planning_store.dart';
 import '../../data/models/budget_model.dart';
 import '../../data/models/financial_account_model.dart';
+import '../../data/models/financial_balance_adjustment_model.dart';
 import '../../data/models/financial_goal_model.dart';
 import '../../data/models/transaction_model.dart';
 import '../../domain/providers.dart';
@@ -24,6 +25,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
   List<FinancialAccount> _accounts = [];
   List<Budget> _budgets = [];
   List<FinancialGoal> _goals = [];
+  List<FinancialBalanceAdjustment> _adjustments = [];
   int? _defaultAccountId;
 
   @override
@@ -40,6 +42,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
     final accounts = await FinancePlanningStore.getAccounts(db, recalculateBeforeRead: true);
     final budgets = await FinancePlanningStore.getBudgets(db);
     final goals = await FinancePlanningStore.getGoals(db);
+    final adjustments = await FinancePlanningStore.getBalanceAdjustments(db);
     final defaultSetting = await dbHelper.getSetting(defaultFinancialAccountSettingKey);
     final defaultAccountId = int.tryParse(defaultSetting?.value ?? '');
     final validDefault = accounts.any((account) => account.id == defaultAccountId && !account.isArchived) ? defaultAccountId : null;
@@ -51,6 +54,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
       _accounts = accounts;
       _budgets = budgets;
       _goals = goals;
+      _adjustments = adjustments;
       _defaultAccountId = validDefault;
       _loading = false;
     });
@@ -101,6 +105,146 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
       if (account.id == id) return account;
     }
     return null;
+  }
+
+  List<FinancialBalanceAdjustment> _adjustmentsForAccount(int? accountId) {
+    if (accountId == null) return [];
+    return _adjustments.where((adjustment) => adjustment.accountId == accountId).toList();
+  }
+
+  FinancialBalanceAdjustment? _latestAdjustmentForAccount(int? accountId) {
+    final accountAdjustments = _adjustmentsForAccount(accountId);
+    return accountAdjustments.isEmpty ? null : accountAdjustments.first;
+  }
+
+  Future<void> _handleAccountAction(FinancialAccount account, String action) async {
+    switch (action) {
+      case 'default':
+        if (!account.isArchived) await _setDefaultAccount(account.id == _defaultAccountId ? null : account.id);
+        break;
+      case 'adjust':
+        await _showBalanceAdjustmentDialog(account);
+        break;
+      case 'history':
+        _showAdjustmentHistory(account);
+        break;
+      case 'edit':
+        await _showAccountDialog(account: account);
+        break;
+    }
+  }
+
+  Future<void> _showBalanceAdjustmentDialog(FinancialAccount account) async {
+    if (account.id == null) return;
+    final newBalanceController = TextEditingController(text: account.currentBalance.toStringAsFixed(2));
+    final reasonController = TextEditingController();
+    final notesController = TextEditingController();
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Reajustar saldo — ${account.name}'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Saldo atual calculado: ${_money(account.currentBalance)}'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: newBalanceController,
+                decoration: const InputDecoration(labelText: 'Novo saldo real', prefixText: 'R\$ '),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              ),
+              TextField(controller: reasonController, decoration: const InputDecoration(labelText: 'Motivo')),
+              TextField(controller: notesController, decoration: const InputDecoration(labelText: 'Observações'), maxLines: 2),
+              const SizedBox(height: 8),
+              Text(
+                'O app registrará a diferença como ajuste, mantendo histórico para auditoria.',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () async {
+              final newBalance = double.tryParse(newBalanceController.text.replaceAll(',', '.'));
+              if (newBalance == null) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Informe um saldo válido.')));
+                return;
+              }
+              await FinancePlanningStore.createBalanceAdjustment(
+                await ref.read(dbProvider).database,
+                accountId: account.id!,
+                newBalance: newBalance,
+                reason: reasonController.text.trim().isEmpty ? null : reasonController.text.trim(),
+                notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
+              );
+              if (ctx.mounted) Navigator.pop(ctx, true);
+            },
+            child: const Text('Salvar ajuste'),
+          ),
+        ],
+      ),
+    );
+
+    newBalanceController.dispose();
+    reasonController.dispose();
+    notesController.dispose();
+    if (saved == true && mounted) await _loadAll();
+  }
+
+  void _showAdjustmentHistory(FinancialAccount account) {
+    final accountAdjustments = _adjustmentsForAccount(account.id);
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Histórico de ajustes — ${account.name}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              if (accountAdjustments.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: Text('Nenhum ajuste registrado para esta conta.')),
+                )
+              else
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: accountAdjustments.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final adjustment = accountAdjustments[index];
+                      final positive = adjustment.delta >= 0;
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: CircleAvatar(
+                          backgroundColor: (positive ? Colors.green : Colors.red).withValues(alpha: 0.12),
+                          child: Icon(positive ? Icons.add : Icons.remove, color: positive ? Colors.green : Colors.red),
+                        ),
+                        title: Text('${positive ? '+' : ''}${_money(adjustment.delta)}'),
+                        subtitle: Text([
+                          _safeDateLabel(adjustment.adjustmentDate),
+                          'de ${_money(adjustment.previousBalance)} para ${_money(adjustment.newBalance)}',
+                          if (adjustment.reason != null && adjustment.reason!.isNotEmpty) adjustment.reason!,
+                        ].join(' • ')),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -154,6 +298,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
         else
           ..._accounts.map((account) {
             final isDefault = account.id != null && account.id == _defaultAccountId;
+            final latestAdjustment = _latestAdjustmentForAccount(account.id);
             return Card(
               child: ListTile(
                 leading: CircleAvatar(backgroundColor: Colors.blue.withValues(alpha: 0.12), child: Icon(account.ignoreInTotals ? Icons.visibility_off : _accountIcon(account.type), color: account.ignoreInTotals ? Colors.grey : Colors.blue)),
@@ -164,17 +309,25 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
                     if (account.ignoreInTotals) const Padding(padding: EdgeInsets.only(left: 4), child: Chip(label: Text('Fora total'), visualDensity: VisualDensity.compact)),
                   ],
                 ),
-                subtitle: Text('${_accountTypeLabel(account.type)}${account.isArchived ? ' • arquivada' : ''}${account.ignoreInTotals ? ' • não soma no saldo total' : ''}\nBase: ${_money(account.initialBalance)}'),
+                subtitle: Text([
+                  '${_accountTypeLabel(account.type)}${account.isArchived ? ' • arquivada' : ''}${account.ignoreInTotals ? ' • não soma no saldo total' : ''}',
+                  'Base: ${_money(account.initialBalance)}',
+                  if (latestAdjustment != null) 'Último ajuste: ${latestAdjustment.delta >= 0 ? '+' : ''}${_money(latestAdjustment.delta)} em ${_safeDateLabel(latestAdjustment.adjustmentDate)}',
+                ].join('\n')),
                 trailing: SizedBox(
-                  width: 128,
+                  width: 150,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       Flexible(child: Text(_money(account.currentBalance), overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, color: account.ignoreInTotals ? Colors.grey : null))),
-                      IconButton(
-                        tooltip: isDefault ? 'Remover conta padrão' : 'Definir como padrão',
-                        icon: Icon(isDefault ? Icons.star : Icons.star_border, color: isDefault ? Colors.amber : null),
-                        onPressed: account.isArchived ? null : () => _setDefaultAccount(isDefault ? null : account.id),
+                      PopupMenuButton<String>(
+                        onSelected: (action) => _handleAccountAction(account, action),
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(value: 'edit', child: Text('Editar conta')),
+                          PopupMenuItem(value: 'default', enabled: !account.isArchived, child: Text(isDefault ? 'Remover padrão' : 'Definir como padrão')),
+                          PopupMenuItem(value: 'adjust', enabled: account.id != null && !account.isArchived, child: const Text('Reajustar saldo')),
+                          PopupMenuItem(value: 'history', enabled: account.id != null, child: const Text('Histórico de ajustes')),
+                        ],
                       ),
                     ],
                   ),
@@ -315,7 +468,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Nome da conta')),
-                TextField(controller: balanceController, decoration: const InputDecoration(labelText: 'Saldo inicial/base', helperText: 'O saldo atual será calculado com as transações pagas e transferências desta conta.'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+                TextField(controller: balanceController, decoration: const InputDecoration(labelText: 'Saldo inicial/base', helperText: 'O saldo atual será calculado com as transações pagas, transferências e reajustes desta conta.'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
                 DropdownButtonFormField<String>(
                   initialValue: type,
                   items: const [
