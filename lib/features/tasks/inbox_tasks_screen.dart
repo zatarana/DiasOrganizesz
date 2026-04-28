@@ -9,6 +9,7 @@ import '../../data/models/task_model.dart';
 import '../../domain/providers.dart';
 import 'create_task_screen.dart';
 import 'quick_add_task_button.dart';
+import 'task_settings_screen.dart';
 import 'task_smart_rules.dart';
 
 class InboxTasksScreen extends ConsumerStatefulWidget {
@@ -53,16 +54,18 @@ class _InboxTasksScreenState extends ConsumerState<InboxTasksScreen> {
   @override
   Widget build(BuildContext context) {
     final tasks = ref.watch(tasksProvider);
+    final settings = ref.watch(appSettingsProvider);
+    final sortKey = settings[TaskSettingsKeys.defaultSort] ?? TaskSettingsDefaults.defaultSort;
     final categories = ref.watch(categoriesProvider);
     final projects = ref.watch(projectsProvider).where((project) => project.status != 'canceled' && project.status != 'completed').toList();
-    final inboxTasks = TaskSmartRules.inboxTasks(tasks);
+    final inboxTasks = TaskSmartRules.inboxTasks(tasks, sortKey: sortKey);
     final noDateButOrganized = tasks.where((task) {
       return TaskSmartRules.isActive(task) &&
           TaskSmartRules.isParentTask(task) &&
           !TaskSmartRules.hasDate(task) &&
           !TaskSmartRules.isInbox(task);
-    }).toList()
-      ..sort(TaskSmartRules.compareByScheduleAndPriority);
+    }).toList();
+    TaskSmartRules.sortTasks(noDateButOrganized, sortKey: sortKey);
 
     return Scaffold(
       appBar: AppBar(
