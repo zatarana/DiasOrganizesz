@@ -1,7 +1,10 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../data/models/category_model.dart';
+import '../../data/models/project_model.dart';
 import '../../data/models/task_model.dart';
 import '../../domain/providers.dart';
 import 'create_task_screen.dart';
@@ -352,8 +355,8 @@ class _InboxSection extends StatelessWidget {
 
 class _InboxTaskTile extends StatelessWidget {
   final Task task;
-  final List<dynamic> categories;
-  final List<dynamic> projects;
+  final List<TaskCategory> categories;
+  final List<Project> projects;
   final VoidCallback onToggle;
   final VoidCallback onOpen;
   final VoidCallback onToday;
@@ -373,8 +376,8 @@ class _InboxTaskTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final categoryName = task.categoryId == null ? null : categories.where((category) => category.id == task.categoryId).map((category) => category.name).cast<String?>().firstOrNull;
-    final projectName = task.projectId == null ? null : projects.where((project) => project.id == task.projectId).map((project) => project.name).cast<String?>().firstOrNull;
+    final categoryName = task.categoryId == null ? null : categories.firstWhereOrNull((category) => category.id == task.categoryId)?.name;
+    final projectName = task.projectId == null ? null : projects.firstWhereOrNull((project) => project.id == task.projectId)?.name;
 
     return Card(
       child: ListTile(
