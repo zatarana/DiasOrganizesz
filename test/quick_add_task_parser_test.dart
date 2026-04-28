@@ -51,5 +51,25 @@ void main() {
       expect(result.time, null);
       expect(result.priority, 'media');
     });
+
+    test('usa prioridade padrão quando texto não define prioridade', () {
+      final result = QuickAddTaskParser.parse('organizar mesa', now: now, defaultPriority: 'alta');
+
+      expect(result.title, 'organizar mesa');
+      expect(result.priority, 'alta');
+    });
+
+    test('prioridade explícita no texto sobrescreve prioridade padrão', () {
+      final result = QuickAddTaskParser.parse('organizar mesa #baixa', now: now, defaultPriority: 'alta');
+
+      expect(result.title, 'organizar mesa');
+      expect(result.priority, 'baixa');
+    });
+
+    test('prioridade padrão inválida cai para média', () {
+      final result = QuickAddTaskParser.parse('organizar mesa', now: now, defaultPriority: 'urgente');
+
+      expect(result.priority, 'media');
+    });
   });
 }
