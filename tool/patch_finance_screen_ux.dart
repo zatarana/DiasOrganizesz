@@ -21,7 +21,6 @@ void main() {
     );
   }
 
-  // Troca apenas pontos de refresh completo já existentes. Não altera todo setState, para evitar recursão.
   text = text.replaceAll('if (mounted) setState(() {});', 'if (mounted) _refreshScreen();');
   text = text.replaceAll('    setState(() {});\n  }\n\n  double _paidIncomeForMonth', '    _refreshScreen();\n  }\n\n  double _paidIncomeForMonth');
 
@@ -33,6 +32,39 @@ void main() {
   }
 
   text = text.replaceAll('future: _loadRealAccountBalance(),', 'future: _realAccountBalanceFuture,');
+
+  text = text.replaceAll(
+    '''        actions: [
+          IconButton(icon: const Icon(Icons.savings_outlined), onPressed: _openPlanning, tooltip: 'Contas, orçamentos e metas'),
+          IconButton(icon: const Icon(Icons.money_off), onPressed: _openDebts, tooltip: 'Dívidas'),
+          IconButton(icon: const Icon(Icons.auto_mode), onPressed: _generateFixedTransactions, tooltip: 'Gerar recorrentes'),
+          IconButton(icon: const Icon(Icons.category), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceCategoriesScreen())), tooltip: 'Categorias'),
+        ],
+''',
+    r'''        actions: [
+          IconButton(icon: const Icon(Icons.savings_outlined), onPressed: _openPlanning, tooltip: 'Contas e metas'),
+          IconButton(icon: const Icon(Icons.payments_outlined), onPressed: _openDebts, tooltip: 'Dívidas'),
+          PopupMenuButton<String>(
+            tooltip: 'Mais ações',
+            onSelected: (value) async {
+              switch (value) {
+                case 'recurring':
+                  await _generateFixedTransactions();
+                  break;
+                case 'categories':
+                  await Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceCategoriesScreen()));
+                  if (mounted) _refreshScreen();
+                  break;
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'recurring', child: ListTile(leading: Icon(Icons.auto_mode), title: Text('Gerar recorrentes'))),
+              PopupMenuItem(value: 'categories', child: ListTile(leading: Icon(Icons.category), title: Text('Categorias'))),
+            ],
+          ),
+        ],
+''',
+  );
 
   text = text.replaceAll(
     '''                      Row(
