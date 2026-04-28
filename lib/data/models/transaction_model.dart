@@ -15,6 +15,10 @@ class FinancialTransaction {
   final bool isFixed;
   final String recurrenceType; // 'none', 'monthly'
   final String? notes;
+  final String? tags;
+  final bool ignoreInTotals;
+  final bool ignoreInReports;
+  final bool ignoreInMonthlySavings;
   final int? debtId;
   final int? installmentNumber;
   final int? totalInstallments;
@@ -39,6 +43,10 @@ class FinancialTransaction {
     this.isFixed = false,
     this.recurrenceType = 'none',
     this.notes,
+    this.tags,
+    this.ignoreInTotals = false,
+    this.ignoreInReports = false,
+    this.ignoreInMonthlySavings = false,
     this.debtId,
     this.installmentNumber,
     this.totalInstallments,
@@ -70,6 +78,11 @@ class FinancialTransaction {
     String? recurrenceType,
     String? notes,
     bool clearNotes = false,
+    String? tags,
+    bool clearTags = false,
+    bool? ignoreInTotals,
+    bool? ignoreInReports,
+    bool? ignoreInMonthlySavings,
     int? debtId,
     bool clearDebtId = false,
     int? installmentNumber,
@@ -98,6 +111,10 @@ class FinancialTransaction {
       isFixed: isFixed ?? this.isFixed,
       recurrenceType: recurrenceType ?? this.recurrenceType,
       notes: clearNotes ? null : (notes ?? this.notes),
+      tags: clearTags ? null : (tags ?? this.tags),
+      ignoreInTotals: ignoreInTotals ?? this.ignoreInTotals,
+      ignoreInReports: ignoreInReports ?? this.ignoreInReports,
+      ignoreInMonthlySavings: ignoreInMonthlySavings ?? this.ignoreInMonthlySavings,
       debtId: clearDebtId ? null : (debtId ?? this.debtId),
       installmentNumber: clearInstallmentNumber ? null : (installmentNumber ?? this.installmentNumber),
       totalInstallments: clearTotalInstallments ? null : (totalInstallments ?? this.totalInstallments),
@@ -125,6 +142,10 @@ class FinancialTransaction {
       'isFixed': isFixed ? 1 : 0,
       'recurrenceType': recurrenceType,
       'notes': notes,
+      'tags': tags,
+      'ignoreInTotals': ignoreInTotals ? 1 : 0,
+      'ignoreInReports': ignoreInReports ? 1 : 0,
+      'ignoreInMonthlySavings': ignoreInMonthlySavings ? 1 : 0,
       'debtId': debtId,
       'installmentNumber': installmentNumber,
       'totalInstallments': totalInstallments,
@@ -149,6 +170,13 @@ class FinancialTransaction {
       return double.tryParse('$value') ?? 0.0;
     }
 
+    bool asBool(dynamic value) {
+      if (value is bool) return value;
+      if (value is num) return value == 1;
+      final normalized = '$value'.toLowerCase();
+      return normalized == 'true' || normalized == '1';
+    }
+
     return FinancialTransaction(
       id: map['id'],
       title: map['title'] ?? 'Movimentação sem título',
@@ -162,10 +190,14 @@ class FinancialTransaction {
       accountId: map['accountId'],
       paymentMethod: map['paymentMethod'],
       status: mappedStatus,
-      reminderEnabled: map['reminderEnabled'] == 1,
-      isFixed: map['isFixed'] == 1,
+      reminderEnabled: asBool(map['reminderEnabled']),
+      isFixed: asBool(map['isFixed']),
       recurrenceType: map['recurrenceType'] ?? 'none',
       notes: map['notes'],
+      tags: map['tags'],
+      ignoreInTotals: asBool(map['ignoreInTotals']),
+      ignoreInReports: asBool(map['ignoreInReports']),
+      ignoreInMonthlySavings: asBool(map['ignoreInMonthlySavings']),
       debtId: map['debtId'],
       installmentNumber: map['installmentNumber'],
       totalInstallments: map['totalInstallments'],
