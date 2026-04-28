@@ -2,6 +2,13 @@ import 'dart:io';
 
 String _asDartSource(String text) => text.replaceAll(r'\n', '\n');
 
+void _assertPatched(bool condition, String message) {
+  if (!condition) {
+    stderr.writeln('ERRO no patch UX Finanças: $message');
+    exit(1);
+  }
+}
+
 void main() {
   final file = File('lib/features/finance/finance_screen.dart');
   if (!file.existsSync()) {
@@ -100,13 +107,12 @@ void main() {
   text = text.replaceAll('withOpacity(0.18)', 'withValues(alpha: 0.18)');
   text = text.replaceAll('withOpacity(0.2)', 'withValues(alpha: 0.2)');
 
-  text = text.replaceAll(
-    '''    final paidExpenseRatio = despesasPrevistas <= 0 ? 0.0 : (despesasPagas / despesasPrevistas).clamp(0.0, 1.0).toDouble();
+  final analysisSource = '''    final paidExpenseRatio = despesasPrevistas <= 0 ? 0.0 : (despesasPagas / despesasPrevistas).clamp(0.0, 1.0).toDouble();
     final categoryTotals = _paidExpensesByCategory(allTransactions, _selectedMonth).entries.toList()..sort((a, b) => b.value.compareTo(a.value));
     final topCategoryEntry = categoryTotals.isEmpty ? null : categoryTotals.first;
     final topCategory = topCategoryEntry == null ? null : _categoryOf(allCategories, topCategoryEntry.key);
-''',
-    '''    final visibleReceitasPagas = filtered.where((t) => t.status == 'paid' && t.type == 'income').fold<double>(0, (sum, t) => sum + t.amount);
+''';
+  const analysisTarget = '''    final visibleReceitasPagas = filtered.where((t) => t.status == 'paid' && t.type == 'income').fold<double>(0, (sum, t) => sum + t.amount);
     final visibleDespesasPagas = filtered.where((t) => t.status == 'paid' && t.type == 'expense').fold<double>(0, (sum, t) => sum + t.amount);
     final visibleDespesasPrevistas = filtered.where((t) => t.status != 'canceled' && t.type == 'expense').fold<double>(0, (sum, t) => sum + t.amount);
     final paidExpenseRatio = visibleDespesasPrevistas <= 0 ? 0.0 : (visibleDespesasPagas / visibleDespesasPrevistas).clamp(0.0, 1.0).toDouble();
@@ -118,10 +124,12 @@ void main() {
     final categoryTotals = visibleCategoryTotals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
     final topCategoryEntry = categoryTotals.isEmpty ? null : categoryTotals.first;
     final topCategory = topCategoryEntry == null ? null : _categoryOf(allCategories, topCategoryEntry.key);
-''',
-  );
-
-  text = text.replaceAll('paidExpenses: despesasPagas,\n                        paidIncomes: receitasPagas,', 'paidExpenses: visibleDespesasPagas,\n                        paidIncomes: visibleReceitasPagas,');
+''';
+  final replacedAnalysis = text.contains(analysisSource);
+  text = text.replaceAll(analysisSource, analysisTarget);
+  if (replacedAnalysis || text.contains('final visibleDespesasPagas')) {
+    text = text.replaceAll('paidExpenses: despesasPagas,\n                        paidIncomes: receitasPagas,', 'paidExpenses: visibleDespesasPagas,\n                        paidIncomes: visibleReceitasPagas,');
+  }
 
   final debtStart = text.indexOf('  Widget _buildDebtBridgeCard(FinanceDebtSnapshot snapshot) {');
   final debtEnd = text.indexOf('  Widget _buildTransactionTile(', debtStart);
@@ -413,6 +421,13 @@ void main() {
   text = text.replaceAll(RegExp(r"'R\\\$ \$\{expenseDiff\.abs\(\)\.toStringAsFixed\(2\)\}'"), "_money(expenseDiff.abs())");
   text = text.replaceAll(RegExp(r"'R\\\$ \$\{topCategoryAmount\.toStringAsFixed\(2\)\}'"), "_money(topCategoryAmount)");
   text = text.replaceAll(RegExp(r"'R\\\$ \$\{previousResult\.toStringAsFixed\(2\)\}'"), "_money(previousResult)");
+
+  _assertPatched(text.contains("NumberFormat.currency(locale: 'pt_BR'"), 'formatador de moeda BR não foi aplicado.');
+  _assertPatched(text.contains('Future<double>? _realAccountBalanceFuture;'), 'cache do saldo real não foi inserido.');
+  _assertPatched(text.contains('Dismissible('), 'swipe para marcar como pago não foi inserido.');
+  _assertPatched(text.contains('Widget _buildFilterButton(') && text.contains('showModalBottomSheet'), 'bottom sheet de filtros não foi inserido.');
+  _assertPatched(text.contains('final visibleDespesasPagas') == text.contains('paidExpenses: visibleDespesasPagas'), 'análise filtrada foi aplicada parcialmente.');
+  _assertPatched(!text.contains('withOpacity'), 'uso de withOpacity permaneceu na tela de finanças.');
 
   file.writeAsStringSync(text);
   stdout.writeln('finance_screen.dart UX patch aplicado.');
