@@ -12,12 +12,14 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 - Dívidas já podem gerar parcelas financeiras.
 - A Home exibe resumo financeiro e resumo de dívidas separadamente.
 - Dívidas foi removida como módulo solto de navegação e passou a pertencer à aba Finanças.
+- A aba inferior Finanças agora abre uma entrada refinada (`FinanceEntryScreen`) em vez de jogar o usuário diretamente na tela clássica de movimentações.
+- A entrada refinada separa uso diário (`FinanceScreen`) de navegação avançada (`FinanceHubScreen`).
 - Contas, saldos, transferências, contas ignoradas nos totais e reajustes de saldo já possuem base estrutural.
 - Categorias, subcategorias, orçamentos avançados e relatórios financeiros principais já possuem base estrutural, telas e testes.
 - Cartões, faturas, compras no cartão, pagamento de fatura e movimentação de compra entre faturas já possuem base estrutural, telas e testes.
 - Objetivos financeiros, economia mensal, sugestão de aporte e vínculo futuro com projetos já possuem base estrutural, tela e testes.
 - Evolução mensal, débito vs crédito, central de relatórios e exportação CSV já possuem base estrutural, telas e testes.
-- A aba Finanças está em reconstrução gradual para alcançar o escopo desejado.
+- A Central Financeira (`FinanceHubScreen`) organiza recursos por visão/planejamento, compromissos/meios de pagamento e análise/exportação.
 - Não há ainda anexos, exportação PDF e gráficos visuais com biblioteca dedicada.
 
 ## Princípios de implementação
@@ -228,7 +230,13 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 
 ### Tarefas
 
-- Criar tela com abas internas ou seções bem definidas.
+- Criar tela de entrada financeira (`FinanceEntryScreen`).
+- Criar Central Financeira (`FinanceHubScreen`).
+- Separar uso diário de movimentações da navegação avançada.
+- Manter a tela clássica de movimentações acessível para lançamentos rápidos.
+- Conectar a aba inferior Finanças à nova entrada financeira.
+- Conectar cards Financeiro e Dívidas da Home à nova entrada financeira.
+- Criar tela com seções bem definidas.
 - Melhorar cards de resumo.
 - Usar marcadores visuais para fixa, dívida, atraso, ignorada e paga.
 - Criar ações rápidas.
@@ -239,8 +247,10 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 ### Critério de conclusão
 
 - A aba será poderosa sem parecer uma planilha jogada dentro do app.
+- A navegação principal de Finanças deve abrir uma entrada limpa e compreensível.
+- A Home deve preservar card separado de Dívidas, mas direcionar para a experiência financeira integrada.
 
-**Status:** próxima fase.
+**Status:** em andamento avançado; pendente validação de build e refinamentos finais.
 
 ## Progresso geral
 
@@ -254,8 +264,8 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 | 5 | Cartões e faturas | Concluída estruturalmente |
 | 6 | Objetivos e economia mensal | Concluída estruturalmente |
 | 7 | Gráficos, relatórios e exportação | Concluída estruturalmente |
-| 8 | Refinamento UX/UI | Próxima fase |
+| 8 | Refinamento UX/UI | Em andamento avançado |
 
 ## Observação importante
 
-A reconstrução deve ser feita em partes pequenas, testáveis e reversíveis. A aba Finanças mudará profundamente, mas o app não deve perder o funcionamento atual de tarefas, projetos, calendário, dívidas e configurações.
+A reconstrução deve ser feita em partes pequenas, testáveis e reversíveis. A aba Finanças mudou profundamente, mas o app não deve perder o funcionamento atual de tarefas, projetos, calendário, dívidas e configurações.
