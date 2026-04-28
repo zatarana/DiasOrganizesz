@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/database/db_helper.dart';
+import '../../data/models/setting_model.dart';
 import '../../domain/providers.dart';
 
 class TaskSettingsKeys {
@@ -23,6 +25,43 @@ class TaskSettingsDefaults {
   static const defaultReminderHour = '09:00';
   static const quickAddDefaultPriority = 'media';
   static const inboxAsDefaultCapture = 'true';
+
+  static const values = <String, String>{
+    TaskSettingsKeys.defaultView: defaultView,
+    TaskSettingsKeys.showCompletedInline: showCompletedInline,
+    TaskSettingsKeys.showSubtasksInline: showSubtasksInline,
+    TaskSettingsKeys.showProjectBadges: showProjectBadges,
+    TaskSettingsKeys.defaultSort: defaultSort,
+    TaskSettingsKeys.defaultReminderHour: defaultReminderHour,
+    TaskSettingsKeys.quickAddDefaultPriority: quickAddDefaultPriority,
+    TaskSettingsKeys.inboxAsDefaultCapture: inboxAsDefaultCapture,
+  };
+}
+
+final taskSettingsProvider = StateNotifierProvider<TaskSettingsNotifier, Map<String, String>>((ref) {
+  return TaskSettingsNotifier(ref.watch(dbProvider));
+});
+
+class TaskSettingsNotifier extends StateNotifier<Map<String, String>> {
+  final DatabaseHelper db;
+
+  TaskSettingsNotifier(this.db) : super(Map<String, String>.from(TaskSettingsDefaults.values)) {
+    loadSettings();
+  }
+
+  Future<void> loadSettings() async {
+    final loaded = Map<String, String>.from(state);
+    for (final key in TaskSettingsDefaults.values.keys) {
+      final setting = await db.getSetting(key);
+      if (setting != null) loaded[key] = setting.value;
+    }
+    state = loaded;
+  }
+
+  Future<void> setValue(String key, String value) async {
+    await db.saveSetting(AppSetting(key: key, value: value));
+    state = {...state, key: value};
+  }
 }
 
 class TaskSettingsScreen extends ConsumerWidget {
@@ -30,8 +69,8 @@ class TaskSettingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final settings = ref.watch(appSettingsProvider);
-    final notifier = ref.read(appSettingsProvider.notifier);
+    final settings = ref.watch(taskSettingsProvider);
+    final notifier = ref.read(taskSettingsProvider.notifier);
 
     String valueOf(String key, String fallback) => settings[key] ?? fallback;
     bool boolOf(String key, String fallback) => valueOf(key, fallback) == 'true';
