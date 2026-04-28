@@ -266,250 +266,278 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
             ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Opacity(
-                opacity: _isDebtInstallment ? 0.65 : 1,
-                child: SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'income', label: Text('Receita', style: TextStyle(color: Colors.green))),
-                    ButtonSegment(value: 'expense', label: Text('Despesa', style: TextStyle(color: Colors.red))),
-                  ],
-                  selected: {_type},
-                  onSelectionChanged: (set) => _setType(set.first),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _TransactionFormSection(
+              title: 'Tipo e valor',
+              icon: Icons.payments_outlined,
+              subtitle: 'Dados principais da movimentação.',
+              children: [
+                Opacity(
+                  opacity: _isDebtInstallment ? 0.65 : 1,
+                  child: SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'income', label: Text('Receita', style: TextStyle(color: Colors.green))),
+                      ButtonSegment(value: 'expense', label: Text('Despesa', style: TextStyle(color: Colors.red))),
+                    ],
+                    selected: {_type},
+                    onSelectionChanged: (set) => _setType(set.first),
+                  ),
                 ),
-              ),
-              if (_isDebtInstallment) ...[
-                const SizedBox(height: 12),
-                _DebtInstallmentInfoCard(transaction: widget.transaction!, debt: linkedDebt),
-              ],
-              const SizedBox(height: 16),
-              TextField(
-                controller: _titleController,
-                decoration: InputDecoration(
-                  labelText: 'Título',
-                  border: const OutlineInputBorder(),
-                  helperText: _isDebtInstallment ? 'Esta movimentação é uma parcela vinculada à aba Dívidas.' : null,
-                  errorText: _titleError,
-                ),
-                onChanged: (_) {
-                  if (_titleError != null) setState(() => _titleError = null);
-                },
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(labelText: 'Descrição', border: OutlineInputBorder()),
-                maxLines: 2,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _amountController,
-                decoration: InputDecoration(
-                  labelText: 'Valor',
-                  prefixText: 'R\$ ',
-                  border: const OutlineInputBorder(),
-                  helperText: _isDebtInstallment ? 'Aceita 1000,50, 1.000,50 ou 1000.50.' : 'Aceita 1000,50, 1.000,50 ou 1000.50.',
-                  errorText: _amountError,
-                ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (_) {
-                  if (_amountError != null) setState(() => _amountError = null);
-                },
-              ),
-              if (_status == 'paid') ...[
+                if (_isDebtInstallment) ...[
+                  const SizedBox(height: 12),
+                  _DebtInstallmentInfoCard(transaction: widget.transaction!, debt: linkedDebt),
+                ],
                 const SizedBox(height: 16),
                 TextField(
-                  controller: _discountController,
+                  controller: _titleController,
                   decoration: InputDecoration(
-                    labelText: _isDebtInstallment ? 'Desconto / Abatimento extra' : 'Desconto / Economia gerada',
+                    labelText: 'Título',
+                    border: const OutlineInputBorder(),
+                    helperText: _isDebtInstallment ? 'Esta movimentação é uma parcela vinculada à aba Dívidas.' : null,
+                    errorText: _titleError,
+                  ),
+                  onChanged: (_) {
+                    if (_titleError != null) setState(() => _titleError = null);
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _descriptionController,
+                  decoration: const InputDecoration(labelText: 'Descrição', border: OutlineInputBorder()),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _amountController,
+                  decoration: InputDecoration(
+                    labelText: 'Valor',
                     prefixText: 'R\$ ',
                     border: const OutlineInputBorder(),
-                    hintText: _isDebtInstallment ? 'Ex: desconto por antecipar parcela' : (_type == 'expense' ? 'Desconto por pagar antecipado' : 'Desconto concedido'),
-                    helperText: _isDebtInstallment ? 'O desconto também abate o saldo restante da dívida.' : 'Aceita vírgula ou ponto decimal.',
-                    errorText: _discountError,
+                    helperText: _isDebtInstallment ? 'Aceita 1000,50, 1.000,50 ou 1000.50.' : 'Aceita 1000,50, 1.000,50 ou 1000.50.',
+                    errorText: _amountError,
                   ),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   onChanged: (_) {
-                    if (_discountError != null) setState(() => _discountError = null);
+                    if (_amountError != null) setState(() => _amountError = null);
                   },
                 ),
+                if (_status == 'paid') ...[
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _discountController,
+                    decoration: InputDecoration(
+                      labelText: _isDebtInstallment ? 'Desconto / Abatimento extra' : 'Desconto / Economia gerada',
+                      prefixText: 'R\$ ',
+                      border: const OutlineInputBorder(),
+                      hintText: _isDebtInstallment ? 'Ex: desconto por antecipar parcela' : (_type == 'expense' ? 'Desconto por pagar antecipado' : 'Desconto concedido'),
+                      helperText: _isDebtInstallment ? 'O desconto também abate o saldo restante da dívida.' : 'Aceita vírgula ou ponto decimal.',
+                      errorText: _discountError,
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: (_) {
+                      if (_discountError != null) setState(() => _discountError = null);
+                    },
+                  ),
+                ],
               ],
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () async {
-                        final dt = await showDatePicker(context: context, initialDate: _transactionDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
-                        if (dt != null) setState(() => _transactionDate = dt);
-                      },
-                      child: Text('Data: ${DateFormat('dd/MM/yyyy').format(_transactionDate)}'),
+            ),
+            const SizedBox(height: 12),
+            _TransactionFormSection(
+              title: 'Datas e status',
+              icon: Icons.event_available_outlined,
+              subtitle: 'Controle vencimento, lembrete e situação.',
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () async {
+                          final dt = await showDatePicker(context: context, initialDate: _transactionDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
+                          if (dt != null) setState(() => _transactionDate = dt);
+                        },
+                        child: Text('Data: ${DateFormat('dd/MM/yyyy').format(_transactionDate)}'),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () async {
-                        final dt = await showDatePicker(context: context, initialDate: _dueDate ?? _transactionDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
-                        if (dt != null) setState(() => _dueDate = dt);
-                      },
-                      child: Text(_dueDate == null ? 'Vencimento: -' : 'Venc. ${DateFormat('dd/MM/yyyy').format(_dueDate!)}'),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () async {
+                          final dt = await showDatePicker(context: context, initialDate: _dueDate ?? _transactionDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
+                          if (dt != null) setState(() => _dueDate = dt);
+                        },
+                        child: Text(_dueDate == null ? 'Vencimento: -' : 'Venc. ${DateFormat('dd/MM/yyyy').format(_dueDate!)}'),
+                      ),
                     ),
-                  ),
-                  if (_dueDate != null)
-                    IconButton(
-                      tooltip: 'Limpar vencimento',
-                      icon: const Icon(Icons.clear),
-                      onPressed: () => setState(() {
-                        _dueDate = null;
-                        if (!_canUseReminder()) _reminderEnabled = false;
-                      }),
-                    ),
-                ],
-              ),
-              SwitchListTile(
-                title: const Text('Ativar lembrete local'),
-                subtitle: Text(_isDebtInstallment ? 'Lembrete da parcela vinculada à dívida' : 'Para vencimento/receita prevista'),
-                value: _canUseReminder() && _reminderEnabled,
-                onChanged: _canUseReminder() ? (v) => setState(() => _reminderEnabled = v) : null,
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<int>(
-                initialValue: safeCategoryId,
-                items: [
-                  const DropdownMenuItem(value: null, child: Text('Sem Categoria')),
-                  ...categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
-                ],
-                onChanged: (v) => setState(() {
-                  _categoryId = v;
-                  if (_subcategoryId != null && !_selectableSubcategories(v).any((subcategory) => subcategory.id == _subcategoryId)) {
-                    _subcategoryId = null;
-                  }
-                }),
-                decoration: const InputDecoration(labelText: 'Categoria', border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<int>(
-                initialValue: safeSubcategoryId,
-                items: [
-                  const DropdownMenuItem(value: null, child: Text('Sem Subcategoria')),
-                  ...selectableSubcategories.map((subcategory) => DropdownMenuItem(value: subcategory.id, child: Text('${subcategory.name}${subcategory.isArchived ? ' (arquivada)' : ''}'))),
-                ],
-                onChanged: safeCategoryId == null ? null : (v) => setState(() => _subcategoryId = v),
-                decoration: InputDecoration(
-                  labelText: 'Subcategoria',
-                  border: const OutlineInputBorder(),
-                  helperText: safeCategoryId == null ? 'Escolha uma categoria para habilitar subcategorias.' : null,
-                ),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<int>(
-                initialValue: safeAccountId,
-                items: [
-                  const DropdownMenuItem(value: null, child: Text('Sem conta')),
-                  ...selectableAccounts.map((account) => DropdownMenuItem(value: account.id, child: Text('${account.name}${account.isArchived ? ' (arquivada)' : ''}'))),
-                ],
-                onChanged: _loadingAccounts
-                    ? null
-                    : (v) => setState(() {
-                          _accountId = v;
-                          _accountError = null;
+                    if (_dueDate != null)
+                      IconButton(
+                        tooltip: 'Limpar vencimento',
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => setState(() {
+                          _dueDate = null;
+                          if (!_canUseReminder()) _reminderEnabled = false;
                         }),
-                decoration: InputDecoration(
-                  labelText: _status == 'paid' ? 'Conta utilizada (obrigatória)' : 'Conta vinculada',
-                  border: const OutlineInputBorder(),
-                  helperText: _status == 'paid' ? 'Transações pagas alteram o saldo da conta.' : 'Será usada quando a transação for paga.',
-                  errorText: _accountError,
+                      ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: _selectedPaymentMethod,
-                items: [
-                  const DropdownMenuItem(value: null, child: Text('Forma de Pagamento (Nenhuma)')),
-                  ..._paymentMethods.map((m) => DropdownMenuItem(value: m, child: Text(m.toUpperCase()))),
-                ],
-                onChanged: (v) => setState(() => _selectedPaymentMethod = v),
-                decoration: const InputDecoration(labelText: 'Forma de Pagamento', border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: _status,
-                items: statusItems,
-                onChanged: (v) {
-                  setState(() {
-                    _status = v!;
-                    _accountError = null;
-                    if (_status == 'paid') {
-                      _paidDate ??= DateTime.now();
-                    } else {
-                      _paidDate = null;
-                      _discountController.clear();
-                      _discountError = null;
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Ativar lembrete local'),
+                  subtitle: Text(_isDebtInstallment ? 'Lembrete da parcela vinculada à dívida' : 'Para vencimento/receita prevista'),
+                  value: _canUseReminder() && _reminderEnabled,
+                  onChanged: _canUseReminder() ? (v) => setState(() => _reminderEnabled = v) : null,
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  initialValue: _status,
+                  items: statusItems,
+                  onChanged: (v) {
+                    setState(() {
+                      _status = v!;
+                      _accountError = null;
+                      if (_status == 'paid') {
+                        _paidDate ??= DateTime.now();
+                      } else {
+                        _paidDate = null;
+                        _discountController.clear();
+                        _discountError = null;
+                      }
+                      if (!_canUseReminder()) _reminderEnabled = false;
+                    });
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Status Atual',
+                    border: const OutlineInputBorder(),
+                    helperText: _isEditing ? null : 'Atraso é calculado automaticamente pelo vencimento.',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Lançamento fixo mensal?'),
+                  subtitle: Text(_isDebtInstallment ? 'Parcelas de dívida não usam recorrência fixa manual' : (_isFixed ? 'Sim' : 'Não')),
+                  value: !_isDebtInstallment && _isFixed,
+                  onChanged: _isDebtInstallment
+                      ? null
+                      : (val) {
+                          setState(() {
+                            _isFixed = val;
+                            _recurrenceType = val ? 'monthly' : 'none';
+                          });
+                        },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _TransactionFormSection(
+              title: 'Classificação',
+              icon: Icons.category_outlined,
+              subtitle: 'Categoria, conta, forma de pagamento e tags.',
+              children: [
+                DropdownButtonFormField<int>(
+                  initialValue: safeCategoryId,
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('Sem Categoria')),
+                    ...categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                  ],
+                  onChanged: (v) => setState(() {
+                    _categoryId = v;
+                    if (_subcategoryId != null && !_selectableSubcategories(v).any((subcategory) => subcategory.id == _subcategoryId)) {
+                      _subcategoryId = null;
                     }
-                    if (!_canUseReminder()) _reminderEnabled = false;
-                  });
-                },
-                decoration: InputDecoration(
-                  labelText: 'Status Atual',
-                  border: const OutlineInputBorder(),
-                  helperText: _isEditing ? null : 'Atraso é calculado automaticamente pelo vencimento.',
+                  }),
+                  decoration: const InputDecoration(labelText: 'Categoria', border: OutlineInputBorder()),
                 ),
-              ),
-              const SizedBox(height: 16),
-              SwitchListTile(
-                title: const Text('Lançamento fixo mensal?'),
-                subtitle: Text(_isDebtInstallment ? 'Parcelas de dívida não usam recorrência fixa manual' : (_isFixed ? 'Sim' : 'Não')),
-                value: !_isDebtInstallment && _isFixed,
-                onChanged: _isDebtInstallment
-                    ? null
-                    : (val) {
-                        setState(() {
-                          _isFixed = val;
-                          _recurrenceType = val ? 'monthly' : 'none';
-                        });
-                      },
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _tagsController,
-                decoration: const InputDecoration(
-                  labelText: 'Tags',
-                  hintText: 'Ex: essencial, casa, trabalho',
-                  helperText: 'Separe por vírgulas para facilitar filtros e relatórios futuros.',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<int>(
+                  initialValue: safeSubcategoryId,
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('Sem Subcategoria')),
+                    ...selectableSubcategories.map((subcategory) => DropdownMenuItem(value: subcategory.id, child: Text('${subcategory.name}${subcategory.isArchived ? ' (arquivada)' : ''}'))),
+                  ],
+                  onChanged: safeCategoryId == null ? null : (v) => setState(() => _subcategoryId = v),
+                  decoration: InputDecoration(
+                    labelText: 'Subcategoria',
+                    border: const OutlineInputBorder(),
+                    helperText: safeCategoryId == null ? 'Escolha uma categoria para habilitar subcategorias.' : null,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              _AdvancedTransactionOptions(
-                ignoreInTotals: _ignoreInTotals,
-                ignoreInReports: _ignoreInReports,
-                ignoreInMonthlySavings: _ignoreInMonthlySavings,
-                onIgnoreInTotalsChanged: (value) => setState(() => _ignoreInTotals = value),
-                onIgnoreInReportsChanged: (value) => setState(() => _ignoreInReports = value),
-                onIgnoreInMonthlySavingsChanged: (value) => setState(() => _ignoreInMonthlySavings = value),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _notesController,
-                decoration: const InputDecoration(labelText: 'Observações (Opcional)', border: OutlineInputBorder()),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 32),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                onPressed: _isSaving ? null : _save,
-                child: _isSaving
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Salvar'),
-              ),
-            ],
-          ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<int>(
+                  initialValue: safeAccountId,
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('Sem conta')),
+                    ...selectableAccounts.map((account) => DropdownMenuItem(value: account.id, child: Text('${account.name}${account.isArchived ? ' (arquivada)' : ''}'))),
+                  ],
+                  onChanged: _loadingAccounts
+                      ? null
+                      : (v) => setState(() {
+                            _accountId = v;
+                            _accountError = null;
+                          }),
+                  decoration: InputDecoration(
+                    labelText: _status == 'paid' ? 'Conta utilizada (obrigatória)' : 'Conta vinculada',
+                    border: const OutlineInputBorder(),
+                    helperText: _status == 'paid' ? 'Transações pagas alteram o saldo da conta.' : 'Será usada quando a transação for paga.',
+                    errorText: _accountError,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedPaymentMethod,
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('Forma de Pagamento (Nenhuma)')),
+                    ..._paymentMethods.map((m) => DropdownMenuItem(value: m, child: Text(m.toUpperCase()))),
+                  ],
+                  onChanged: (v) => setState(() => _selectedPaymentMethod = v),
+                  decoration: const InputDecoration(labelText: 'Forma de Pagamento', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _tagsController,
+                  decoration: const InputDecoration(
+                    labelText: 'Tags',
+                    hintText: 'Ex: essencial, casa, trabalho',
+                    helperText: 'Separe por vírgulas para facilitar filtros e relatórios futuros.',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _AdvancedTransactionOptions(
+              ignoreInTotals: _ignoreInTotals,
+              ignoreInReports: _ignoreInReports,
+              ignoreInMonthlySavings: _ignoreInMonthlySavings,
+              onIgnoreInTotalsChanged: (value) => setState(() => _ignoreInTotals = value),
+              onIgnoreInReportsChanged: (value) => setState(() => _ignoreInReports = value),
+              onIgnoreInMonthlySavingsChanged: (value) => setState(() => _ignoreInMonthlySavings = value),
+            ),
+            const SizedBox(height: 12),
+            _TransactionFormSection(
+              title: 'Observações',
+              icon: Icons.notes_outlined,
+              subtitle: 'Informações livres para consulta futura.',
+              children: [
+                TextField(
+                  controller: _notesController,
+                  decoration: const InputDecoration(labelText: 'Observações (Opcional)', border: OutlineInputBorder()),
+                  maxLines: 3,
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+              onPressed: _isSaving ? null : _save,
+              child: _isSaving
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Salvar'),
+            ),
+          ],
         ),
       ),
     );
@@ -606,6 +634,57 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   }
 }
 
+class _TransactionFormSection extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final IconData icon;
+  final List<Widget> children;
+
+  const _TransactionFormSection({
+    required this.title,
+    required this.icon,
+    required this.children,
+    this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.grey.shade300)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(subtitle!, style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _AdvancedTransactionOptions extends StatelessWidget {
   final bool ignoreInTotals;
   final bool ignoreInReports;
@@ -625,24 +704,27 @@ class _AdvancedTransactionOptions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ExpansionTile(
-      tilePadding: EdgeInsets.zero,
-      title: const Text('Opções avançadas'),
-      subtitle: const Text('Controle como esta movimentação aparece nos cálculos'),
+    return _TransactionFormSection(
+      title: 'Opções avançadas',
+      icon: Icons.tune_outlined,
+      subtitle: 'Controle como esta movimentação aparece nos cálculos.',
       children: [
         SwitchListTile(
+          contentPadding: EdgeInsets.zero,
           title: const Text('Ignorar nos totais financeiros'),
           subtitle: const Text('Não entra em saldos previstos, resumos e totais gerais.'),
           value: ignoreInTotals,
           onChanged: onIgnoreInTotalsChanged,
         ),
         SwitchListTile(
+          contentPadding: EdgeInsets.zero,
           title: const Text('Ignorar em relatórios e gráficos'),
           subtitle: const Text('Útil para lançamentos técnicos, ajustes ou movimentações que não quer analisar.'),
           value: ignoreInReports,
           onChanged: onIgnoreInReportsChanged,
         ),
         SwitchListTile(
+          contentPadding: EdgeInsets.zero,
           title: const Text('Ignorar na economia mensal'),
           subtitle: const Text('Não afeta cálculo de sobra/economia do mês.'),
           value: ignoreInMonthlySavings,
@@ -675,7 +757,7 @@ class _DebtInstallmentInfoCard extends StatelessWidget {
           children: [
             Row(
               children: const [
-                Icon(Icons.money_off, color: Colors.deepOrange),
+                Icon(Icons.payments_outlined, color: Colors.deepOrange),
                 SizedBox(width: 8),
                 Expanded(child: Text('Parcela de dívida', style: TextStyle(fontWeight: FontWeight.bold))),
               ],
