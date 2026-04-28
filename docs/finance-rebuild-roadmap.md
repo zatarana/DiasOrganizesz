@@ -12,8 +12,9 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 - Dívidas já podem gerar parcelas financeiras.
 - A Home exibe resumo financeiro e resumo de dívidas separadamente.
 - Dívidas foi removida como módulo solto de navegação e passou a pertencer à aba Finanças.
+- Contas, saldos, transferências, contas ignoradas nos totais e reajustes de saldo já possuem base estrutural.
 - A aba Finanças está em reconstrução gradual para alcançar o escopo desejado.
-- Não há ainda transferências completas, cartões/faturas, subcategorias, anexos, relatórios avançados e gráficos financeiros completos.
+- Não há ainda cartões/faturas, subcategorias completas, anexos, relatórios avançados e gráficos financeiros completos.
 
 ## Princípios de implementação
 
@@ -94,7 +95,7 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 - Receitas e despesas terão base de dados pronta para relatórios, gráficos e resumo avançado.
 - As regras principais terão testes básicos.
 
-**Status:** em andamento avançado.
+**Status:** em andamento avançado; pendente conexão completa da tela principal ao provider novo.
 
 ## Fase 3 — Contas, saldos e transferências
 
@@ -108,12 +109,15 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 - Fazer transferências aparecerem como saída na origem e entrada no destino.
 - Calcular impacto no saldo geral quando uma conta for ignorada nos totais.
 - Adicionar reajuste de saldo.
+- Criar histórico básico de reajustes.
+- Criar testes de saldo com transações, transferências, reajustes e contas ignoradas.
 
 ### Critério de conclusão
 
 - O usuário conseguirá controlar carteira, banco, caixinha, investimento e movimentações entre elas.
+- O saldo será recalculável com base em saldo inicial, transações pagas, transferências e reajustes.
 
-**Status:** pendente.
+**Status:** concluída estruturalmente; pendente refinamento visual e validação de build.
 
 ## Fase 4 — Categorias, subcategorias e orçamentos
 
@@ -125,14 +129,17 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 - Garantir subcategoria padrão `Outros`.
 - Melhorar gestão de categorias.
 - Criar orçamento por categoria e mês.
+- Evoluir orçamento para categoria + subcategoria.
 - Mostrar consumo do orçamento na aba Finanças.
 - Permitir filtros por categoria e subcategoria.
+- Preparar relatórios futuros por categoria/subcategoria.
 
 ### Critério de conclusão
 
-- O usuário conseguirá entender para onde o dinheiro está indo e comparar com limites planejados.
+- O usuário conseguirá entender para onde o dinheiro está indo e comparar com limites definidos.
+- Orçamentos poderão ser gerais, por categoria ou por subcategoria.
 
-**Status:** pendente.
+**Status:** iniciada.
 
 ## Fase 5 — Cartões e faturas
 
@@ -216,8 +223,8 @@ A diretriz é transformar Finanças em um módulo central e completo. Dívidas e
 | 0 | Planejamento e proteção do core | Concluída |
 | 1 | Finanças enxerga Dívidas | Concluída estruturalmente |
 | 2 | Novo modelo de transações | Em andamento avançado |
-| 3 | Contas, saldos e transferências | Pendente |
-| 4 | Categorias, subcategorias e orçamentos | Pendente |
+| 3 | Contas, saldos e transferências | Concluída estruturalmente |
+| 4 | Categorias, subcategorias e orçamentos | Iniciada |
 | 5 | Cartões e faturas | Pendente |
 | 6 | Objetivos e economia mensal | Pendente |
 | 7 | Gráficos, relatórios e exportação | Pendente |
