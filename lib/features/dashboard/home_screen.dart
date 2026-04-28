@@ -12,7 +12,7 @@ import '../projects/projects_screen.dart';
 import '../settings/settings_screen.dart';
 import '../statistics/stats_screen.dart';
 import '../tasks/create_task_screen.dart';
-import '../tasks/task_list_screen.dart';
+import '../tasks/tasks_entry_screen.dart';
 import 'app_drawer.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -27,7 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   late final List<Widget> _pages = [
     const TaskDashboard(),
-    const TaskListScreen(),
+    const TasksEntryScreen(),
     const FinanceEntryScreen(),
     const ProjectsScreen(),
     const MoreScreen(),
@@ -224,7 +224,7 @@ class _TaskDashboardState extends ConsumerState<TaskDashboard> {
         final realAccountBalance = accountSnapshot.data ?? 0;
         final cards = <Widget>[
           _DashboardSummaryCard(title: 'Financeiro', icon: Icons.account_balance_wallet, color: Colors.blue, lines: ['Saldo real: ${money(realAccountBalance)}', 'Resultado mês: ${money(resultadoRealizadoMes)}', 'Previsto mês: ${money(saldoPrevisto)}'], onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceEntryScreen()))),
-          _DashboardSummaryCard(title: 'Tarefas', icon: Icons.checklist, color: Colors.green, lines: ['Hoje: ${todayTasks.length}', 'Pendentes: $pendingTasks', 'Atrasadas: $overdueTasks'], onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskListScreen()))),
+          _DashboardSummaryCard(title: 'Tarefas', icon: Icons.checklist, color: Colors.green, lines: ['Hoje: ${todayTasks.length}', 'Pendentes: $pendingTasks', 'Atrasadas: $overdueTasks'], onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TasksEntryScreen()))),
           _DashboardSummaryCard(title: 'Dívidas', icon: Icons.money_off, color: Colors.deepOrange, lines: ['Em aberto: $openDebts', 'Restante: ${money(remainingDebts)}', 'Parcelas atraso: $overdueDebtInstallments'], onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceEntryScreen()))),
           if (showProjectsCard) _DashboardSummaryCard(title: 'Projetos', icon: Icons.rocket_launch, color: Colors.purple, lines: ['Ativos: $activeProjects', 'Atrasados: $overdueProjects', 'Total: ${validProjects.length}'], onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProjectsScreen()))),
         ];
