@@ -7,7 +7,6 @@ import '../../domain/providers.dart';
 import '../../data/models/task_model.dart';
 import '../calendar/calendar_screen.dart';
 import '../categories/categories_screen.dart';
-import '../debts/debts_screen.dart';
 import '../finance/finance_screen.dart';
 import '../projects/projects_screen.dart';
 import '../settings/settings_screen.dart';
@@ -72,9 +71,6 @@ class MoreScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('Mais módulos')),
       body: ListView(
         children: const [
-          ListTile(title: Text('Acesso rápido', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey))),
-          _MoreTile(icon: Icons.money_off, title: 'Dívidas', subtitle: 'Acesse rapidamente suas dívidas e parcelas', page: DebtsScreen()),
-          Divider(),
           ListTile(title: Text('Outros recursos', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey))),
           _MoreTile(icon: Icons.calendar_month, title: 'Calendário', page: CalendarScreen()),
           _MoreTile(icon: Icons.category, title: 'Categorias', page: CategoriesScreen()),
@@ -231,7 +227,7 @@ class _TaskDashboardState extends ConsumerState<TaskDashboard> {
         final cards = <Widget>[
           _DashboardSummaryCard(title: 'Financeiro', icon: Icons.account_balance_wallet, color: Colors.blue, lines: ['Saldo real: ${money(realAccountBalance)}', 'Resultado mês: ${money(resultadoRealizadoMes)}', 'Previsto mês: ${money(saldoPrevisto)}'], onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceScreen()))),
           _DashboardSummaryCard(title: 'Tarefas', icon: Icons.checklist, color: Colors.green, lines: ['Hoje: ${todayTasks.length}', 'Pendentes: $pendingTasks', 'Atrasadas: $overdueTasks'], onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskListScreen()))),
-          _DashboardSummaryCard(title: 'Dívidas', icon: Icons.money_off, color: Colors.deepOrange, lines: ['Em aberto: $openDebts', 'Restante: ${money(remainingDebts)}', 'Parcelas atraso: $overdueDebtInstallments'], onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtsScreen()))),
+          _DashboardSummaryCard(title: 'Dívidas', icon: Icons.money_off, color: Colors.deepOrange, lines: ['Em aberto: $openDebts', 'Restante: ${money(remainingDebts)}', 'Parcelas atraso: $overdueDebtInstallments'], onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceScreen()))),
           if (showProjectsCard) _DashboardSummaryCard(title: 'Projetos', icon: Icons.rocket_launch, color: Colors.purple, lines: ['Ativos: $activeProjects', 'Atrasados: $overdueProjects', 'Total: ${validProjects.length}'], onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProjectsScreen()))),
         ];
 
