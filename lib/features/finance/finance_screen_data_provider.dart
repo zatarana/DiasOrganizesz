@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/database/finance_planning_store.dart';
 import '../../domain/providers.dart';
 import 'finance_screen_data.dart';
 
@@ -8,6 +9,7 @@ class FinanceScreenFilters {
   final String filterType;
   final String filterStatus;
   final int? filterCategory;
+  final int? filterSubcategory;
   final String searchQuery;
 
   const FinanceScreenFilters({
@@ -15,6 +17,7 @@ class FinanceScreenFilters {
     required this.filterType,
     required this.filterStatus,
     required this.filterCategory,
+    required this.filterSubcategory,
     required this.searchQuery,
   });
 
@@ -24,6 +27,8 @@ class FinanceScreenFilters {
     String? filterStatus,
     int? filterCategory,
     bool clearFilterCategory = false,
+    int? filterSubcategory,
+    bool clearFilterSubcategory = false,
     String? searchQuery,
   }) {
     return FinanceScreenFilters(
@@ -31,6 +36,7 @@ class FinanceScreenFilters {
       filterType: filterType ?? this.filterType,
       filterStatus: filterStatus ?? this.filterStatus,
       filterCategory: clearFilterCategory ? null : (filterCategory ?? this.filterCategory),
+      filterSubcategory: clearFilterSubcategory ? null : (filterSubcategory ?? this.filterSubcategory),
       searchQuery: searchQuery ?? this.searchQuery,
     );
   }
@@ -44,6 +50,7 @@ class FinanceScreenFilters {
         other.filterType == filterType &&
         other.filterStatus == filterStatus &&
         other.filterCategory == filterCategory &&
+        other.filterSubcategory == filterSubcategory &&
         other.searchQuery == searchQuery;
   }
 
@@ -54,23 +61,32 @@ class FinanceScreenFilters {
         filterType,
         filterStatus,
         filterCategory,
+        filterSubcategory,
         searchQuery,
       );
 }
+
+final financeSubcategoriesProvider = FutureProvider((ref) async {
+  final db = await ref.watch(dbProvider).database;
+  return FinancePlanningStore.getSubcategories(db, includeArchived: true);
+});
 
 final financeScreenDataProvider = Provider.family<FinanceScreenData, FinanceScreenFilters>((ref, filters) {
   final transactions = ref.watch(transactionsProvider);
   final categories = ref.watch(financialCategoriesProvider);
   final debts = ref.watch(debtsProvider);
+  final subcategories = ref.watch(financeSubcategoriesProvider).maybeWhen(data: (items) => items, orElse: () => const []);
 
   return FinanceScreenData.build(
     selectedMonth: filters.selectedMonth,
     transactions: transactions,
     categories: categories,
+    subcategories: subcategories,
     debts: debts,
     filterType: filters.filterType,
     filterStatus: filters.filterStatus,
     filterCategory: filters.filterCategory,
+    filterSubcategory: filters.filterSubcategory,
     searchQuery: filters.searchQuery,
   );
 });
