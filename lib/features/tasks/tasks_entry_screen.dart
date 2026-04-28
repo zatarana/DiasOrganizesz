@@ -17,6 +17,7 @@ import 'task_search_screen.dart';
 import 'task_settings_screen.dart';
 import 'task_smart_list_screen.dart';
 import 'task_smart_rules.dart';
+import 'task_timeline_screen.dart';
 import 'today_tasks_screen.dart';
 
 class TasksEntryScreen extends ConsumerWidget {
@@ -128,6 +129,13 @@ class TasksEntryScreen extends ConsumerWidget {
                 subtitle: 'Pesquisa por texto, status, prioridade e escopo.',
                 color: Colors.cyan,
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskSearchScreen())),
+              ),
+              _EntryCard(
+                icon: Icons.timeline,
+                title: 'Timeline',
+                subtitle: 'Atrasadas, hoje, amanhã, semana, sem data e concluídas.',
+                color: Colors.blueGrey,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskTimelineScreen())),
               ),
               _EntryCard(
                 icon: Icons.category,
