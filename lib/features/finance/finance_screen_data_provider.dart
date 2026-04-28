@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/database/finance_planning_store.dart';
+import '../../data/models/financial_subcategory_model.dart';
 import '../../domain/providers.dart';
 import 'finance_screen_data.dart';
 
@@ -66,7 +67,7 @@ class FinanceScreenFilters {
       );
 }
 
-final financeSubcategoriesProvider = FutureProvider((ref) async {
+final financeSubcategoriesProvider = FutureProvider<List<FinancialSubcategory>>((ref) async {
   final db = await ref.watch(dbProvider).database;
   return FinancePlanningStore.getSubcategories(db, includeArchived: true);
 });
@@ -75,7 +76,10 @@ final financeScreenDataProvider = Provider.family<FinanceScreenData, FinanceScre
   final transactions = ref.watch(transactionsProvider);
   final categories = ref.watch(financialCategoriesProvider);
   final debts = ref.watch(debtsProvider);
-  final subcategories = ref.watch(financeSubcategoriesProvider).maybeWhen(data: (items) => items, orElse: () => const []);
+  final subcategories = ref.watch(financeSubcategoriesProvider).maybeWhen<List<FinancialSubcategory>>(
+        data: (items) => items,
+        orElse: () => const <FinancialSubcategory>[],
+      );
 
   return FinanceScreenData.build(
     selectedMonth: filters.selectedMonth,
