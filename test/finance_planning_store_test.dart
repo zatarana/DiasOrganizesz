@@ -39,6 +39,18 @@ Future<Database> openTestDatabase() async {
     )
   ''');
   await db.execute('''
+    CREATE TABLE IF NOT EXISTS financial_categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'expense',
+      color TEXT,
+      icon TEXT,
+      isArchived INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT,
+      updatedAt TEXT
+    )
+  ''');
+  await db.execute('''
     CREATE TABLE IF NOT EXISTS tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
