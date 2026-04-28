@@ -21,6 +21,10 @@ void main() {
     );
   }
 
+  // Troca apenas pontos de refresh completo já existentes. Não altera todo setState, para evitar recursão.
+  text = text.replaceAll('if (mounted) setState(() {});', 'if (mounted) _refreshScreen();');
+  text = text.replaceAll('    setState(() {});\n  }\n\n  double _paidIncomeForMonth', '    _refreshScreen();\n  }\n\n  double _paidIncomeForMonth');
+
   if (!text.contains('void _refreshRealAccountBalance()')) {
     text = text.replaceFirst(
       '  @override\n  void dispose() {',
@@ -28,8 +32,6 @@ void main() {
     );
   }
 
-  text = text.replaceAll('if (mounted) setState(() {});', 'if (mounted) _refreshScreen();');
-  text = text.replaceAll('setState(() {});', '_refreshScreen();');
   text = text.replaceAll('future: _loadRealAccountBalance(),', 'future: _realAccountBalanceFuture,');
 
   text = text.replaceAll(
@@ -45,10 +47,6 @@ void main() {
     '',
   );
 
-  text = text.replaceAll(
-    "IconButton(icon: const Icon(Icons.money_off), onPressed: _openDebts, tooltip: 'Dívidas'),",
-    "IconButton(icon: const Icon(Icons.payments_outlined), onPressed: _openDebts, tooltip: 'Dívidas'),",
-  );
   text = text.replaceAll('Icons.money_off', 'Icons.payments_outlined');
   text = text.replaceAll('withOpacity(0.08)', 'withValues(alpha: 0.08)');
   text = text.replaceAll('withOpacity(0.18)', 'withValues(alpha: 0.18)');
