@@ -9,7 +9,7 @@ Future<Database> openMovePurchaseTestDatabase() async {
   final db = await databaseFactory.openDatabase(inMemoryDatabasePath);
 
   await db.execute('''
-    CREATE TABLE transactions (
+    CREATE TABLE IF NOT EXISTS transactions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
       description TEXT,
@@ -95,8 +95,8 @@ void main() {
         'updatedAt': now,
       });
 
-      expect(
-        () => CreditCardStore.movePurchaseToInvoiceMonth(
+      await expectLater(
+        CreditCardStore.movePurchaseToInvoiceMonth(
           db,
           transactionId: transactionId,
           targetMonth: DateTime(2026, 5, 1),
