@@ -35,6 +35,9 @@ jobs:
       - name: Habilitar desugaring Android
         run: dart run tool/patch_android_desugaring.dart
 
+      - name: Aplicar melhorias UX da aba Finanças
+        run: dart run tool/patch_finance_screen_ux.dart
+
       - name: Validar identidade e dados locais
         run: |
           echo "Validando applicationId estável: $STABLE_APPLICATION_ID"
