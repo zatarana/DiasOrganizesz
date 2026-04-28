@@ -7,6 +7,7 @@ import '../../domain/providers.dart';
 import 'create_task_screen.dart';
 import 'quick_add_task_button.dart';
 import 'quick_add_task_sheet.dart';
+import 'task_settings_screen.dart';
 import 'task_smart_rules.dart';
 
 class TaskTimelineScreen extends ConsumerWidget {
@@ -14,6 +15,8 @@ class TaskTimelineScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsProvider);
+    final sortKey = settings[TaskSettingsKeys.defaultSort] ?? TaskSettingsDefaults.defaultSort;
     final tasks = ref.watch(tasksProvider).where((task) {
       return TaskSmartRules.isParentTask(task) && !TaskSmartRules.isCanceled(task);
     }).toList();
@@ -23,25 +26,25 @@ class TaskTimelineScreen extends ConsumerWidget {
     final tomorrow = today.add(const Duration(days: 1));
     final weekEnd = today.add(const Duration(days: 7));
 
-    final overdue = tasks.where((task) => TaskSmartRules.isOverdue(task, now: now)).toList()
-      ..sort(TaskSmartRules.compareByScheduleAndPriority);
-    final todayTasks = tasks.where((task) => TaskSmartRules.isExactlyToday(task, now: now) && !TaskSmartRules.isOverdue(task, now: now)).toList()
-      ..sort(TaskSmartRules.compareByScheduleAndPriority);
+    final overdue = tasks.where((task) => TaskSmartRules.isOverdue(task, now: now)).toList();
+    TaskSmartRules.sortTasks(overdue, sortKey: sortKey);
+    final todayTasks = tasks.where((task) => TaskSmartRules.isExactlyToday(task, now: now) && !TaskSmartRules.isOverdue(task, now: now)).toList();
+    TaskSmartRules.sortTasks(todayTasks, sortKey: sortKey);
     final tomorrowTasks = tasks.where((task) {
       final date = TaskSmartRules.dateOnly(task);
       return date != null && _sameDay(date, tomorrow) && TaskSmartRules.isActive(task);
-    }).toList()
-      ..sort(TaskSmartRules.compareByScheduleAndPriority);
+    }).toList();
+    TaskSmartRules.sortTasks(tomorrowTasks, sortKey: sortKey);
     final nextWeekTasks = tasks.where((task) {
       final date = TaskSmartRules.dateOnly(task);
       if (date == null || !TaskSmartRules.isActive(task)) return false;
       return date.isAfter(tomorrow) && !date.isAfter(weekEnd);
-    }).toList()
-      ..sort(TaskSmartRules.compareByScheduleAndPriority);
-    final noDate = tasks.where((task) => TaskSmartRules.isNoDate(task) && TaskSmartRules.isActive(task)).toList()
-      ..sort(TaskSmartRules.compareByScheduleAndPriority);
-    final completed = tasks.where(TaskSmartRules.isCompleted).toList()
-      ..sort(TaskSmartRules.compareByScheduleAndPriority);
+    }).toList();
+    TaskSmartRules.sortTasks(nextWeekTasks, sortKey: sortKey);
+    final noDate = tasks.where((task) => TaskSmartRules.isNoDate(task) && TaskSmartRules.isActive(task)).toList();
+    TaskSmartRules.sortTasks(noDate, sortKey: sortKey);
+    final completed = tasks.where(TaskSmartRules.isCompleted).toList();
+    TaskSmartRules.sortTasks(completed, sortKey: sortKey);
 
     return Scaffold(
       appBar: AppBar(
@@ -51,7 +54,7 @@ class TaskTimelineScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
-          const _TimelineHeader(),
+          _TimelineHeader(sortLabel: _sortLabel(sortKey)),
           const SizedBox(height: 16),
           _TimelineSection(title: 'Atrasadas', subtitle: 'Pendências vencidas antes de hoje.', icon: Icons.warning_amber, color: Colors.red, tasks: overdue),
           _TimelineSection(title: 'Hoje', subtitle: 'Ainda programadas para hoje.', icon: Icons.today, color: Colors.blue, tasks: todayTasks, quickDate: today),
@@ -66,28 +69,46 @@ class TaskTimelineScreen extends ConsumerWidget {
   }
 
   static bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+
+  static String _sortLabel(String sortKey) {
+    switch (sortKey) {
+      case 'priority_schedule':
+        return 'Prioridade e data';
+      case 'title':
+        return 'Título';
+      case 'created_desc':
+        return 'Mais recentes';
+      case 'schedule_priority':
+      default:
+        return 'Data e prioridade';
+    }
+  }
 }
 
 class _TimelineHeader extends StatelessWidget {
-  const _TimelineHeader();
+  final String sortLabel;
+
+  const _TimelineHeader({required this.sortLabel});
 
   @override
   Widget build(BuildContext context) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: const Padding(
-        padding: EdgeInsets.all(18),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
         child: Row(
           children: [
-            CircleAvatar(child: Icon(Icons.timeline)),
-            SizedBox(width: 12),
+            const CircleAvatar(child: Icon(Icons.timeline)),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Timeline de tarefas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  Text('Veja tarefas por momento: atraso, hoje, amanhã, semana e sem data.', style: TextStyle(color: Colors.grey)),
+                  const Text('Timeline de tarefas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Text('Veja tarefas por momento: atraso, hoje, amanhã, semana e sem data.', style: TextStyle(color: Colors.grey)),
+                  const SizedBox(height: 2),
+                  Text('Ordenação: $sortLabel', style: const TextStyle(color: Colors.grey, fontSize: 12)),
                 ],
               ),
             ),
