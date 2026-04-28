@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'finance_budgets_screen.dart';
+import 'finance_category_report_screen.dart';
 import 'finance_subcategory_report_screen.dart';
 
 class FinanceReportsScreen extends StatelessWidget {
@@ -15,6 +16,13 @@ class FinanceReportsScreen extends StatelessWidget {
         children: [
           const _ReportsHeader(),
           const SizedBox(height: 16),
+          _ReportNavigationCard(
+            icon: Icons.category_outlined,
+            title: 'Gastos por categoria',
+            subtitle: 'Veja ranking mensal das maiores categorias de gasto.',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceCategoryReportScreen())),
+          ),
+          const SizedBox(height: 8),
           _ReportNavigationCard(
             icon: Icons.leaderboard_outlined,
             title: 'Gastos por subcategoria',
@@ -108,7 +116,6 @@ class _ComingSoonCard extends StatelessWidget {
             Text('Próximos relatórios', style: TextStyle(fontWeight: FontWeight.bold)),
             SizedBox(height: 8),
             Text('• Evolução mensal de receitas e despesas'),
-            Text('• Ranking por categoria'),
             Text('• Comparativo previsto x realizado'),
             Text('• Exportação futura em CSV/PDF'),
           ],
