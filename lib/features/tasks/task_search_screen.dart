@@ -5,6 +5,7 @@ import '../../data/models/task_model.dart';
 import '../../domain/providers.dart';
 import 'create_task_screen.dart';
 import 'quick_add_task_button.dart';
+import 'task_settings_screen.dart';
 import 'task_smart_rules.dart';
 
 class TaskSearchScreen extends ConsumerStatefulWidget {
@@ -32,7 +33,7 @@ class _TaskSearchScreenState extends ConsumerState<TaskSearchScreen> {
     super.dispose();
   }
 
-  List<Task> _filtered(List<Task> tasks) {
+  List<Task> _filtered(List<Task> tasks, String sortKey) {
     final query = _queryController.text.trim().toLowerCase();
     final result = tasks.where((task) {
       if (TaskSmartRules.isCanceled(task)) return false;
@@ -45,13 +46,15 @@ class _TaskSearchScreenState extends ConsumerState<TaskSearchScreen> {
       if (query.isEmpty) return true;
       return '${task.title} ${task.description ?? ''}'.toLowerCase().contains(query);
     }).toList();
-    result.sort(TaskSmartRules.compareByScheduleAndPriority);
+    TaskSmartRules.sortTasks(result, sortKey: sortKey);
     return result;
   }
 
   @override
   Widget build(BuildContext context) {
-    final tasks = _filtered(ref.watch(tasksProvider));
+    final settings = ref.watch(appSettingsProvider);
+    final sortKey = settings[TaskSettingsKeys.defaultSort] ?? TaskSettingsDefaults.defaultSort;
+    final tasks = _filtered(ref.watch(tasksProvider), sortKey);
     final active = tasks.where(TaskSmartRules.isActive).length;
     final completed = tasks.where(TaskSmartRules.isCompleted).length;
     final overdue = tasks.where((task) => TaskSmartRules.isOverdue(task)).length;
@@ -61,7 +64,7 @@ class _TaskSearchScreenState extends ConsumerState<TaskSearchScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
-          _Header(total: tasks.length, active: active, completed: completed, overdue: overdue),
+          _Header(total: tasks.length, active: active, completed: completed, overdue: overdue, sortLabel: _sortLabel(sortKey)),
           const SizedBox(height: 16),
           TextField(
             controller: _queryController,
@@ -88,6 +91,20 @@ class _TaskSearchScreenState extends ConsumerState<TaskSearchScreen> {
       floatingActionButton: const QuickAddTaskButton(label: 'Capturar'),
     );
   }
+
+  String _sortLabel(String sortKey) {
+    switch (sortKey) {
+      case 'priority_schedule':
+        return 'Prioridade e data';
+      case 'title':
+        return 'Título';
+      case 'created_desc':
+        return 'Mais recentes';
+      case 'schedule_priority':
+      default:
+        return 'Data e prioridade';
+    }
+  }
 }
 
 class _Header extends StatelessWidget {
@@ -95,8 +112,9 @@ class _Header extends StatelessWidget {
   final int active;
   final int completed;
   final int overdue;
+  final String sortLabel;
 
-  const _Header({required this.total, required this.active, required this.completed, required this.overdue});
+  const _Header({required this.total, required this.active, required this.completed, required this.overdue, required this.sortLabel});
 
   @override
   Widget build(BuildContext context) {
@@ -112,6 +130,8 @@ class _Header extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               const Text('Busca e filtros', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               Text('$total resultados • $active ativas • $completed concluídas • $overdue atrasadas', style: const TextStyle(color: Colors.grey)),
+              const SizedBox(height: 2),
+              Text('Ordenação: $sortLabel', style: const TextStyle(color: Colors.grey, fontSize: 12)),
             ]),
           ),
         ]),
