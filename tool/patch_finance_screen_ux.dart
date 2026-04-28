@@ -9,8 +9,8 @@ void main() {
 
   var text = file.readAsStringSync();
 
-  text = text.replaceAll(
-    "String _money(num value) => 'R\\\$ \\${value.toDouble().toStringAsFixed(2)}';",
+  text = text.replaceFirst(
+    RegExp(r"String _money\(num value\) => 'R\\\$ \$\{value\.toDouble\(\)\.toStringAsFixed\(2\)\}';"),
     "String _money(num value) => NumberFormat.currency(locale: 'pt_BR', symbol: 'R\\\$', decimalDigits: 2).format(value);",
   );
 
@@ -49,6 +49,7 @@ void main() {
 
   text = text.replaceAll('Icons.money_off', 'Icons.payments_outlined');
   text = text.replaceAll('withOpacity(0.08)', 'withValues(alpha: 0.08)');
+  text = text.replaceAll('withOpacity(0.10)', 'withValues(alpha: 0.10)');
   text = text.replaceAll('withOpacity(0.18)', 'withValues(alpha: 0.18)');
   text = text.replaceAll('withOpacity(0.2)', 'withValues(alpha: 0.2)');
 
@@ -137,6 +138,13 @@ void main() {
 ''',
     );
   }
+
+  text = text.replaceAll(RegExp(r"'R\\\$ \$\{transaction\.amount\.toStringAsFixed\(2\)\}'"), "_money(transaction.amount)");
+  text = text.replaceAll(RegExp(r"'R\\\$ \$\{amount\.toStringAsFixed\(2\)\}'"), "_money(amount)");
+  text = text.replaceAll(RegExp(r"'R\\\$ \$\{resultDiff\.abs\(\)\.toStringAsFixed\(2\)\}'"), "_money(resultDiff.abs())");
+  text = text.replaceAll(RegExp(r"'R\\\$ \$\{expenseDiff\.abs\(\)\.toStringAsFixed\(2\)\}'"), "_money(expenseDiff.abs())");
+  text = text.replaceAll(RegExp(r"'R\\\$ \$\{topCategoryAmount\.toStringAsFixed\(2\)\}'"), "_money(topCategoryAmount)");
+  text = text.replaceAll(RegExp(r"'R\\\$ \$\{previousResult\.toStringAsFixed\(2\)\}'"), "_money(previousResult)");
 
   file.writeAsStringSync(text);
   stdout.writeln('finance_screen.dart UX patch aplicado.');
