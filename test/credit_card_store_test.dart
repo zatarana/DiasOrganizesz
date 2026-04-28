@@ -18,12 +18,15 @@ Future<Database> openCreditCardTestDatabase() async {
       transactionDate TEXT,
       dueDate TEXT,
       paidDate TEXT,
+      categoryId INTEGER,
+      subcategoryId INTEGER,
       accountId INTEGER,
       paymentMethod TEXT,
       status TEXT NOT NULL,
       ignoreInReports INTEGER NOT NULL DEFAULT 0,
       ignoreInMonthlySavings INTEGER NOT NULL DEFAULT 0,
       notes TEXT,
+      tags TEXT,
       createdAt TEXT,
       updatedAt TEXT
     )
@@ -33,7 +36,7 @@ Future<Database> openCreditCardTestDatabase() async {
   return db;
 }
 
-CreditCard card({int? id, int closingDay = 10, int dueDay = 20}) {
+CreditCard card({int? id, int closingDay = 10, int dueDay = 20, bool isArchived = false}) {
   final now = DateTime(2026, 4, 1).toIso8601String();
   return CreditCard(
     id: id,
@@ -42,6 +45,7 @@ CreditCard card({int? id, int closingDay = 10, int dueDay = 20}) {
     creditLimit: 5000,
     closingDay: closingDay,
     dueDay: dueDay,
+    isArchived: isArchived,
     createdAt: now,
     updatedAt: now,
   );
@@ -177,6 +181,67 @@ void main() {
 
       expect((exported['credit_cards'] as List).length, 1);
       expect((exported['credit_card_invoices'] as List).length, 1);
+      await db.close();
+    });
+  });
+
+  group('CreditCardStore purchases', () {
+    test('createCardPurchase cria despesa vinculada ao cartão e recalcula fatura', () async {
+      final db = await openCreditCardTestDatabase();
+      final cardId = await CreditCardStore.upsertCard(db, card());
+
+      final transactionId = await CreditCardStore.createCardPurchase(
+        db,
+        cardId: cardId,
+        title: 'Mercado',
+        description: 'Compra semanal',
+        amount: 123.45,
+        purchaseDate: DateTime(2026, 4, 15),
+        categoryId: 1,
+        subcategoryId: 10,
+        notes: 'Sem juros',
+        tags: 'casa, mercado',
+      );
+
+      final transaction = (await db.query('transactions', where: 'id = ?', whereArgs: [transactionId])).first;
+      final invoices = await CreditCardStore.getInvoices(db, cardId: cardId);
+
+      expect(invoices.length, 1);
+      expect(invoices.first.referenceMonth, '2026-04');
+      expect(invoices.first.amount, 123.45);
+      expect(transaction['creditCardId'], cardId);
+      expect(transaction['creditCardInvoiceId'], invoices.first.id);
+      expect(transaction['paymentMethod'], 'cartão de crédito');
+      expect(transaction['status'], 'pending');
+      expect(transaction['categoryId'], 1);
+      expect(transaction['subcategoryId'], 10);
+      await db.close();
+    });
+
+    test('createCardPurchase reutiliza fatura existente do mês', () async {
+      final db = await openCreditCardTestDatabase();
+      final cardId = await CreditCardStore.upsertCard(db, card());
+
+      await CreditCardStore.createCardPurchase(db, cardId: cardId, title: 'Compra 1', amount: 100, purchaseDate: DateTime(2026, 4, 1));
+      await CreditCardStore.createCardPurchase(db, cardId: cardId, title: 'Compra 2', amount: 50, purchaseDate: DateTime(2026, 4, 20));
+
+      final invoices = await CreditCardStore.getInvoices(db, cardId: cardId);
+      final transactions = await db.query('transactions');
+
+      expect(invoices.length, 1);
+      expect(invoices.first.amount, 150);
+      expect(transactions.length, 2);
+      await db.close();
+    });
+
+    test('createCardPurchase bloqueia cartão arquivado', () async {
+      final db = await openCreditCardTestDatabase();
+      final cardId = await CreditCardStore.upsertCard(db, card(isArchived: true));
+
+      expect(
+        () => CreditCardStore.createCardPurchase(db, cardId: cardId, title: 'Compra', amount: 10, purchaseDate: DateTime(2026, 4, 1)),
+        throwsArgumentError,
+      );
       await db.close();
     });
   });
