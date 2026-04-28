@@ -8,6 +8,7 @@ import '../../data/models/project_model.dart';
 import '../../data/models/task_model.dart';
 import '../../domain/providers.dart';
 import 'create_task_screen.dart';
+import 'quick_add_task_button.dart';
 import 'task_smart_rules.dart';
 
 class InboxTasksScreen extends ConsumerStatefulWidget {
@@ -64,7 +65,16 @@ class _InboxTasksScreenState extends ConsumerState<InboxTasksScreen> {
       ..sort(TaskSmartRules.compareByScheduleAndPriority);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Inbox')),
+      appBar: AppBar(
+        title: const Text('Inbox'),
+        actions: [
+          IconButton(
+            tooltip: 'Criação completa',
+            icon: const Icon(Icons.edit_note),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateTaskScreen())),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
@@ -118,11 +128,7 @@ class _InboxTasksScreenState extends ConsumerState<InboxTasksScreen> {
           ],
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateTaskScreen())),
-        icon: const Icon(Icons.add),
-        label: const Text('Nova completa'),
-      ),
+      floatingActionButton: const QuickAddTaskButton(label: 'Quick Add Inbox'),
     );
   }
 
