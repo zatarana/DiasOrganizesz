@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+
 import '../../data/database/finance_planning_store.dart';
+import '../../data/models/debt_model.dart';
 import '../../data/models/financial_account_model.dart';
-import '../../domain/providers.dart';
 import '../../data/models/transaction_model.dart';
+import '../../domain/providers.dart';
 
 const String defaultFinancialAccountSettingKey = 'default_financial_account_id';
 
@@ -22,6 +24,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   final _amountController = TextEditingController();
   final _notesController = TextEditingController();
   final _discountController = TextEditingController();
+
   String _type = 'expense';
   DateTime _transactionDate = DateTime.now();
   DateTime? _dueDate;
@@ -36,6 +39,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   List<FinancialAccount> _accounts = [];
 
   bool get _isEditing => widget.transaction?.id != null;
+  bool get _isDebtInstallment => widget.transaction?.debtId != null;
 
   final List<String> _paymentMethods = [
     'dinheiro',
@@ -52,6 +56,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   void initState() {
     super.initState();
     _loadAccounts();
+
     final template = widget.transaction;
     if (template != null) {
       _titleController.text = template.title;
@@ -68,14 +73,14 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
         _selectedPaymentMethod = 'outro';
       }
 
-      _type = template.type;
+      _type = template.debtId != null ? 'expense' : template.type;
       _transactionDate = DateTime.tryParse(template.transactionDate) ?? DateTime.now();
       if (template.dueDate != null) _dueDate = DateTime.tryParse(template.dueDate!);
       if (template.paidDate != null) _paidDate = DateTime.tryParse(template.paidDate!);
       _status = template.status;
       _reminderEnabled = template.reminderEnabled;
-      _isFixed = template.isFixed;
-      _recurrenceType = template.recurrenceType;
+      _isFixed = template.debtId != null ? false : template.isFixed;
+      _recurrenceType = template.debtId != null ? 'none' : template.recurrenceType;
       _categoryId = template.categoryId;
       _accountId = template.accountId;
     }
@@ -87,6 +92,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
     final accounts = await FinancePlanningStore.getAccounts(db);
     final defaultAccountSetting = await dbHelper.getSetting(defaultFinancialAccountSettingKey);
     final defaultAccountId = int.tryParse(defaultAccountSetting?.value ?? '');
+
     if (!mounted) return;
     setState(() {
       _accounts = accounts;
@@ -114,7 +120,21 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
     return _accounts.where((account) => !account.isArchived || account.id == widget.transaction?.accountId).toList();
   }
 
+  Debt? _linkedDebt(List<Debt> debts) {
+    final debtId = widget.transaction?.debtId;
+    if (debtId == null) return null;
+    for (final debt in debts) {
+      if (debt.id == debtId) return debt;
+    }
+    return null;
+  }
+
   void _setType(String value) {
+    if (_isDebtInstallment) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Parcelas de dívida permanecem como despesa.')));
+      return;
+    }
+
     setState(() {
       _type = value;
       final validCategories = ref.read(financialCategoriesProvider).where((c) => c.type == _type || c.type == 'both').toList();
@@ -139,8 +159,12 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Excluir movimentação?'),
-        content: Text('Deseja excluir "${widget.transaction!.title}"? Esta ação não pode ser desfeita.'),
+        title: Text(_isDebtInstallment ? 'Excluir parcela da dívida?' : 'Excluir movimentação?'),
+        content: Text(
+          _isDebtInstallment
+              ? 'Deseja excluir esta parcela? A dívida vinculada será recalculada com base nas parcelas restantes.'
+              : 'Deseja excluir "${widget.transaction!.title}"? Esta ação não pode ser desfeita.',
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
           TextButton(
@@ -158,6 +182,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
 
   @override
   Widget build(BuildContext context) {
+    final linkedDebt = _linkedDebt(ref.watch(debtsProvider));
     final categories = ref.watch(financialCategoriesProvider).where((c) => c.type == _type || c.type == 'both').toList();
     final selectableAccounts = _selectableAccounts();
     final safeCategoryId = categories.any((category) => category.id == _categoryId) ? _categoryId : null;
@@ -180,18 +205,29 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'income', label: Text('Receita', style: TextStyle(color: Colors.green))),
-                  ButtonSegment(value: 'expense', label: Text('Despesa', style: TextStyle(color: Colors.red))),
-                ],
-                selected: {_type},
-                onSelectionChanged: (set) => _setType(set.first),
+              Opacity(
+                opacity: _isDebtInstallment ? 0.65 : 1,
+                child: SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'income', label: Text('Receita', style: TextStyle(color: Colors.green))),
+                    ButtonSegment(value: 'expense', label: Text('Despesa', style: TextStyle(color: Colors.red))),
+                  ],
+                  selected: {_type},
+                  onSelectionChanged: (set) => _setType(set.first),
+                ),
               ),
+              if (_isDebtInstallment) ...[
+                const SizedBox(height: 12),
+                _DebtInstallmentInfoCard(transaction: widget.transaction!, debt: linkedDebt),
+              ],
               const SizedBox(height: 16),
               TextField(
                 controller: _titleController,
-                decoration: const InputDecoration(labelText: 'Título', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                  labelText: 'Título',
+                  border: const OutlineInputBorder(),
+                  helperText: _isDebtInstallment ? 'Esta movimentação é uma parcela vinculada à aba Dívidas.' : null,
+                ),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -202,7 +238,11 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
               const SizedBox(height: 16),
               TextField(
                 controller: _amountController,
-                decoration: const InputDecoration(labelText: 'Valor (R\$)', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                  labelText: 'Valor (R\$)',
+                  border: const OutlineInputBorder(),
+                  helperText: _isDebtInstallment ? 'Alterar o valor afeta o abatimento e o saldo restante da dívida.' : null,
+                ),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
               ),
               if (_status == 'paid') ...[
@@ -210,9 +250,10 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                 TextField(
                   controller: _discountController,
                   decoration: InputDecoration(
-                    labelText: 'Desconto / Economia gerada (R\$)',
+                    labelText: _isDebtInstallment ? 'Desconto / Abatimento extra (R\$)' : 'Desconto / Economia gerada (R\$)',
                     border: const OutlineInputBorder(),
-                    hintText: _type == 'expense' ? 'Desconto por pagar antecipado' : 'Desconto concedido',
+                    hintText: _isDebtInstallment ? 'Ex: desconto por antecipar parcela' : (_type == 'expense' ? 'Desconto por pagar antecipado' : 'Desconto concedido'),
+                    helperText: _isDebtInstallment ? 'O desconto também abate o saldo restante da dívida.' : null,
                   ),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 ),
@@ -252,7 +293,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
               ),
               SwitchListTile(
                 title: const Text('Ativar lembrete local'),
-                subtitle: const Text('Para vencimento/receita prevista'),
+                subtitle: Text(_isDebtInstallment ? 'Lembrete da parcela vinculada à dívida' : 'Para vencimento/receita prevista'),
                 value: _canUseReminder() && _reminderEnabled,
                 onChanged: _canUseReminder() ? (v) => setState(() => _reminderEnabled = v) : null,
               ),
@@ -316,14 +357,16 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
               const SizedBox(height: 16),
               SwitchListTile(
                 title: const Text('Lançamento fixo mensal?'),
-                subtitle: Text(_isFixed ? 'Sim' : 'Não'),
-                value: _isFixed,
-                onChanged: (val) {
-                  setState(() {
-                    _isFixed = val;
-                    _recurrenceType = val ? 'monthly' : 'none';
-                  });
-                },
+                subtitle: Text(_isDebtInstallment ? 'Parcelas de dívida não usam recorrência fixa manual' : (_isFixed ? 'Sim' : 'Não')),
+                value: !_isDebtInstallment && _isFixed,
+                onChanged: _isDebtInstallment
+                    ? null
+                    : (val) {
+                        setState(() {
+                          _isFixed = val;
+                          _recurrenceType = val ? 'monthly' : 'none';
+                        });
+                      },
               ),
               const SizedBox(height: 16),
               TextField(
@@ -349,6 +392,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
     final discount = double.tryParse(_discountController.text.replaceAll(',', '.')) ?? 0.0;
     final template = widget.transaction;
     final selectableAccounts = _selectableAccounts();
+    final effectiveType = _isDebtInstallment ? 'expense' : _type;
 
     if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O título é obrigatório.')));
@@ -367,11 +411,11 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
       return;
     }
 
-    final categories = ref.read(financialCategoriesProvider).where((c) => c.type == _type || c.type == 'both').toList();
+    final categories = ref.read(financialCategoriesProvider).where((c) => c.type == effectiveType || c.type == 'both').toList();
     final safeCategoryId = categories.any((category) => category.id == _categoryId) ? _categoryId : null;
     final safeAccountId = selectableAccounts.any((account) => account.id == _accountId) ? _accountId : null;
     final normalizedStatus = _statusAfterSave(_status);
-    final canReminder = normalizedStatus != 'paid' && normalizedStatus != 'canceled' && (_dueDate != null || _type == 'income');
+    final canReminder = normalizedStatus != 'paid' && normalizedStatus != 'canceled' && (_dueDate != null || effectiveType == 'income');
 
     if (normalizedStatus == 'paid' && safeAccountId == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A conta selecionada não está disponível. Escolha uma conta ativa.')));
@@ -383,7 +427,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim().isNotEmpty ? _descriptionController.text.trim() : null,
       amount: amount,
-      type: _type,
+      type: effectiveType,
       transactionDate: _transactionDate.toIso8601String(),
       dueDate: _dueDate?.toIso8601String(),
       paidDate: normalizedStatus == 'paid' ? (_paidDate ?? DateTime.now()).toIso8601String() : null,
@@ -392,8 +436,8 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
       paymentMethod: _selectedPaymentMethod,
       status: normalizedStatus,
       reminderEnabled: canReminder && _reminderEnabled,
-      isFixed: _isFixed,
-      recurrenceType: _recurrenceType,
+      isFixed: _isDebtInstallment ? false : _isFixed,
+      recurrenceType: _isDebtInstallment ? 'none' : _recurrenceType,
       notes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
       debtId: template?.debtId,
       installmentNumber: template?.installmentNumber,
@@ -409,5 +453,48 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
       await ref.read(transactionsProvider.notifier).addTransaction(transaction);
     }
     if (mounted) Navigator.pop(context);
+  }
+}
+
+class _DebtInstallmentInfoCard extends StatelessWidget {
+  final FinancialTransaction transaction;
+  final Debt? debt;
+
+  const _DebtInstallmentInfoCard({required this.transaction, required this.debt});
+
+  @override
+  Widget build(BuildContext context) {
+    final installment = transaction.installmentNumber == null
+        ? 'Parcela vinculada'
+        : 'Parcela ${transaction.installmentNumber}/${transaction.totalInstallments ?? '-'}';
+
+    return Card(
+      color: Colors.deepOrange.withOpacity(0.08),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: const [
+                Icon(Icons.money_off, color: Colors.deepOrange),
+                SizedBox(width: 8),
+                Expanded(child: Text('Parcela de dívida', style: TextStyle(fontWeight: FontWeight.bold))),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(debt == null ? 'Dívida vinculada não encontrada. A parcela será mantida como despesa.' : 'Dívida: ${debt!.name}'),
+            if (debt?.creditorName != null && debt!.creditorName!.isNotEmpty) Text('Credor: ${debt!.creditorName}'),
+            Text(installment),
+            const SizedBox(height: 8),
+            Text(
+              'Ao marcar como paga, o valor e eventual desconto serão usados para abater o saldo restante da dívida.',
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
