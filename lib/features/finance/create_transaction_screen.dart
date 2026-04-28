@@ -586,7 +586,7 @@ class _DebtInstallmentInfoCard extends StatelessWidget {
         : 'Parcela ${transaction.installmentNumber}/${transaction.totalInstallments ?? '-'}';
 
     return Card(
-      color: Colors.deepOrange.withOpacity(0.08),
+      color: Colors.deepOrange.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(12),
