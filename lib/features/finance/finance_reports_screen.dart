@@ -1,0 +1,119 @@
+import 'package:flutter/material.dart';
+
+import 'finance_budgets_screen.dart';
+import 'finance_subcategory_report_screen.dart';
+
+class FinanceReportsScreen extends StatelessWidget {
+  const FinanceReportsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Relatórios Financeiros')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const _ReportsHeader(),
+          const SizedBox(height: 16),
+          _ReportNavigationCard(
+            icon: Icons.leaderboard_outlined,
+            title: 'Gastos por subcategoria',
+            subtitle: 'Ranking mensal, percentuais e maiores focos de gasto.',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceSubcategoryReportScreen())),
+          ),
+          const SizedBox(height: 8),
+          _ReportNavigationCard(
+            icon: Icons.account_balance_wallet_outlined,
+            title: 'Orçamentos avançados',
+            subtitle: 'Acompanhe limites gerais, por categoria e por subcategoria.',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceBudgetsScreen())),
+          ),
+          const SizedBox(height: 16),
+          const _ComingSoonCard(),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReportsHeader extends StatelessWidget {
+  const _ReportsHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: const [
+                CircleAvatar(child: Icon(Icons.analytics_outlined)),
+                SizedBox(width: 12),
+                Expanded(child: Text('Central de análise', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Use estes relatórios para entender para onde o dinheiro está indo, acompanhar limites e encontrar padrões de gasto.',
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReportNavigationCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _ReportNavigationCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: CircleAvatar(child: Icon(icon)),
+        title: Text(title),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _ComingSoonCard extends StatelessWidget {
+  const _ComingSoonCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: Colors.grey.withValues(alpha: 0.08),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text('Próximos relatórios', style: TextStyle(fontWeight: FontWeight.bold)),
+            SizedBox(height: 8),
+            Text('• Evolução mensal de receitas e despesas'),
+            Text('• Ranking por categoria'),
+            Text('• Comparativo previsto x realizado'),
+            Text('• Exportação futura em CSV/PDF'),
+          ],
+        ),
+      ),
+    );
+  }
+}
