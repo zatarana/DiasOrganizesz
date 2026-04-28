@@ -7,6 +7,7 @@ import '../../domain/providers.dart';
 import 'create_task_screen.dart';
 import 'quick_add_task_button.dart';
 import 'quick_add_task_sheet.dart';
+import 'task_settings_screen.dart';
 import 'task_smart_rules.dart';
 
 class TodayTasksScreen extends ConsumerWidget {
@@ -15,18 +16,20 @@ class TodayTasksScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tasks = ref.watch(tasksProvider);
+    final settings = ref.watch(appSettingsProvider);
+    final sortKey = settings[TaskSettingsKeys.defaultSort] ?? TaskSettingsDefaults.defaultSort;
     final now = DateTime.now();
     final progress = TaskSmartRules.dayProgress(tasks, now: now);
 
     final overdueTasks = tasks.where((task) {
       return TaskSmartRules.isParentTask(task) && TaskSmartRules.isOverdue(task, now: now);
-    }).toList()
-      ..sort(TaskSmartRules.compareByScheduleAndPriority);
+    }).toList();
+    TaskSmartRules.sortTasks(overdueTasks, sortKey: sortKey);
 
     final exactTodayTasks = tasks.where((task) {
       return TaskSmartRules.isParentTask(task) && TaskSmartRules.isExactlyToday(task, now: now) && !TaskSmartRules.isCanceled(task);
-    }).toList()
-      ..sort(TaskSmartRules.compareByScheduleAndPriority);
+    }).toList();
+    TaskSmartRules.sortTasks(exactTodayTasks, sortKey: sortKey);
 
     final noDateSuggestions = TaskSmartRules.suggestedForToday(tasks, now: now)
         .where((task) => !TaskSmartRules.hasDate(task) && TaskSmartRules.isParentTask(task))
