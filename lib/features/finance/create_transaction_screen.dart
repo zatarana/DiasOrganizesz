@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../data/database/finance_planning_store.dart';
 import '../../data/models/debt_model.dart';
 import '../../data/models/financial_account_model.dart';
+import '../../data/models/financial_subcategory_model.dart';
 import '../../data/models/transaction_model.dart';
 import '../../domain/providers.dart';
 
@@ -34,6 +35,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   bool _isFixed = false;
   String _recurrenceType = 'none';
   int? _categoryId;
+  int? _subcategoryId;
   int? _accountId;
   bool _reminderEnabled = false;
   bool _ignoreInTotals = false;
@@ -41,6 +43,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   bool _ignoreInMonthlySavings = false;
   bool _loadingAccounts = true;
   List<FinancialAccount> _accounts = [];
+  List<FinancialSubcategory> _subcategories = [];
 
   bool get _isEditing => widget.transaction?.id != null;
   bool get _isDebtInstallment => widget.transaction?.debtId != null;
@@ -90,6 +93,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
       _ignoreInReports = template.ignoreInReports;
       _ignoreInMonthlySavings = template.ignoreInMonthlySavings;
       _categoryId = template.categoryId;
+      _subcategoryId = template.subcategoryId;
       _accountId = template.accountId;
     }
   }
@@ -98,16 +102,21 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
     final dbHelper = ref.read(dbProvider);
     final db = await dbHelper.database;
     final accounts = await FinancePlanningStore.getAccounts(db);
+    final subcategories = await FinancePlanningStore.getSubcategories(db, includeArchived: true);
     final defaultAccountSetting = await dbHelper.getSetting(defaultFinancialAccountSettingKey);
     final defaultAccountId = int.tryParse(defaultAccountSetting?.value ?? '');
 
     if (!mounted) return;
     setState(() {
       _accounts = accounts;
+      _subcategories = subcategories;
       _loadingAccounts = false;
       if (_accountId != null && !_accounts.any((account) => account.id == _accountId)) _accountId = null;
       if (_accountId == null && defaultAccountId != null && _accounts.any((account) => account.id == defaultAccountId && !account.isArchived)) {
         _accountId = defaultAccountId;
+      }
+      if (_subcategoryId != null && !_subcategories.any((item) => item.id == _subcategoryId && !item.isArchived && item.categoryId == _categoryId)) {
+        _subcategoryId = null;
       }
     });
   }
@@ -127,6 +136,11 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
 
   List<FinancialAccount> _selectableAccounts() {
     return _accounts.where((account) => !account.isArchived || account.id == widget.transaction?.accountId).toList();
+  }
+
+  List<FinancialSubcategory> _selectableSubcategories(int? categoryId) {
+    if (categoryId == null) return [];
+    return _subcategories.where((item) => item.categoryId == categoryId && (!item.isArchived || item.id == widget.transaction?.subcategoryId)).toList();
   }
 
   Debt? _linkedDebt(List<Debt> debts) {
@@ -149,6 +163,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
       final validCategories = ref.read(financialCategoriesProvider).where((c) => c.type == _type || c.type == 'both').toList();
       if (_categoryId != null && !validCategories.any((category) => category.id == _categoryId)) {
         _categoryId = null;
+        _subcategoryId = null;
       }
       if (!_canUseReminder()) _reminderEnabled = false;
     });
@@ -195,6 +210,8 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
     final categories = ref.watch(financialCategoriesProvider).where((c) => c.type == _type || c.type == 'both').toList();
     final selectableAccounts = _selectableAccounts();
     final safeCategoryId = categories.any((category) => category.id == _categoryId) ? _categoryId : null;
+    final selectableSubcategories = _selectableSubcategories(safeCategoryId);
+    final safeSubcategoryId = selectableSubcategories.any((subcategory) => subcategory.id == _subcategoryId) ? _subcategoryId : null;
     final safeAccountId = selectableAccounts.any((account) => account.id == _accountId) ? _accountId : null;
 
     return Scaffold(
@@ -313,8 +330,27 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                   const DropdownMenuItem(value: null, child: Text('Sem Categoria')),
                   ...categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
                 ],
-                onChanged: (v) => setState(() => _categoryId = v),
+                onChanged: (v) => setState(() {
+                  _categoryId = v;
+                  if (_subcategoryId != null && !_selectableSubcategories(v).any((subcategory) => subcategory.id == _subcategoryId)) {
+                    _subcategoryId = null;
+                  }
+                }),
                 decoration: const InputDecoration(labelText: 'Categoria', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<int>(
+                initialValue: safeSubcategoryId,
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('Sem Subcategoria')),
+                  ...selectableSubcategories.map((subcategory) => DropdownMenuItem(value: subcategory.id, child: Text('${subcategory.name}${subcategory.isArchived ? ' (arquivada)' : ''}'))),
+                ],
+                onChanged: safeCategoryId == null ? null : (v) => setState(() => _subcategoryId = v),
+                decoration: InputDecoration(
+                  labelText: 'Subcategoria',
+                  border: const OutlineInputBorder(),
+                  helperText: safeCategoryId == null ? 'Escolha uma categoria para habilitar subcategorias.' : null,
+                ),
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<int>(
@@ -441,6 +477,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
 
     final categories = ref.read(financialCategoriesProvider).where((c) => c.type == effectiveType || c.type == 'both').toList();
     final safeCategoryId = categories.any((category) => category.id == _categoryId) ? _categoryId : null;
+    final safeSubcategoryId = _selectableSubcategories(safeCategoryId).any((subcategory) => subcategory.id == _subcategoryId) ? _subcategoryId : null;
     final safeAccountId = selectableAccounts.any((account) => account.id == _accountId) ? _accountId : null;
     final normalizedStatus = _statusAfterSave(_status);
     final canReminder = normalizedStatus != 'paid' && normalizedStatus != 'canceled' && (_dueDate != null || effectiveType == 'income');
@@ -460,6 +497,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
       dueDate: _dueDate?.toIso8601String(),
       paidDate: normalizedStatus == 'paid' ? (_paidDate ?? DateTime.now()).toIso8601String() : null,
       categoryId: safeCategoryId,
+      subcategoryId: safeSubcategoryId,
       accountId: safeAccountId,
       paymentMethod: _selectedPaymentMethod,
       status: normalizedStatus,
