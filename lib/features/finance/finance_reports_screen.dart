@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'finance_budgets_screen.dart';
 import 'finance_category_report_screen.dart';
+import 'finance_planned_vs_realized_report_screen.dart';
 import 'finance_subcategory_report_screen.dart';
 
 class FinanceReportsScreen extends StatelessWidget {
@@ -16,6 +17,13 @@ class FinanceReportsScreen extends StatelessWidget {
         children: [
           const _ReportsHeader(),
           const SizedBox(height: 16),
+          _ReportNavigationCard(
+            icon: Icons.compare_arrows,
+            title: 'Previsto x realizado',
+            subtitle: 'Compare receitas, despesas e resultado planejado com o que foi pago.',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinancePlannedVsRealizedReportScreen())),
+          ),
+          const SizedBox(height: 8),
           _ReportNavigationCard(
             icon: Icons.category_outlined,
             title: 'Gastos por categoria',
@@ -116,7 +124,6 @@ class _ComingSoonCard extends StatelessWidget {
             Text('Próximos relatórios', style: TextStyle(fontWeight: FontWeight.bold)),
             SizedBox(height: 8),
             Text('• Evolução mensal de receitas e despesas'),
-            Text('• Comparativo previsto x realizado'),
             Text('• Exportação futura em CSV/PDF'),
           ],
         ),
