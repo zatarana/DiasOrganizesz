@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import '../models/budget_model.dart';
 import '../models/financial_account_model.dart';
 import '../models/financial_goal_model.dart';
+import '../models/financial_transfer_model.dart';
 
 class FinancePlanningStore {
   static bool _indexesEnsured = false;
@@ -18,6 +19,20 @@ class FinancePlanningStore {
         color TEXT NOT NULL DEFAULT '0xFF2196F3',
         icon TEXT NOT NULL DEFAULT 'account_balance',
         isArchived INTEGER NOT NULL DEFAULT 0,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS financial_transfers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fromAccountId INTEGER NOT NULL,
+        toAccountId INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        transferDate TEXT NOT NULL,
+        description TEXT,
+        notes TEXT,
+        ignoreInReports INTEGER NOT NULL DEFAULT 0,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       )
@@ -51,12 +66,16 @@ class FinancePlanningStore {
       )
     ''');
     await _addColumnIfMissing(db, 'financial_goals', 'accountId INTEGER');
+    await _addColumnIfMissing(db, 'financial_transfers', 'notes TEXT');
+    await _addColumnIfMissing(db, 'financial_transfers', 'ignoreInReports INTEGER NOT NULL DEFAULT 0');
     await _ensureIndexes(db);
   }
 
   static Future<void> _ensureIndexes(Database db) async {
     if (_indexesEnsured) return;
     await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_accounts_archived_name ON financial_accounts(isArchived, name)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_transfers_from_date ON financial_transfers(fromAccountId, transferDate)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_transfers_to_date ON financial_transfers(toAccountId, transferDate)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_goals_status_account ON financial_goals(status, accountId)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_budgets_month_category ON budgets(month, categoryId, isArchived)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_status_account ON transactions(status, accountId)');
@@ -100,16 +119,31 @@ class FinancePlanningStore {
     return _asDouble(rows.first['delta']);
   }
 
+  static Future<double> _transferDelta(Database db, int accountId) async {
+    final rows = await db.rawQuery(
+      '''
+      SELECT
+        COALESCE(SUM(CASE WHEN toAccountId = ? THEN amount ELSE 0 END), 0) -
+        COALESCE(SUM(CASE WHEN fromAccountId = ? THEN amount ELSE 0 END), 0) AS delta
+      FROM financial_transfers
+      WHERE fromAccountId = ? OR toAccountId = ?
+      ''',
+      [accountId, accountId, accountId, accountId],
+    );
+    return _asDouble(rows.first['delta']);
+  }
+
   static Future<void> recalculateAccountBalance(Database db, int accountId) async {
     await ensureTables(db);
     final rows = await db.query('financial_accounts', where: 'id = ?', whereArgs: [accountId], limit: 1);
     if (rows.isEmpty) return;
     final account = FinancialAccount.fromMap(rows.first);
-    final delta = await _paidTransactionDelta(db, accountId);
+    final transactionDelta = await _paidTransactionDelta(db, accountId);
+    final transferDelta = await _transferDelta(db, accountId);
     await db.update(
       'financial_accounts',
       {
-        'currentBalance': account.initialBalance + delta,
+        'currentBalance': account.initialBalance + transactionDelta + transferDelta,
         'updatedAt': DateTime.now().toIso8601String(),
       },
       where: 'id = ?',
@@ -131,6 +165,12 @@ class FinancePlanningStore {
     if (recalculateBeforeRead) await recalculateAllAccountBalances(db);
     final rows = await db.query('financial_accounts', orderBy: 'isArchived ASC, name ASC');
     return rows.map(FinancialAccount.fromMap).toList();
+  }
+
+  static Future<List<FinancialTransfer>> getTransfers(Database db) async {
+    await ensureTables(db);
+    final rows = await db.query('financial_transfers', orderBy: 'transferDate DESC, id DESC');
+    return rows.map(FinancialTransfer.fromMap).toList();
   }
 
   static Future<double> getActiveAccountsBalance(Database db) async {
@@ -165,6 +205,33 @@ class FinancePlanningStore {
     await recalculateAccountBalance(db, account.id!);
     if (account.isArchived) await clearGoalAccountLinks(db, account.id!);
     return account.id!;
+  }
+
+  static Future<int> upsertTransfer(Database db, FinancialTransfer transfer) async {
+    await ensureTables(db);
+    if (transfer.amount <= 0) throw ArgumentError('O valor da transferência deve ser maior que zero.');
+    if (transfer.fromAccountId == transfer.toAccountId) throw ArgumentError('A conta de origem e destino devem ser diferentes.');
+
+    late int transferId;
+    await db.transaction((txn) async {
+      if (transfer.id == null) {
+        transferId = await txn.insert('financial_transfers', transfer.toMap());
+      } else {
+        transferId = transfer.id!;
+        await txn.update('financial_transfers', transfer.toMap(), where: 'id = ?', whereArgs: [transfer.id]);
+      }
+    });
+    await recalculateAccountBalance(db, transfer.fromAccountId);
+    await recalculateAccountBalance(db, transfer.toAccountId);
+    return transferId;
+  }
+
+  static Future<void> deleteTransfer(Database db, FinancialTransfer transfer) async {
+    await ensureTables(db);
+    if (transfer.id == null) return;
+    await db.delete('financial_transfers', where: 'id = ?', whereArgs: [transfer.id]);
+    await recalculateAccountBalance(db, transfer.fromAccountId);
+    await recalculateAccountBalance(db, transfer.toAccountId);
   }
 
   static Future<void> upsertBudget(Database db, Budget budget) async {
@@ -212,6 +279,7 @@ class FinancePlanningStore {
   static Future<void> resetPlanningData(Database db) async {
     await ensureTables(db);
     await db.delete('financial_accounts');
+    await db.delete('financial_transfers');
     await db.delete('budgets');
     await db.delete('financial_goals');
   }
@@ -221,6 +289,7 @@ class FinancePlanningStore {
     await clearArchivedAccountGoalLinks(db);
     return {
       'financial_accounts': await db.query('financial_accounts', orderBy: 'id ASC'),
+      'financial_transfers': await db.query('financial_transfers', orderBy: 'id ASC'),
       'budgets': await db.query('budgets', orderBy: 'id ASC'),
       'financial_goals': await db.query('financial_goals', orderBy: 'id ASC'),
     };
