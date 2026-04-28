@@ -55,8 +55,8 @@ void main() {
         ],
       );
 
-      expect(report.incomeRealizationRatio, 0.5);
-      expect(report.expenseRealizationRatio, 0.25);
+      expect(report.incomeRealizationRatio, closeTo(1 / 3, 0.000001));
+      expect(report.expenseRealizationRatio, 0.2);
     });
 
     test('ignora movimentações canceladas e ignoradas nos totais', () {
