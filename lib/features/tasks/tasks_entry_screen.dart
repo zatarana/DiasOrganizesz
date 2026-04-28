@@ -9,6 +9,7 @@ import 'create_task_screen.dart';
 import 'task_list_screen.dart';
 import 'task_smart_list_screen.dart';
 import 'task_smart_rules.dart';
+import 'today_tasks_screen.dart';
 
 class TasksEntryScreen extends ConsumerWidget {
   const TasksEntryScreen({super.key});
@@ -43,7 +44,7 @@ class TasksEntryScreen extends ConsumerWidget {
                 subtitle: 'Tarefas do dia, atrasadas e sugestões imediatas.',
                 count: todayCount,
                 color: Colors.blue,
-                onTap: () => _openSmartList(context, TaskSmartListType.today),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TodayTasksScreen())),
               ),
               _EntryCard(
                 icon: Icons.inbox,
