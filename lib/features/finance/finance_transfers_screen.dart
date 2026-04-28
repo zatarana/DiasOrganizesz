@@ -223,7 +223,7 @@ class _FinanceTransfersScreenState extends ConsumerState<FinanceTransfersScreen>
                     final date = DateTime.tryParse(transfer.transferDate);
                     return Card(
                       child: ListTile(
-                        leading: CircleAvatar(backgroundColor: Colors.blue.withOpacity(0.12), child: const Icon(Icons.swap_horiz, color: Colors.blue)),
+                        leading: CircleAvatar(backgroundColor: Colors.blue.withValues(alpha: 0.12), child: const Icon(Icons.swap_horiz, color: Colors.blue)),
                         title: Text('${from?.name ?? 'Origem removida'} → ${to?.name ?? 'Destino removido'}'),
                         subtitle: Text([
                           if (date != null) DateFormat('dd/MM/yyyy').format(date),
