@@ -16,7 +16,7 @@ class TodayTasksScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tasks = ref.watch(tasksProvider);
-    final settings = ref.watch(appSettingsProvider);
+    final settings = ref.watch(taskSettingsProvider);
     final sortKey = settings[TaskSettingsKeys.defaultSort] ?? TaskSettingsDefaults.defaultSort;
     final now = DateTime.now();
     final progress = TaskSmartRules.dayProgress(tasks, now: now);
