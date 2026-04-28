@@ -1,5 +1,4 @@
 import 'package:diasorganize/data/database/credit_card_store.dart';
-import 'package:diasorganize/data/models/credit_card_invoice_model.dart';
 import 'package:diasorganize/data/models/credit_card_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -13,9 +12,18 @@ Future<Database> openCreditCardTestDatabase() async {
     CREATE TABLE transactions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
+      description TEXT,
       amount REAL NOT NULL,
       type TEXT NOT NULL,
+      transactionDate TEXT,
+      dueDate TEXT,
+      paidDate TEXT,
+      accountId INTEGER,
+      paymentMethod TEXT,
       status TEXT NOT NULL,
+      ignoreInReports INTEGER NOT NULL DEFAULT 0,
+      ignoreInMonthlySavings INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
       createdAt TEXT,
       updatedAt TEXT
     )
@@ -37,6 +45,26 @@ CreditCard card({int? id, int closingDay = 10, int dueDay = 20}) {
     createdAt: now,
     updatedAt: now,
   );
+}
+
+Future<(Database, int, int)> seedCardInvoiceWithAmount({double amount = 150}) async {
+  final db = await openCreditCardTestDatabase();
+  final cardId = await CreditCardStore.upsertCard(db, card());
+  final savedCard = (await CreditCardStore.getCards(db)).firstWhere((item) => item.id == cardId);
+  final invoice = await CreditCardStore.getOrCreateInvoice(db, card: savedCard, month: DateTime(2026, 4, 1));
+  final now = DateTime(2026, 4, 10).toIso8601String();
+  await db.insert('transactions', {
+    'title': 'Compra da fatura',
+    'amount': amount,
+    'type': 'expense',
+    'status': 'pending',
+    'creditCardId': cardId,
+    'creditCardInvoiceId': invoice.id,
+    'createdAt': now,
+    'updatedAt': now,
+  });
+  await CreditCardStore.recalculateInvoiceAmount(db, invoice.id!);
+  return (db, cardId, invoice.id!);
 }
 
 void main() {
@@ -127,46 +155,10 @@ void main() {
       final invoice = await CreditCardStore.getOrCreateInvoice(db, card: savedCard, month: DateTime(2026, 4, 1));
       final now = DateTime(2026, 4, 10).toIso8601String();
 
-      await db.insert('transactions', {
-        'title': 'Mercado',
-        'amount': 100,
-        'type': 'expense',
-        'status': 'pending',
-        'creditCardId': cardId,
-        'creditCardInvoiceId': invoice.id,
-        'createdAt': now,
-        'updatedAt': now,
-      });
-      await db.insert('transactions', {
-        'title': 'Farmácia',
-        'amount': 50,
-        'type': 'expense',
-        'status': 'paid',
-        'creditCardId': cardId,
-        'creditCardInvoiceId': invoice.id,
-        'createdAt': now,
-        'updatedAt': now,
-      });
-      await db.insert('transactions', {
-        'title': 'Cancelada',
-        'amount': 500,
-        'type': 'expense',
-        'status': 'canceled',
-        'creditCardId': cardId,
-        'creditCardInvoiceId': invoice.id,
-        'createdAt': now,
-        'updatedAt': now,
-      });
-      await db.insert('transactions', {
-        'title': 'Receita indevida',
-        'amount': 1000,
-        'type': 'income',
-        'status': 'paid',
-        'creditCardId': cardId,
-        'creditCardInvoiceId': invoice.id,
-        'createdAt': now,
-        'updatedAt': now,
-      });
+      await db.insert('transactions', {'title': 'Mercado', 'amount': 100, 'type': 'expense', 'status': 'pending', 'creditCardId': cardId, 'creditCardInvoiceId': invoice.id, 'createdAt': now, 'updatedAt': now});
+      await db.insert('transactions', {'title': 'Farmácia', 'amount': 50, 'type': 'expense', 'status': 'paid', 'creditCardId': cardId, 'creditCardInvoiceId': invoice.id, 'createdAt': now, 'updatedAt': now});
+      await db.insert('transactions', {'title': 'Cancelada', 'amount': 500, 'type': 'expense', 'status': 'canceled', 'creditCardId': cardId, 'creditCardInvoiceId': invoice.id, 'createdAt': now, 'updatedAt': now});
+      await db.insert('transactions', {'title': 'Receita indevida', 'amount': 1000, 'type': 'income', 'status': 'paid', 'creditCardId': cardId, 'creditCardInvoiceId': invoice.id, 'createdAt': now, 'updatedAt': now});
 
       await CreditCardStore.recalculateInvoiceAmount(db, invoice.id!);
       final invoices = await CreditCardStore.getInvoices(db, cardId: cardId);
@@ -185,6 +177,64 @@ void main() {
 
       expect((exported['credit_cards'] as List).length, 1);
       expect((exported['credit_card_invoices'] as List).length, 1);
+      await db.close();
+    });
+  });
+
+  group('CreditCardStore invoice payments', () {
+    test('payInvoice registra pagamento total e cria transação paga na conta', () async {
+      final (db, _, invoiceId) = await seedCardInvoiceWithAmount(amount: 150);
+      final paidDate = DateTime(2026, 4, 20);
+
+      final transactionId = await CreditCardStore.payInvoice(db, invoiceId: invoiceId, paymentAccountId: 7, paidDate: paidDate, notes: 'Pago no app do banco');
+      final invoice = (await CreditCardStore.getInvoices(db)).firstWhere((item) => item.id == invoiceId);
+      final payment = (await db.query('transactions', where: 'id = ?', whereArgs: [transactionId])).first;
+
+      expect(invoice.status, 'paid');
+      expect(invoice.paidAmount, 150);
+      expect(invoice.paymentAccountId, 7);
+      expect(DateTime.parse(invoice.paidDate!).day, 20);
+      expect(payment['amount'], 150);
+      expect(payment['type'], 'expense');
+      expect(payment['status'], 'paid');
+      expect(payment['accountId'], 7);
+      expect(payment['ignoreInReports'], 1);
+      expect(payment['ignoreInMonthlySavings'], 1);
+      expect(payment['creditCardPaymentInvoiceId'], invoiceId);
+      await db.close();
+    });
+
+    test('payInvoice permite pagamento parcial', () async {
+      final (db, _, invoiceId) = await seedCardInvoiceWithAmount(amount: 200);
+
+      await CreditCardStore.payInvoice(db, invoiceId: invoiceId, paymentAccountId: 3, amount: 80, paidDate: DateTime(2026, 4, 20));
+      final invoice = (await CreditCardStore.getInvoices(db)).firstWhere((item) => item.id == invoiceId);
+
+      expect(invoice.status, 'partial');
+      expect(invoice.paidAmount, 80);
+      expect(invoice.paidDate, null);
+      await db.close();
+    });
+
+    test('payInvoice bloqueia pagamento maior que fatura', () async {
+      final (db, _, invoiceId) = await seedCardInvoiceWithAmount(amount: 100);
+
+      expect(
+        () => CreditCardStore.payInvoice(db, invoiceId: invoiceId, paymentAccountId: 1, amount: 101),
+        throwsArgumentError,
+      );
+      await db.close();
+    });
+
+    test('payInvoice bloqueia fatura já paga', () async {
+      final (db, _, invoiceId) = await seedCardInvoiceWithAmount(amount: 100);
+
+      await CreditCardStore.payInvoice(db, invoiceId: invoiceId, paymentAccountId: 1, paidDate: DateTime(2026, 4, 20));
+
+      expect(
+        () => CreditCardStore.payInvoice(db, invoiceId: invoiceId, paymentAccountId: 1, paidDate: DateTime(2026, 4, 21)),
+        throwsArgumentError,
+      );
       await db.close();
     });
   });
