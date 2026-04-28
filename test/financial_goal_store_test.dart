@@ -62,9 +62,9 @@ void main() {
     test('upsertGoal valida nome, alvo e valor atual', () async {
       final db = await openFinancialGoalTestDatabase();
 
-      expect(() => FinancialGoalStore.upsertGoal(db, goal(name: '')), throwsArgumentError);
-      expect(() => FinancialGoalStore.upsertGoal(db, goal(targetAmount: 0)), throwsArgumentError);
-      expect(() => FinancialGoalStore.upsertGoal(db, goal(currentAmount: -1)), throwsArgumentError);
+      await expectLater(FinancialGoalStore.upsertGoal(db, goal(name: '')), throwsArgumentError);
+      await expectLater(FinancialGoalStore.upsertGoal(db, goal(targetAmount: 0)), throwsArgumentError);
+      await expectLater(FinancialGoalStore.upsertGoal(db, goal(currentAmount: -1)), throwsArgumentError);
       await db.close();
     });
 
@@ -110,10 +110,10 @@ void main() {
     test('updateGoalProgress bloqueia valor negativo e objetivo inexistente', () async {
       final db = await openFinancialGoalTestDatabase();
 
-      expect(() => FinancialGoalStore.updateGoalProgress(db, 999, 100), throwsArgumentError);
+      await expectLater(FinancialGoalStore.updateGoalProgress(db, 999, 100), throwsArgumentError);
 
       final id = await FinancialGoalStore.upsertGoal(db, goal());
-      expect(() => FinancialGoalStore.updateGoalProgress(db, id, -1), throwsArgumentError);
+      await expectLater(FinancialGoalStore.updateGoalProgress(db, id, -1), throwsArgumentError);
       await db.close();
     });
 
