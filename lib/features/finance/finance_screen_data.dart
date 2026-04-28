@@ -1,5 +1,6 @@
 import '../../data/models/debt_model.dart';
 import '../../data/models/financial_category_model.dart';
+import '../../data/models/financial_subcategory_model.dart';
 import '../../data/models/transaction_model.dart';
 import 'finance_monthly_summary.dart';
 import 'finance_transaction_rules.dart';
@@ -9,22 +10,26 @@ class FinanceScreenData {
   final FinanceMonthlySummary summary;
   final List<FinancialTransaction> filteredTransactions;
   final FinancialCategory? topExpenseCategory;
+  final FinancialSubcategory? topExpenseSubcategory;
 
   const FinanceScreenData({
     required this.selectedMonth,
     required this.summary,
     required this.filteredTransactions,
     required this.topExpenseCategory,
+    required this.topExpenseSubcategory,
   });
 
   static FinanceScreenData build({
     required DateTime selectedMonth,
     required List<FinancialTransaction> transactions,
     required List<FinancialCategory> categories,
+    required List<FinancialSubcategory> subcategories,
     required List<Debt> debts,
     required String filterType,
     required String filterStatus,
     required int? filterCategory,
+    required int? filterSubcategory,
     required String searchQuery,
   }) {
     final summary = FinanceMonthlySummary.fromTransactions(
@@ -42,13 +47,16 @@ class FinanceScreenData {
       if (filterStatus == 'pending' && transaction.status != 'pending') return false;
       if (filterStatus == 'overdue' && transaction.status != 'overdue') return false;
       if (filterCategory != null && transaction.categoryId != filterCategory) return false;
+      if (filterSubcategory != null && transaction.subcategoryId != filterSubcategory) return false;
 
       final category = _categoryOf(categories, transaction.categoryId);
+      final subcategory = _subcategoryOf(subcategories, transaction.subcategoryId);
       final debt = _debtOf(debts, transaction.debtId);
       return FinanceTransactionRules.matchesText(
         transaction,
         searchQuery,
         categoryName: category?.name,
+        subcategoryName: subcategory?.name,
         debtName: debt?.name,
         creditorName: debt?.creditorName,
       );
@@ -64,6 +72,7 @@ class FinanceScreenData {
       summary: summary,
       filteredTransactions: filtered,
       topExpenseCategory: _categoryOf(categories, summary.topExpenseCategoryId),
+      topExpenseSubcategory: _subcategoryOf(subcategories, summary.topExpenseSubcategoryId),
     );
   }
 
@@ -71,6 +80,14 @@ class FinanceScreenData {
     if (categoryId == null) return null;
     for (final category in categories) {
       if (category.id == categoryId) return category;
+    }
+    return null;
+  }
+
+  static FinancialSubcategory? _subcategoryOf(List<FinancialSubcategory> subcategories, int? subcategoryId) {
+    if (subcategoryId == null) return null;
+    for (final subcategory in subcategories) {
+      if (subcategory.id == subcategoryId) return subcategory;
     }
     return null;
   }
