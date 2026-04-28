@@ -5,6 +5,7 @@ import '../../data/models/task_model.dart';
 import '../../domain/providers.dart';
 import 'create_task_screen.dart';
 import 'quick_add_task_button.dart';
+import 'task_settings_screen.dart';
 import 'task_smart_rules.dart';
 
 class TaskKanbanScreen extends ConsumerWidget {
@@ -12,17 +13,22 @@ class TaskKanbanScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsProvider);
+    final sortKey = settings[TaskSettingsKeys.defaultSort] ?? TaskSettingsDefaults.defaultSort;
     final allTasks = ref.watch(tasksProvider).where((task) => TaskSmartRules.isParentTask(task) && !TaskSmartRules.isCanceled(task)).toList();
-    final overdue = allTasks.where((task) => TaskSmartRules.isOverdue(task)).toList()..sort(TaskSmartRules.compareByScheduleAndPriority);
-    final pending = allTasks.where((task) => TaskSmartRules.isActive(task) && !TaskSmartRules.isOverdue(task)).toList()..sort(TaskSmartRules.compareByScheduleAndPriority);
-    final completed = allTasks.where(TaskSmartRules.isCompleted).toList()..sort(TaskSmartRules.compareByScheduleAndPriority);
+    final overdue = allTasks.where((task) => TaskSmartRules.isOverdue(task)).toList();
+    TaskSmartRules.sortTasks(overdue, sortKey: sortKey);
+    final pending = allTasks.where((task) => TaskSmartRules.isActive(task) && !TaskSmartRules.isOverdue(task)).toList();
+    TaskSmartRules.sortTasks(pending, sortKey: sortKey);
+    final completed = allTasks.where(TaskSmartRules.isCompleted).toList();
+    TaskSmartRules.sortTasks(completed, sortKey: sortKey);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Kanban de tarefas'), actions: const [QuickAddTaskIconButton()]),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
-          const _KanbanHeader(),
+          _KanbanHeader(sortLabel: _sortLabel(sortKey)),
           const SizedBox(height: 16),
           _KanbanColumn(title: 'Atrasadas', subtitle: 'Tarefas vencidas que precisam de decisão.', icon: Icons.warning_amber, color: Colors.red, tasks: overdue, targetStatus: 'pendente'),
           _KanbanColumn(title: 'Pendentes', subtitle: 'Tarefas ativas ainda não concluídas.', icon: Icons.radio_button_unchecked, color: Colors.blue, tasks: pending, targetStatus: 'concluida'),
@@ -32,28 +38,46 @@ class TaskKanbanScreen extends ConsumerWidget {
       floatingActionButton: const QuickAddTaskButton(label: 'Capturar'),
     );
   }
+
+  static String _sortLabel(String sortKey) {
+    switch (sortKey) {
+      case 'priority_schedule':
+        return 'Prioridade e data';
+      case 'title':
+        return 'Título';
+      case 'created_desc':
+        return 'Mais recentes';
+      case 'schedule_priority':
+      default:
+        return 'Data e prioridade';
+    }
+  }
 }
 
 class _KanbanHeader extends StatelessWidget {
-  const _KanbanHeader();
+  final String sortLabel;
+
+  const _KanbanHeader({required this.sortLabel});
 
   @override
   Widget build(BuildContext context) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: const Padding(
-        padding: EdgeInsets.all(18),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
         child: Row(
           children: [
-            CircleAvatar(child: Icon(Icons.view_kanban)),
-            SizedBox(width: 12),
+            const CircleAvatar(child: Icon(Icons.view_kanban)),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Kanban operacional', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  Text('Visualize tarefas por situação sem alterar a tela clássica.', style: TextStyle(color: Colors.grey)),
+                  const Text('Kanban operacional', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Text('Visualize tarefas por situação sem alterar a tela clássica.', style: TextStyle(color: Colors.grey)),
+                  const SizedBox(height: 2),
+                  Text('Ordenação: $sortLabel', style: const TextStyle(color: Colors.grey, fontSize: 12)),
                 ],
               ),
             ),
