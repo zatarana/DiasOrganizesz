@@ -13,6 +13,7 @@ class FinanceMonthlySummary {
   final double previousPaidExpense;
   final int overdueExpenses;
   final Map<int?, double> paidExpensesByCategory;
+  final Map<int?, double> paidExpensesBySubcategory;
 
   const FinanceMonthlySummary({
     required this.month,
@@ -26,6 +27,7 @@ class FinanceMonthlySummary {
     required this.previousPaidExpense,
     required this.overdueExpenses,
     required this.paidExpensesByCategory,
+    required this.paidExpensesBySubcategory,
   });
 
   double get expectedBalance => expectedIncome - expectedExpense;
@@ -56,6 +58,7 @@ class FinanceMonthlySummary {
       previousPaidExpense: FinanceTransactionRules.paidExpenseForMonth(transactions, previousMonth),
       overdueExpenses: FinanceTransactionRules.overdueExpensesForMonth(transactions, month, now: now),
       paidExpensesByCategory: FinanceTransactionRules.paidExpensesByCategoryForMonth(transactions, month),
+      paidExpensesBySubcategory: FinanceTransactionRules.paidExpensesBySubcategoryForMonth(transactions, month),
     );
   }
 
@@ -68,6 +71,18 @@ class FinanceMonthlySummary {
   double get topExpenseCategoryAmount {
     if (paidExpensesByCategory.isEmpty) return 0;
     final entries = paidExpensesByCategory.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    return entries.first.value;
+  }
+
+  int? get topExpenseSubcategoryId {
+    if (paidExpensesBySubcategory.isEmpty) return null;
+    final entries = paidExpensesBySubcategory.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    return entries.first.key;
+  }
+
+  double get topExpenseSubcategoryAmount {
+    if (paidExpensesBySubcategory.isEmpty) return 0;
+    final entries = paidExpensesBySubcategory.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
     return entries.first.value;
   }
 }
