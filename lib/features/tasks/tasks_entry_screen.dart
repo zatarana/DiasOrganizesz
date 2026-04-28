@@ -14,6 +14,7 @@ import 'task_list_screen.dart';
 import 'task_priority_matrix_screen.dart';
 import 'task_productivity_stats_screen.dart';
 import 'task_search_screen.dart';
+import 'task_settings_screen.dart';
 import 'task_smart_list_screen.dart';
 import 'task_smart_rules.dart';
 import 'today_tasks_screen.dart';
@@ -38,6 +39,11 @@ class TasksEntryScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Tarefas'),
         actions: [
+          IconButton(
+            tooltip: 'Configurações de tarefas',
+            icon: const Icon(Icons.tune),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskSettingsScreen())),
+          ),
           IconButton(
             tooltip: 'Criação completa',
             icon: const Icon(Icons.edit_note),
@@ -187,6 +193,13 @@ class TasksEntryScreen extends ConsumerWidget {
                 subtitle: 'Estatísticas específicas de tarefas e conclusão.',
                 color: Colors.brown,
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskProductivityStatsScreen())),
+              ),
+              _EntryCard(
+                icon: Icons.settings,
+                title: 'Configurações de tarefas',
+                subtitle: 'Preferências da Central, cards, Quick Add e listas.',
+                color: Colors.blueGrey,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskSettingsScreen())),
               ),
               _EntryCard(
                 icon: Icons.analytics,
