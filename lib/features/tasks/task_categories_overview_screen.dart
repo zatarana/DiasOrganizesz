@@ -6,6 +6,7 @@ import '../../domain/providers.dart';
 import 'create_task_screen.dart';
 import 'quick_add_task_button.dart';
 import 'quick_add_task_sheet.dart';
+import 'task_settings_screen.dart';
 import 'task_smart_rules.dart';
 
 class TaskCategoriesOverviewScreen extends ConsumerWidget {
@@ -14,19 +15,21 @@ class TaskCategoriesOverviewScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final categories = ref.watch(categoriesProvider);
+    final settings = ref.watch(appSettingsProvider);
+    final sortKey = settings[TaskSettingsKeys.defaultSort] ?? TaskSettingsDefaults.defaultSort;
     final tasks = ref.watch(tasksProvider);
 
     final uncategorized = tasks.where((task) {
       return TaskSmartRules.isParentTask(task) && TaskSmartRules.isActive(task) && task.categoryId == null;
-    }).toList()
-      ..sort(TaskSmartRules.compareByScheduleAndPriority);
+    }).toList();
+    TaskSmartRules.sortTasks(uncategorized, sortKey: sortKey);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Listas e categorias')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
-          const _CategoryOverviewHeader(),
+          _CategoryOverviewHeader(sortLabel: _sortLabel(sortKey)),
           const SizedBox(height: 16),
           if (categories.isEmpty && uncategorized.isEmpty)
             const _CategoryEmptyState()
@@ -66,6 +69,20 @@ class TaskCategoriesOverviewScreen extends ConsumerWidget {
       floatingActionButton: const QuickAddTaskButton(label: 'Capturar'),
     );
   }
+
+  static String _sortLabel(String sortKey) {
+    switch (sortKey) {
+      case 'priority_schedule':
+        return 'Prioridade e data';
+      case 'title':
+        return 'Título';
+      case 'created_desc':
+        return 'Mais recentes';
+      case 'schedule_priority':
+      default:
+        return 'Data e prioridade';
+    }
+  }
 }
 
 class TaskCategoryDetailScreen extends ConsumerWidget {
@@ -76,10 +93,12 @@ class TaskCategoryDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsProvider);
+    final sortKey = settings[TaskSettingsKeys.defaultSort] ?? TaskSettingsDefaults.defaultSort;
     final tasks = ref.watch(tasksProvider).where((task) {
       return TaskSmartRules.isParentTask(task) && !TaskSmartRules.isCanceled(task) && task.categoryId == categoryId;
-    }).toList()
-      ..sort(TaskSmartRules.compareByScheduleAndPriority);
+    }).toList();
+    TaskSmartRules.sortTasks(tasks, sortKey: sortKey);
 
     final active = tasks.where(TaskSmartRules.isActive).toList();
     final completed = tasks.where(TaskSmartRules.isCompleted).toList();
@@ -94,7 +113,7 @@ class TaskCategoryDetailScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
-          _CategoryDetailHeader(categoryName: categoryName, active: active.length, completed: completed.length),
+          _CategoryDetailHeader(categoryName: categoryName, active: active.length, completed: completed.length, sortLabel: TaskCategoriesOverviewScreen._sortLabel(sortKey)),
           const SizedBox(height: 16),
           if (tasks.isEmpty)
             const _CategoryEmptyState()
@@ -162,25 +181,29 @@ class _TaskTile extends ConsumerWidget {
 }
 
 class _CategoryOverviewHeader extends StatelessWidget {
-  const _CategoryOverviewHeader();
+  final String sortLabel;
+
+  const _CategoryOverviewHeader({required this.sortLabel});
 
   @override
   Widget build(BuildContext context) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: const Padding(
-        padding: EdgeInsets.all(18),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
         child: Row(
           children: [
-            CircleAvatar(child: Icon(Icons.category)),
-            SizedBox(width: 12),
+            const CircleAvatar(child: Icon(Icons.category)),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Listas por categoria', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  Text('Use categorias como listas visuais sem quebrar o modelo atual.', style: TextStyle(color: Colors.grey)),
+                  const Text('Listas por categoria', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Text('Use categorias como listas visuais sem quebrar o modelo atual.', style: TextStyle(color: Colors.grey)),
+                  const SizedBox(height: 2),
+                  Text('Ordenação: $sortLabel', style: const TextStyle(color: Colors.grey, fontSize: 12)),
                 ],
               ),
             ),
@@ -195,8 +218,9 @@ class _CategoryDetailHeader extends StatelessWidget {
   final String categoryName;
   final int active;
   final int completed;
+  final String sortLabel;
 
-  const _CategoryDetailHeader({required this.categoryName, required this.active, required this.completed});
+  const _CategoryDetailHeader({required this.categoryName, required this.active, required this.completed, required this.sortLabel});
 
   @override
   Widget build(BuildContext context) {
@@ -215,6 +239,8 @@ class _CategoryDetailHeader extends StatelessWidget {
                 children: [
                   Text(categoryName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   Text('$active ativas • $completed concluídas', style: const TextStyle(color: Colors.grey)),
+                  const SizedBox(height: 2),
+                  Text('Ordenação: $sortLabel', style: const TextStyle(color: Colors.grey, fontSize: 12)),
                 ],
               ),
             ),
