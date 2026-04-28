@@ -7,6 +7,7 @@ class FinancialAccount {
   final String color;
   final String icon;
   final bool isArchived;
+  final bool ignoreInTotals;
   final String createdAt;
   final String updatedAt;
 
@@ -19,6 +20,7 @@ class FinancialAccount {
     this.color = '0xFF2196F3',
     this.icon = 'account_balance',
     this.isArchived = false,
+    this.ignoreInTotals = false,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -32,6 +34,7 @@ class FinancialAccount {
     String? color,
     String? icon,
     bool? isArchived,
+    bool? ignoreInTotals,
     String? createdAt,
     String? updatedAt,
   }) {
@@ -44,6 +47,7 @@ class FinancialAccount {
       color: color ?? this.color,
       icon: icon ?? this.icon,
       isArchived: isArchived ?? this.isArchived,
+      ignoreInTotals: ignoreInTotals ?? this.ignoreInTotals,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -58,6 +62,7 @@ class FinancialAccount {
         'color': color,
         'icon': icon,
         'isArchived': isArchived ? 1 : 0,
+        'ignoreInTotals': ignoreInTotals ? 1 : 0,
         'createdAt': createdAt,
         'updatedAt': updatedAt,
       };
@@ -68,6 +73,13 @@ class FinancialAccount {
       return double.tryParse('$value') ?? 0.0;
     }
 
+    bool asBool(dynamic value) {
+      if (value is bool) return value;
+      if (value is num) return value == 1;
+      final normalized = '$value'.toLowerCase();
+      return normalized == 'true' || normalized == '1';
+    }
+
     return FinancialAccount(
       id: map['id'],
       name: map['name'] ?? 'Conta sem nome',
@@ -76,7 +88,8 @@ class FinancialAccount {
       currentBalance: asDouble(map['currentBalance']),
       color: map['color'] ?? '0xFF2196F3',
       icon: map['icon'] ?? 'account_balance',
-      isArchived: map['isArchived'] == 1,
+      isArchived: asBool(map['isArchived']),
+      ignoreInTotals: asBool(map['ignoreInTotals']),
       createdAt: map['createdAt'] ?? DateTime.now().toIso8601String(),
       updatedAt: map['updatedAt'] ?? DateTime.now().toIso8601String(),
     );
