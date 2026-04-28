@@ -76,9 +76,9 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
       _notesController.text = template.notes ?? '';
       _tagsController.text = template.tags ?? '';
       if (template.discountAmount != null && template.discountAmount! > 0) {
-        _discountController.text = template.discountAmount!.toStringAsFixed(2);
+        _discountController.text = template.discountAmount!.toStringAsFixed(2).replaceAll('.', ',');
       }
-      _amountController.text = template.amount > 0 ? template.amount.toStringAsFixed(2) : '';
+      _amountController.text = template.amount > 0 ? template.amount.toStringAsFixed(2).replaceAll('.', ',') : '';
 
       if (_paymentMethods.contains(template.paymentMethod?.toLowerCase())) {
         _selectedPaymentMethod = template.paymentMethod?.toLowerCase();
@@ -155,6 +155,24 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
       if (debt.id == debtId) return debt;
     }
     return null;
+  }
+
+  double? _parseMoney(String input) {
+    var value = input.trim();
+    if (value.isEmpty) return null;
+    value = value.replaceAll(RegExp(r'[^0-9,.-]'), '');
+
+    final lastComma = value.lastIndexOf(',');
+    final lastDot = value.lastIndexOf('.');
+    if (lastComma > lastDot) {
+      value = value.replaceAll('.', '').replaceAll(',', '.');
+    } else if (lastDot > lastComma) {
+      value = value.replaceAll(',', '');
+    } else {
+      value = value.replaceAll(',', '.');
+    }
+
+    return double.tryParse(value);
   }
 
   void _clearValidationErrors() {
@@ -295,7 +313,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                   labelText: 'Valor',
                   prefixText: 'R\$ ',
                   border: const OutlineInputBorder(),
-                  helperText: _isDebtInstallment ? 'Alterar o valor afeta o abatimento e o saldo restante da dívida.' : null,
+                  helperText: _isDebtInstallment ? 'Aceita 1000,50, 1.000,50 ou 1000.50.' : 'Aceita 1000,50, 1.000,50 ou 1000.50.',
                   errorText: _amountError,
                 ),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -312,7 +330,7 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
                     prefixText: 'R\$ ',
                     border: const OutlineInputBorder(),
                     hintText: _isDebtInstallment ? 'Ex: desconto por antecipar parcela' : (_type == 'expense' ? 'Desconto por pagar antecipado' : 'Desconto concedido'),
-                    helperText: _isDebtInstallment ? 'O desconto também abate o saldo restante da dívida.' : null,
+                    helperText: _isDebtInstallment ? 'O desconto também abate o saldo restante da dívida.' : 'Aceita vírgula ou ponto decimal.',
                     errorText: _discountError,
                   ),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -500,8 +518,8 @@ class _CreateTransactionScreenState extends ConsumerState<CreateTransactionScree
   Future<void> _save() async {
     if (_isSaving) return;
 
-    final amount = double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0;
-    final discount = double.tryParse(_discountController.text.replaceAll(',', '.')) ?? 0.0;
+    final amount = _parseMoney(_amountController.text) ?? 0.0;
+    final discount = _parseMoney(_discountController.text) ?? 0.0;
     final template = widget.transaction;
     final selectableAccounts = _selectableAccounts();
     final effectiveType = _isDebtInstallment ? 'expense' : _type;
