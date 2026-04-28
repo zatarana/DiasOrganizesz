@@ -210,6 +210,42 @@ class CreditCardStore {
     return transactionId;
   }
 
+  static Future<int> movePurchaseToInvoiceMonth(
+    Database db, {
+    required int transactionId,
+    required DateTime targetMonth,
+  }) async {
+    await ensureTables(db);
+    final rows = await db.query('transactions', where: 'id = ?', whereArgs: [transactionId], limit: 1);
+    if (rows.isEmpty) throw ArgumentError('Compra não encontrada.');
+    final transaction = rows.first;
+    final cardId = transaction['creditCardId'];
+    final oldInvoiceId = transaction['creditCardInvoiceId'];
+    if (cardId is! int || oldInvoiceId is! int) throw ArgumentError('A movimentação não é uma compra de cartão válida.');
+    if (transaction['status'] == 'canceled') throw ArgumentError('Compra cancelada não pode ser movida de fatura.');
+
+    final cardRows = await db.query('credit_cards', where: 'id = ? AND isArchived = 0', whereArgs: [cardId], limit: 1);
+    if (cardRows.isEmpty) throw ArgumentError('Cartão não encontrado ou arquivado.');
+    final card = CreditCard.fromMap(cardRows.first);
+    final targetInvoice = await getOrCreateInvoice(db, card: card, month: DateTime(targetMonth.year, targetMonth.month, 1));
+    final targetInvoiceId = targetInvoice.id!;
+    if (targetInvoiceId == oldInvoiceId) return targetInvoiceId;
+
+    await db.update(
+      'transactions',
+      {
+        'creditCardInvoiceId': targetInvoiceId,
+        'dueDate': targetInvoice.dueDate,
+        'updatedAt': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [transactionId],
+    );
+    await recalculateInvoiceAmount(db, oldInvoiceId);
+    await recalculateInvoiceAmount(db, targetInvoiceId);
+    return targetInvoiceId;
+  }
+
   static Future<int> payInvoice(
     Database db, {
     required int invoiceId,
