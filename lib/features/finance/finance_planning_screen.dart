@@ -8,6 +8,7 @@ import '../../data/models/financial_account_model.dart';
 import '../../data/models/financial_goal_model.dart';
 import '../../data/models/transaction_model.dart';
 import '../../domain/providers.dart';
+import 'finance_transfers_screen.dart';
 
 const String defaultFinancialAccountSettingKey = 'default_financial_account_id';
 
@@ -36,7 +37,7 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
     setState(() => _loading = true);
     final dbHelper = ref.read(dbProvider);
     final db = await dbHelper.database;
-    final accounts = await FinancePlanningStore.getAccounts(db);
+    final accounts = await FinancePlanningStore.getAccounts(db, recalculateBeforeRead: true);
     final budgets = await FinancePlanningStore.getBudgets(db);
     final goals = await FinancePlanningStore.getGoals(db);
     final defaultSetting = await dbHelper.getSetting(defaultFinancialAccountSettingKey);
@@ -59,6 +60,11 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
     await ref.read(appSettingsProvider.notifier).setValue(defaultFinancialAccountSettingKey, accountId?.toString() ?? '');
     if (!mounted) return;
     setState(() => _defaultAccountId = accountId);
+  }
+
+  Future<void> _openTransfers() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceTransfersScreen()));
+    if (mounted) await _loadAll();
   }
 
   String _money(num value) => 'R\$ ${value.toDouble().toStringAsFixed(2)}';
@@ -130,7 +136,13 @@ class _FinancePlanningScreenState extends ConsumerState<FinancePlanningScreen> {
       children: [
         _summaryCard('Saldo total em contas', _money(totalBalance), Icons.account_balance_wallet, Colors.blue),
         const SizedBox(height: 12),
-        ElevatedButton.icon(onPressed: () => _showAccountDialog(), icon: const Icon(Icons.add), label: const Text('Adicionar conta')),
+        Row(
+          children: [
+            Expanded(child: ElevatedButton.icon(onPressed: () => _showAccountDialog(), icon: const Icon(Icons.add), label: const Text('Adicionar conta'))),
+            const SizedBox(width: 8),
+            Expanded(child: OutlinedButton.icon(onPressed: _openTransfers, icon: const Icon(Icons.swap_horiz), label: const Text('Transferências'))),
+          ],
+        ),
         const SizedBox(height: 12),
         if (_accounts.isEmpty)
           const _EmptyState(text: 'Nenhuma conta cadastrada ainda.')
