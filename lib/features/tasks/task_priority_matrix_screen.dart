@@ -5,6 +5,7 @@ import '../../data/models/task_model.dart';
 import '../../domain/providers.dart';
 import 'create_task_screen.dart';
 import 'quick_add_task_button.dart';
+import 'task_settings_screen.dart';
 import 'task_smart_rules.dart';
 
 class TaskPriorityMatrixScreen extends ConsumerWidget {
@@ -12,18 +13,24 @@ class TaskPriorityMatrixScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(appSettingsProvider);
+    final sortKey = settings[TaskSettingsKeys.defaultSort] ?? TaskSettingsDefaults.defaultSort;
     final tasks = ref.watch(tasksProvider).where((task) => TaskSmartRules.isParentTask(task) && TaskSmartRules.isActive(task)).toList();
-    final urgentHigh = tasks.where((task) => task.priority == 'alta' && TaskSmartRules.hasDate(task)).toList()..sort(TaskSmartRules.compareByScheduleAndPriority);
-    final importantNoDate = tasks.where((task) => task.priority == 'alta' && !TaskSmartRules.hasDate(task)).toList()..sort(TaskSmartRules.compareByScheduleAndPriority);
-    final scheduledNormal = tasks.where((task) => task.priority != 'alta' && TaskSmartRules.hasDate(task)).toList()..sort(TaskSmartRules.compareByScheduleAndPriority);
-    final lowLoose = tasks.where((task) => task.priority != 'alta' && !TaskSmartRules.hasDate(task)).toList()..sort(TaskSmartRules.compareByScheduleAndPriority);
+    final urgentHigh = tasks.where((task) => task.priority == 'alta' && TaskSmartRules.hasDate(task)).toList();
+    TaskSmartRules.sortTasks(urgentHigh, sortKey: sortKey);
+    final importantNoDate = tasks.where((task) => task.priority == 'alta' && !TaskSmartRules.hasDate(task)).toList();
+    TaskSmartRules.sortTasks(importantNoDate, sortKey: sortKey);
+    final scheduledNormal = tasks.where((task) => task.priority != 'alta' && TaskSmartRules.hasDate(task)).toList();
+    TaskSmartRules.sortTasks(scheduledNormal, sortKey: sortKey);
+    final lowLoose = tasks.where((task) => task.priority != 'alta' && !TaskSmartRules.hasDate(task)).toList();
+    TaskSmartRules.sortTasks(lowLoose, sortKey: sortKey);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Matriz de prioridade'), actions: const [QuickAddTaskIconButton()]),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
-          const _MatrixHeader(),
+          _MatrixHeader(sortLabel: _sortLabel(sortKey)),
           const SizedBox(height: 16),
           _MatrixSection(title: 'Fazer agora', subtitle: 'Alta prioridade com data definida.', color: Colors.red, tasks: urgentHigh),
           _MatrixSection(title: 'Planejar', subtitle: 'Alta prioridade ainda sem data.', color: Colors.deepOrange, tasks: importantNoDate),
@@ -34,26 +41,44 @@ class TaskPriorityMatrixScreen extends ConsumerWidget {
       floatingActionButton: const QuickAddTaskButton(label: 'Capturar'),
     );
   }
+
+  static String _sortLabel(String sortKey) {
+    switch (sortKey) {
+      case 'priority_schedule':
+        return 'Prioridade e data';
+      case 'title':
+        return 'Título';
+      case 'created_desc':
+        return 'Mais recentes';
+      case 'schedule_priority':
+      default:
+        return 'Data e prioridade';
+    }
+  }
 }
 
 class _MatrixHeader extends StatelessWidget {
-  const _MatrixHeader();
+  final String sortLabel;
+
+  const _MatrixHeader({required this.sortLabel});
 
   @override
   Widget build(BuildContext context) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: const Padding(
-        padding: EdgeInsets.all(18),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
         child: Row(
           children: [
-            CircleAvatar(child: Icon(Icons.grid_view)),
-            SizedBox(width: 12),
+            const CircleAvatar(child: Icon(Icons.grid_view)),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Matriz de prioridade', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                Text('Cruza prioridade e data para decidir o que fazer, planejar ou revisar.', style: TextStyle(color: Colors.grey)),
+                const Text('Matriz de prioridade', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Text('Cruza prioridade e data para decidir o que fazer, planejar ou revisar.', style: TextStyle(color: Colors.grey)),
+                const SizedBox(height: 2),
+                Text('Ordenação: $sortLabel', style: const TextStyle(color: Colors.grey, fontSize: 12)),
               ]),
             ),
           ],
