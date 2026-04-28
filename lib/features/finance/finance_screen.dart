@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../data/database/finance_planning_store.dart';
-import '../../domain/providers.dart';
+import '../../data/models/debt_model.dart';
 import '../../data/models/financial_category_model.dart';
 import '../../data/models/transaction_model.dart';
+import '../../domain/providers.dart';
+import '../debts/debts_screen.dart';
 import 'create_transaction_screen.dart';
 import 'finance_categories_screen.dart';
+import 'finance_debt_snapshot.dart';
 import 'finance_planning_screen.dart';
 
 class FinanceScreen extends ConsumerStatefulWidget {
@@ -32,9 +35,15 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
 
   void _nextMonth() => setState(() => _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 1));
   void _prevMonth() => setState(() => _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1, 1));
+  void _currentMonth() => setState(() => _selectedMonth = DateTime.now());
 
   Future<void> _openPlanning() async {
     await Navigator.push(context, MaterialPageRoute(builder: (_) => const FinancePlanningScreen()));
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _openDebts() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtsScreen()));
     if (mounted) setState(() {});
   }
 
@@ -52,7 +61,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     return FinancePlanningStore.getActiveAccountsBalance(db);
   }
 
-  FinancialCategory? _findCategory(List<FinancialCategory> categories, int? categoryId) {
+  FinancialCategory? _categoryOf(List<FinancialCategory> categories, int? categoryId) {
     if (categoryId == null) return null;
     for (final category in categories) {
       if (category.id == categoryId) return category;
@@ -60,9 +69,18 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     return null;
   }
 
-  Color _safeCategoryColor(FinancialCategory? category, FinancialTransaction transaction) {
-    if (category == null) return transaction.type == 'income' ? Colors.green : Colors.red;
-    return Color(int.tryParse(category.color) ?? (transaction.type == 'income' ? 0xFF4CAF50 : 0xFFF44336));
+  Debt? _debtOf(List<Debt> debts, int? debtId) {
+    if (debtId == null) return null;
+    for (final debt in debts) {
+      if (debt.id == debtId) return debt;
+    }
+    return null;
+  }
+
+  Color _transactionColor(FinancialTransaction transaction, FinancialCategory? category) {
+    if (transaction.debtId != null) return Colors.deepOrange;
+    if (category != null) return Color(int.tryParse(category.color) ?? 0xFF607D8B);
+    return transaction.type == 'income' ? Colors.green : Colors.red;
   }
 
   DateTime _safeMonthlyDate(DateTime original, DateTime targetMonth) {
@@ -82,7 +100,10 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     if (!existing.isFixed) return false;
     final existingExpected = _expectedDate(existing);
     if (!_isSameMonth(existingExpected, targetExpectedDate)) return false;
-    return existing.title == source.title && existing.type == source.type && existing.categoryId == source.categoryId && existing.amount.toStringAsFixed(2) == source.amount.toStringAsFixed(2);
+    return existing.title == source.title &&
+        existing.type == source.type &&
+        existing.categoryId == source.categoryId &&
+        existing.amount.toStringAsFixed(2) == source.amount.toStringAsFixed(2);
   }
 
   Future<void> _generateFixedTransactions() async {
@@ -93,7 +114,13 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
 
     final previousFixed = allTransactions.where((transaction) {
       final expected = _expectedDate(transaction);
-      return expected != null && expected.month == previousMonth.month && expected.year == previousMonth.year && transaction.isFixed && transaction.recurrenceType == 'monthly' && transaction.status != 'canceled';
+      return expected != null &&
+          expected.month == previousMonth.month &&
+          expected.year == previousMonth.year &&
+          transaction.isFixed &&
+          transaction.recurrenceType == 'monthly' &&
+          transaction.status != 'canceled' &&
+          transaction.debtId == null;
     }).toList();
 
     int added = 0;
@@ -121,19 +148,36 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       if (source.accountId != null && copiedAccountId == null) accountCleared++;
 
       final now = DateTime.now().toIso8601String();
-      final newTransaction = FinancialTransaction(title: source.title, description: source.description, amount: source.amount, type: source.type, transactionDate: newTransactionDate.toIso8601String(), dueDate: newDueDate?.toIso8601String(), paidDate: null, categoryId: source.categoryId, accountId: copiedAccountId, paymentMethod: source.paymentMethod, status: 'pending', reminderEnabled: source.reminderEnabled, isFixed: true, recurrenceType: 'monthly', notes: source.notes, createdAt: now, updatedAt: now);
+      final newTransaction = FinancialTransaction(
+        title: source.title,
+        description: source.description,
+        amount: source.amount,
+        type: source.type,
+        transactionDate: newTransactionDate.toIso8601String(),
+        dueDate: newDueDate?.toIso8601String(),
+        paidDate: null,
+        categoryId: source.categoryId,
+        accountId: copiedAccountId,
+        paymentMethod: source.paymentMethod,
+        status: 'pending',
+        reminderEnabled: source.reminderEnabled,
+        isFixed: true,
+        recurrenceType: 'monthly',
+        notes: source.notes,
+        createdAt: now,
+        updatedAt: now,
+      );
       await ref.read(transactionsProvider.notifier).addTransaction(newTransaction);
       added++;
     }
 
     if (!mounted) return;
-    if (added > 0) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$added lançamento(s) fixo(s) gerado(s). ${skipped > 0 ? '$skipped duplicado(s) ignorado(s).' : ''}${accountCleared > 0 ? ' $accountCleared conta(s) arquivada(s) removida(s).' : ''}')));
-    } else if (skipped > 0) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Nenhum lançamento novo. $skipped recorrente(s) já existiam neste mês.')));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nenhum lançamento fixo encontrado no mês anterior.')));
-    }
+    final message = added > 0
+        ? '$added lançamento(s) fixo(s) gerado(s). ${skipped > 0 ? '$skipped duplicado(s) ignorado(s).' : ''}${accountCleared > 0 ? ' $accountCleared conta(s) arquivada(s) removida(s).' : ''}'
+        : skipped > 0
+            ? 'Nenhum lançamento novo. $skipped recorrente(s) já existiam neste mês.'
+            : 'Nenhum lançamento fixo encontrado no mês anterior.';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     setState(() {});
   }
 
@@ -153,17 +197,26 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       return;
     }
 
-    final updated = transaction.copyWith(status: isPaid ? 'paid' : _statusAfterUnpay(transaction), paidDate: isPaid ? DateTime.now().toIso8601String() : null, clearPaidDate: !isPaid, updatedAt: DateTime.now().toIso8601String());
+    final updated = transaction.copyWith(
+      status: isPaid ? 'paid' : _statusAfterUnpay(transaction),
+      paidDate: isPaid ? DateTime.now().toIso8601String() : null,
+      clearPaidDate: !isPaid,
+      updatedAt: DateTime.now().toIso8601String(),
+    );
     await ref.read(transactionsProvider.notifier).updateTransaction(updated);
     setState(() {});
   }
 
   double _paidIncomeForMonth(List<FinancialTransaction> transactions, DateTime month) {
-    return transactions.where((t) => t.status == 'paid' && t.type == 'income' && (_isSameMonth(_paidDate(t), month) || (_paidDate(t) == null && _isSameMonth(_expectedDate(t), month)))).fold<double>(0, (sum, t) => sum + t.amount);
+    return transactions
+        .where((t) => t.status == 'paid' && t.type == 'income' && (_isSameMonth(_paidDate(t), month) || (_paidDate(t) == null && _isSameMonth(_expectedDate(t), month))))
+        .fold<double>(0, (sum, t) => sum + t.amount);
   }
 
   double _paidExpenseForMonth(List<FinancialTransaction> transactions, DateTime month) {
-    return transactions.where((t) => t.status == 'paid' && t.type == 'expense' && (_isSameMonth(_paidDate(t), month) || (_paidDate(t) == null && _isSameMonth(_expectedDate(t), month)))).fold<double>(0, (sum, t) => sum + t.amount);
+    return transactions
+        .where((t) => t.status == 'paid' && t.type == 'expense' && (_isSameMonth(_paidDate(t), month) || (_paidDate(t) == null && _isSameMonth(_expectedDate(t), month))))
+        .fold<double>(0, (sum, t) => sum + t.amount);
   }
 
   Map<int?, double> _paidExpensesByCategory(List<FinancialTransaction> transactions, DateTime month) {
@@ -179,39 +232,57 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     return result;
   }
 
+  bool _matchesSearch(FinancialTransaction transaction, FinancialCategory? category, Debt? debt, String query) {
+    if (query.isEmpty) return true;
+    final q = query.toLowerCase();
+    final fields = [
+      transaction.title,
+      transaction.description ?? '',
+      transaction.notes ?? '',
+      transaction.paymentMethod ?? '',
+      category?.name ?? '',
+      debt?.name ?? '',
+      debt?.creditorName ?? '',
+      transaction.installmentNumber == null ? '' : 'parcela ${transaction.installmentNumber}/${transaction.totalInstallments ?? ''}',
+    ];
+    return fields.any((field) => field.toLowerCase().contains(q));
+  }
+
+  String _money(num value) => 'R\$ ${value.toDouble().toStringAsFixed(2)}';
+
   @override
   Widget build(BuildContext context) {
     final allTransactions = ref.watch(transactionsProvider);
     final allCategories = ref.watch(financialCategoriesProvider);
+    final allDebts = ref.watch(debtsProvider);
+    final debtSnapshot = FinanceDebtSnapshot.from(debts: allDebts, transactions: allTransactions, selectedMonth: _selectedMonth);
 
     final filtered = allTransactions.where((transaction) {
       if (transaction.status == 'canceled' && _filterStatus != 'all') return false;
       if (!_belongsToSelectedMonth(transaction)) return false;
-      if (_filterType != 'all' && transaction.type != _filterType) return false;
+      if (_filterType == 'income' && transaction.type != 'income') return false;
+      if (_filterType == 'expense' && transaction.type != 'expense') return false;
+      if (_filterType == 'debt' && transaction.debtId == null) return false;
       if (_filterStatus == 'paid' && transaction.status != 'paid') return false;
       if (_filterStatus == 'pending' && transaction.status != 'pending') return false;
       if (_filterStatus == 'overdue' && transaction.status != 'overdue') return false;
       if (_filterCategory != null && transaction.categoryId != _filterCategory) return false;
-      if (_searchController.text.trim().isNotEmpty && !transaction.title.toLowerCase().contains(_searchController.text.trim().toLowerCase())) return false;
-      return true;
+      final category = _categoryOf(allCategories, transaction.categoryId);
+      final debt = _debtOf(allDebts, transaction.debtId);
+      return _matchesSearch(transaction, category, debt, _searchController.text.trim());
     }).toList()
-      ..sort((a, b) {
-        final ad = _expectedDate(a) ?? DateTime(2100);
-        final bd = _expectedDate(b) ?? DateTime(2100);
-        return ad.compareTo(bd);
-      });
+      ..sort((a, b) => (_expectedDate(a) ?? DateTime(2100)).compareTo(_expectedDate(b) ?? DateTime(2100)));
 
     double receitasPrevistas = 0;
     double despesasPrevistas = 0;
     double receitasPagas = 0;
     double despesasPagas = 0;
-    int qtdeDespesasVencidas = 0;
+    int despesasVencidas = 0;
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    for (final transaction in allTransactions) {
-      if (transaction.status == 'canceled') continue;
+    for (final transaction in allTransactions.where((t) => t.status != 'canceled')) {
       final expected = _expectedDate(transaction);
       final paid = _paidDate(transaction);
       final expectedInMonth = _isSameMonth(expected, _selectedMonth);
@@ -220,17 +291,17 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
       if (expectedInMonth) {
         if (transaction.type == 'income') {
           receitasPrevistas += transaction.amount;
-        } else if (transaction.type == 'expense') {
+        } else {
           despesasPrevistas += transaction.amount;
-          final dueDate = expected == null ? null : DateTime(expected.year, expected.month, expected.day);
-          if ((transaction.status == 'pending' || transaction.status == 'overdue') && dueDate != null && dueDate.isBefore(today)) qtdeDespesasVencidas++;
+          final due = expected == null ? null : DateTime(expected.year, expected.month, expected.day);
+          if ((transaction.status == 'pending' || transaction.status == 'overdue') && due != null && due.isBefore(today)) despesasVencidas++;
         }
       }
 
       if (paidInMonth) {
         if (transaction.type == 'income') {
           receitasPagas += transaction.amount;
-        } else if (transaction.type == 'expense') {
+        } else {
           despesasPagas += transaction.amount;
         }
       }
@@ -239,23 +310,21 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     final saldoPrevisto = receitasPrevistas - despesasPrevistas;
     final resultadoRealizado = receitasPagas - despesasPagas;
     final previousMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1, 1);
-    final previousIncome = _paidIncomeForMonth(allTransactions, previousMonth);
-    final previousExpense = _paidExpenseForMonth(allTransactions, previousMonth);
-    final previousResult = previousIncome - previousExpense;
+    final previousResult = _paidIncomeForMonth(allTransactions, previousMonth) - _paidExpenseForMonth(allTransactions, previousMonth);
     final resultDiff = resultadoRealizado - previousResult;
-    final expenseDiff = despesasPagas - previousExpense;
+    final expenseDiff = despesasPagas - _paidExpenseForMonth(allTransactions, previousMonth);
     final paidExpenseRatio = despesasPrevistas <= 0 ? 0.0 : (despesasPagas / despesasPrevistas).clamp(0.0, 1.0).toDouble();
-    final categoryTotals = _paidExpensesByCategory(allTransactions, _selectedMonth);
-    final sortedCategories = categoryTotals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-    final topCategoryEntry = sortedCategories.isEmpty ? null : sortedCategories.first;
-    final topCategory = topCategoryEntry == null ? null : _findCategory(allCategories, topCategoryEntry.key);
+    final categoryTotals = _paidExpensesByCategory(allTransactions, _selectedMonth).entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final topCategoryEntry = categoryTotals.isEmpty ? null : categoryTotals.first;
+    final topCategory = topCategoryEntry == null ? null : _categoryOf(allCategories, topCategoryEntry.key);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Finanças'),
         actions: [
           IconButton(icon: const Icon(Icons.savings_outlined), onPressed: _openPlanning, tooltip: 'Contas, orçamentos e metas'),
-          IconButton(icon: const Icon(Icons.auto_mode), onPressed: _generateFixedTransactions, tooltip: 'Gerar Recorrentes do Mês Anterior'),
+          IconButton(icon: const Icon(Icons.money_off), onPressed: _openDebts, tooltip: 'Dívidas'),
+          IconButton(icon: const Icon(Icons.auto_mode), onPressed: _generateFixedTransactions, tooltip: 'Gerar recorrentes'),
           IconButton(icon: const Icon(Icons.category), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceCategoriesScreen())), tooltip: 'Categorias'),
         ],
       ),
@@ -267,46 +336,87 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
             slivers: [
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      ElevatedButton.icon(onPressed: _openPlanning, icon: const Icon(Icons.savings_outlined), label: const Text('Contas, Orçamentos e Metas')),
+                      Row(
+                        children: [
+                          Expanded(child: ElevatedButton.icon(onPressed: _openPlanning, icon: const Icon(Icons.account_balance_wallet_outlined), label: const Text('Contas e metas'))),
+                          const SizedBox(width: 8),
+                          Expanded(child: OutlinedButton.icon(onPressed: _openDebts, icon: const Icon(Icons.money_off), label: const Text('Dívidas'))),
+                        ],
+                      ),
                       const SizedBox(height: 12),
-                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [IconButton(icon: const Icon(Icons.chevron_left), onPressed: _prevMonth), Text(DateFormat('MMMM yyyy', 'pt_BR').format(_selectedMonth).toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)), IconButton(icon: const Icon(Icons.chevron_right), onPressed: _nextMonth)]),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          IconButton(icon: const Icon(Icons.chevron_left), onPressed: _prevMonth),
+                          InkWell(onTap: _currentMonth, child: Text(DateFormat('MMMM yyyy', 'pt_BR').format(_selectedMonth).toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+                          IconButton(icon: const Icon(Icons.chevron_right), onPressed: _nextMonth),
+                        ],
+                      ),
                       const SizedBox(height: 8),
-                      _buildSummaryCard(realAccountBalance, saldoPrevisto, resultadoRealizado, receitasPrevistas, despesasPrevistas, qtdeDespesasVencidas),
+                      _buildSummaryCard(
+                        realBalance: realAccountBalance,
+                        saldoPrevisto: saldoPrevisto,
+                        resultadoRealizado: resultadoRealizado,
+                        receitas: receitasPrevistas,
+                        despesas: despesasPrevistas,
+                        despesasVencidas: despesasVencidas,
+                        debtSnapshot: debtSnapshot,
+                      ),
                       const SizedBox(height: 16),
-                      _buildAnalysisSection(previousResult: previousResult, resultDiff: resultDiff, expenseDiff: expenseDiff, paidExpenseRatio: paidExpenseRatio, topCategoryName: topCategory?.name ?? (topCategoryEntry == null ? 'Sem gastos pagos' : 'Sem categoria'), topCategoryAmount: topCategoryEntry?.value ?? 0, paidExpenses: despesasPagas, paidIncomes: receitasPagas),
+                      _buildDebtBridgeCard(debtSnapshot),
                       const SizedBox(height: 16),
-                      TextField(controller: _searchController, decoration: InputDecoration(hintText: 'Buscar movimentação...', prefixIcon: const Icon(Icons.search), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), contentPadding: const EdgeInsets.symmetric(horizontal: 16)), onChanged: (_) => setState(() {})),
+                      _buildAnalysisSection(
+                        previousResult: previousResult,
+                        resultDiff: resultDiff,
+                        expenseDiff: expenseDiff,
+                        paidExpenseRatio: paidExpenseRatio,
+                        topCategoryName: topCategory?.name ?? (topCategoryEntry == null ? 'Sem gastos pagos' : 'Sem categoria'),
+                        topCategoryAmount: topCategoryEntry?.value ?? 0,
+                        paidExpenses: despesasPagas,
+                        paidIncomes: receitasPagas,
+                      ),
                       const SizedBox(height: 16),
-                      SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [_buildFilterChip('Todos', 'all', _filterType, (v) => setState(() => _filterType = v)), const SizedBox(width: 8), _buildFilterChip('Receitas', 'income', _filterType, (v) => setState(() => _filterType = v)), const SizedBox(width: 8), _buildFilterChip('Despesas', 'expense', _filterType, (v) => setState(() => _filterType = v)), const SizedBox(width: 16), _buildFilterChip('Tudo', 'all', _filterStatus, (v) => setState(() => _filterStatus = v)), const SizedBox(width: 8), _buildFilterChip('Pago', 'paid', _filterStatus, (v) => setState(() => _filterStatus = v)), const SizedBox(width: 8), _buildFilterChip('Pendente', 'pending', _filterStatus, (v) => setState(() => _filterStatus = v)), const SizedBox(width: 8), _buildFilterChip('Atrasado', 'overdue', _filterStatus, (v) => setState(() => _filterStatus = v))])),
-                      if (allCategories.isNotEmpty) ...[const SizedBox(height: 8), SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [ChoiceChip(label: const Text('Todas as Categorias'), selected: _filterCategory == null, onSelected: (_) => setState(() => _filterCategory = null)), const SizedBox(width: 8), ...allCategories.map((c) => Padding(padding: const EdgeInsets.only(right: 8.0), child: ChoiceChip(label: Text(c.name), selected: _filterCategory == c.id, onSelected: (selected) => setState(() => _filterCategory = selected ? c.id : null))))]))],
+                      TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Buscar título, categoria, dívida, credor ou observação...',
+                          prefixIcon: const Icon(Icons.search),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
                       const SizedBox(height: 16),
-                      const Text('Movimentações', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      _buildTypeFilters(),
+                      const SizedBox(height: 8),
+                      _buildStatusFilters(),
+                      if (allCategories.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        _buildCategoryFilters(allCategories),
+                      ],
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Movimentações', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          Text('${filtered.length} item(ns)', style: TextStyle(color: Colors.grey.shade700)),
+                        ],
+                      ),
                     ],
                   ),
                 ),
               ),
               filtered.isEmpty
-                  ? SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(32.0), child: Center(child: Text('Nenhuma movimentação para o período e filtros atuais.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600)))))
+                  ? SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(32), child: Center(child: Text('Nenhuma movimentação para o período e filtros atuais.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600)))))
                   : SliverList(
-                      delegate: SliverChildBuilderDelegate((context, index) {
-                        final transaction = filtered[index];
-                        final isPaid = transaction.status == 'paid';
-                        final isCanceled = transaction.status == 'canceled';
-                        final cat = _findCategory(allCategories, transaction.categoryId);
-                        final color = _safeCategoryColor(cat, transaction);
-                        final expected = _expectedDate(transaction);
-                        return ListTile(
-                          leading: CircleAvatar(backgroundColor: isCanceled ? Colors.grey.withValues(alpha: 0.2) : color.withValues(alpha: 0.2), child: Icon(transaction.type == 'income' ? Icons.arrow_upward : Icons.arrow_downward, color: isCanceled ? Colors.grey : color)),
-                          title: Text(transaction.title, style: TextStyle(decoration: isCanceled ? TextDecoration.lineThrough : null, color: isCanceled ? Colors.grey : Colors.black87)),
-                          subtitle: Text('${expected == null ? 'Sem data' : 'Venc./Prev.: ${DateFormat('dd/MM/yyyy').format(expected)}'}${cat != null ? ' • ${cat.name}' : ''}'),
-                          trailing: Row(mainAxisSize: MainAxisSize.min, children: [Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [Text('R\$ ${transaction.amount.toStringAsFixed(2)}', style: TextStyle(color: isCanceled ? Colors.grey : (transaction.type == 'income' ? Colors.green : Colors.red), fontWeight: FontWeight.bold, decoration: isCanceled ? TextDecoration.lineThrough : null)), Text(isCanceled ? 'Cancelado' : (transaction.status == 'paid' ? 'Efetuado' : (transaction.status == 'overdue' ? 'Atrasado' : 'Pendente')), style: TextStyle(color: isCanceled ? Colors.grey : (transaction.status == 'paid' ? Colors.green : (transaction.status == 'overdue' ? Colors.red : Colors.orange)), fontSize: 12))]), Checkbox(value: isPaid, onChanged: isCanceled ? null : (val) { if (val != null) _togglePaid(transaction, val); })]),
-                          onTap: () => _openTransactionForm(transaction: transaction),
-                        );
-                      }, childCount: filtered.length),
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => _buildTransactionTile(filtered[index], allCategories, allDebts),
+                        childCount: filtered.length,
+                      ),
                     ),
             ],
           );
@@ -316,28 +426,284 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen> {
     );
   }
 
-  Widget _buildFilterChip(String label, String value, String groupValue, Function(String) onSelect) => ChoiceChip(label: Text(label), selected: groupValue == value, onSelected: (selected) { if (selected) onSelect(value); });
+  Widget _buildTypeFilters() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _filterChip('Todos', 'all', _filterType, (v) => setState(() => _filterType = v)),
+          _gap(),
+          _filterChip('Receitas', 'income', _filterType, (v) => setState(() => _filterType = v)),
+          _gap(),
+          _filterChip('Despesas', 'expense', _filterType, (v) => setState(() => _filterType = v)),
+          _gap(),
+          _filterChip('Dívidas', 'debt', _filterType, (v) => setState(() => _filterType = v)),
+        ],
+      ),
+    );
+  }
 
-  Widget _buildSummaryCard(double realBalance, double saldoPrevisto, double resultadoRealizado, double receitas, double despesas, int despesasVencidas) {
-    return Card(elevation: 2, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), child: Padding(padding: const EdgeInsets.all(20.0), child: Column(children: [Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: _summaryValue('Saldo real em contas', realBalance, realBalance >= 0 ? Colors.green : Colors.red, big: true)), const SizedBox(width: 12), Expanded(child: _summaryValue('Resultado do mês', resultadoRealizado, resultadoRealizado >= 0 ? Colors.green : Colors.red))]), const SizedBox(height: 16), const Divider(), const SizedBox(height: 16), Wrap(spacing: 16, runSpacing: 12, children: [_buildStat('Previsto mês', saldoPrevisto, saldoPrevisto >= 0 ? Colors.green : Colors.red), _buildStat('Receitas previstas', receitas, Colors.green), _buildStat('Despesas previstas', despesas, Colors.red)]), if (despesasVencidas > 0) ...[const SizedBox(height: 16), Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)), child: Row(children: [const Icon(Icons.warning, color: Colors.red, size: 20), const SizedBox(width: 8), Expanded(child: Text('$despesasVencidas despesa(s) vencida(s)!', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)))]))]])));
+  Widget _buildStatusFilters() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _filterChip('Tudo', 'all', _filterStatus, (v) => setState(() => _filterStatus = v)),
+          _gap(),
+          _filterChip('Pago', 'paid', _filterStatus, (v) => setState(() => _filterStatus = v)),
+          _gap(),
+          _filterChip('Pendente', 'pending', _filterStatus, (v) => setState(() => _filterStatus = v)),
+          _gap(),
+          _filterChip('Atrasado', 'overdue', _filterStatus, (v) => setState(() => _filterStatus = v)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryFilters(List<FinancialCategory> categories) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          ChoiceChip(label: const Text('Todas as categorias'), selected: _filterCategory == null, onSelected: (_) => setState(() => _filterCategory = null)),
+          const SizedBox(width: 8),
+          ...categories.map((category) => Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(label: Text(category.name), selected: _filterCategory == category.id, onSelected: (selected) => setState(() => _filterCategory = selected ? category.id : null)),
+              )),
+        ],
+      ),
+    );
+  }
+
+  Widget _gap() => const SizedBox(width: 8);
+
+  Widget _filterChip(String label, String value, String groupValue, ValueChanged<String> onSelect) {
+    return ChoiceChip(label: Text(label), selected: groupValue == value, onSelected: (selected) { if (selected) onSelect(value); });
+  }
+
+  Widget _buildSummaryCard({required double realBalance, required double saldoPrevisto, required double resultadoRealizado, required double receitas, required double despesas, required int despesasVencidas, required FinanceDebtSnapshot debtSnapshot}) {
+    final hasAlert = despesasVencidas > 0 || debtSnapshot.hasOverdueInstallments;
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(child: _summaryValue('Saldo real em contas', realBalance, realBalance >= 0 ? Colors.green : Colors.red, big: true)),
+                const SizedBox(width: 12),
+                Expanded(child: _summaryValue('Resultado do mês', resultadoRealizado, resultadoRealizado >= 0 ? Colors.green : Colors.red)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 16,
+              runSpacing: 12,
+              children: [
+                _stat('Previsto mês', saldoPrevisto, saldoPrevisto >= 0 ? Colors.green : Colors.red),
+                _stat('Receitas previstas', receitas, Colors.green),
+                _stat('Despesas previstas', despesas, Colors.red),
+                _stat('Dívidas restantes', debtSnapshot.totalRemaining, Colors.deepOrange),
+                _stat('Parcelas do mês', debtSnapshot.dueInMonth, Colors.orange),
+              ],
+            ),
+            if (hasAlert) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10)),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning, color: Colors.red, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text('${despesasVencidas > 0 ? '$despesasVencidas despesa(s) vencida(s)' : ''}${despesasVencidas > 0 && debtSnapshot.hasOverdueInstallments ? ' • ' : ''}${debtSnapshot.hasOverdueInstallments ? '${debtSnapshot.overdueInstallments} parcela(s) de dívida em atraso' : ''}', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDebtBridgeCard(FinanceDebtSnapshot snapshot) {
+    return Card(
+      color: Colors.deepOrange.withOpacity(0.08),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.money_off, color: Colors.deepOrange),
+                const SizedBox(width: 8),
+                const Expanded(child: Text('Dívidas dentro das Finanças', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
+                TextButton(onPressed: _openDebts, child: const Text('Abrir')),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(snapshot.hasOpenDebts ? '${snapshot.openDebtCount} dívida(s) aberta(s), com ${_money(snapshot.totalRemaining)} restante(s).' : 'Nenhuma dívida aberta no momento.'),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _analysisChip(Icons.event_available, 'A vencer no mês: ${_money(snapshot.dueInMonth)}', Colors.orange),
+                _analysisChip(Icons.check_circle_outline, 'Abatido no mês: ${_money(snapshot.paidInMonth)}', Colors.green),
+                _analysisChip(Icons.warning_amber, 'Em atraso: ${_money(snapshot.overdueAmount)}', snapshot.overdueAmount > 0 ? Colors.red : Colors.grey),
+                if (snapshot.nextDueDate != null) _analysisChip(Icons.today, 'Próximo venc.: ${DateFormat('dd/MM/yyyy').format(snapshot.nextDueDate!)}', Colors.deepOrange),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTransactionTile(FinancialTransaction transaction, List<FinancialCategory> categories, List<Debt> debts) {
+    final isPaid = transaction.status == 'paid';
+    final isCanceled = transaction.status == 'canceled';
+    final category = _categoryOf(categories, transaction.categoryId);
+    final debt = _debtOf(debts, transaction.debtId);
+    final color = _transactionColor(transaction, category);
+    final expected = _expectedDate(transaction);
+    final subtitleParts = <String>[
+      expected == null ? 'Sem data' : 'Venc./Prev.: ${DateFormat('dd/MM/yyyy').format(expected)}',
+      if (category != null) category.name,
+      if (debt != null) 'Dívida: ${debt.name}',
+      if (transaction.installmentNumber != null) 'Parcela ${transaction.installmentNumber}/${transaction.totalInstallments ?? '-'}',
+    ];
+
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: isCanceled ? Colors.grey.withOpacity(0.2) : color.withOpacity(0.18),
+        child: Icon(transaction.debtId != null ? Icons.money_off : (transaction.type == 'income' ? Icons.arrow_upward : Icons.arrow_downward), color: isCanceled ? Colors.grey : color),
+      ),
+      title: Text(transaction.title, style: TextStyle(decoration: isCanceled ? TextDecoration.lineThrough : null, color: isCanceled ? Colors.grey : Colors.black87)),
+      subtitle: Text(subtitleParts.join(' • '), maxLines: 2, overflow: TextOverflow.ellipsis),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(_money(transaction.amount), style: TextStyle(color: isCanceled ? Colors.grey : (transaction.type == 'income' ? Colors.green : Colors.red), fontWeight: FontWeight.bold, decoration: isCanceled ? TextDecoration.lineThrough : null)),
+              Text(_statusLabel(transaction.status), style: TextStyle(color: _statusColor(transaction.status), fontSize: 12)),
+            ],
+          ),
+          Checkbox(value: isPaid, onChanged: isCanceled ? null : (value) { if (value != null) _togglePaid(transaction, value); }),
+        ],
+      ),
+      onTap: () => _openTransactionForm(transaction: transaction),
+    );
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'paid':
+        return 'Efetuado';
+      case 'overdue':
+        return 'Atrasado';
+      case 'canceled':
+        return 'Cancelado';
+      default:
+        return 'Pendente';
+    }
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'paid':
+        return Colors.green;
+      case 'overdue':
+        return Colors.red;
+      case 'canceled':
+        return Colors.grey;
+      default:
+        return Colors.orange;
+    }
   }
 
   Widget _summaryValue(String label, double amount, Color color, {bool big = false}) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey), maxLines: 2, overflow: TextOverflow.ellipsis), const SizedBox(height: 4), Text('R\$ ${amount.toStringAsFixed(2)}', style: TextStyle(fontSize: big ? 21 : 17, fontWeight: FontWeight.bold, color: color), maxLines: 1, overflow: TextOverflow.ellipsis)]);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey), maxLines: 2, overflow: TextOverflow.ellipsis),
+        const SizedBox(height: 4),
+        Text(_money(amount), style: TextStyle(fontSize: big ? 21 : 17, fontWeight: FontWeight.bold, color: color), maxLines: 1, overflow: TextOverflow.ellipsis),
+      ],
+    );
   }
 
   Widget _buildAnalysisSection({required double previousResult, required double resultDiff, required double expenseDiff, required double paidExpenseRatio, required String topCategoryName, required double topCategoryAmount, required double paidExpenses, required double paidIncomes}) {
     final economyRate = paidIncomes <= 0 ? 0.0 : ((paidIncomes - paidExpenses) / paidIncomes) * 100;
     final resultLabel = resultDiff >= 0 ? 'Melhor que mês anterior' : 'Pior que mês anterior';
     final expenseLabel = expenseDiff <= 0 ? 'Gastos menores' : 'Gastos maiores';
-    return Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Análise de gastos', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), const SizedBox(height: 10), LinearProgressIndicator(value: paidExpenseRatio), const SizedBox(height: 6), Text('Despesas pagas representam ${(paidExpenseRatio * 100).toStringAsFixed(0)}% das despesas previstas.'), const SizedBox(height: 12), Wrap(spacing: 10, runSpacing: 10, children: [_analysisChip(Icons.compare_arrows, '$resultLabel: R\$ ${resultDiff.abs().toStringAsFixed(2)}', resultDiff >= 0 ? Colors.green : Colors.red), _analysisChip(Icons.trending_up, '$expenseLabel: R\$ ${expenseDiff.abs().toStringAsFixed(2)}', expenseDiff <= 0 ? Colors.green : Colors.orange), _analysisChip(Icons.pie_chart, 'Maior gasto: $topCategoryName — R\$ ${topCategoryAmount.toStringAsFixed(2)}', Colors.blue), _analysisChip(Icons.savings, 'Taxa de sobra: ${economyRate.toStringAsFixed(1)}%', economyRate >= 0 ? Colors.green : Colors.red)]), if (previousResult != 0) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Resultado mês anterior: R\$ ${previousResult.toStringAsFixed(2)}', style: TextStyle(color: Colors.grey.shade700)))])));
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Análise de gastos', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            LinearProgressIndicator(value: paidExpenseRatio),
+            const SizedBox(height: 6),
+            Text('Despesas pagas representam ${(paidExpenseRatio * 100).toStringAsFixed(0)}% das despesas previstas.'),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _analysisChip(Icons.compare_arrows, '$resultLabel: ${_money(resultDiff.abs())}', resultDiff >= 0 ? Colors.green : Colors.red),
+                _analysisChip(Icons.trending_up, '$expenseLabel: ${_money(expenseDiff.abs())}', expenseDiff <= 0 ? Colors.green : Colors.orange),
+                _analysisChip(Icons.pie_chart, 'Maior gasto: $topCategoryName — ${_money(topCategoryAmount)}', Colors.blue),
+                _analysisChip(Icons.savings, 'Taxa de sobra: ${economyRate.toStringAsFixed(1)}%', economyRate >= 0 ? Colors.green : Colors.red),
+              ],
+            ),
+            if (previousResult != 0) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Resultado mês anterior: ${_money(previousResult)}', style: TextStyle(color: Colors.grey.shade700))),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _analysisChip(IconData icon, String label, Color color) {
-    return Container(constraints: const BoxConstraints(maxWidth: 320), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), decoration: BoxDecoration(color: color.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(12)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 18, color: color), const SizedBox(width: 6), Flexible(child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontWeight: FontWeight.w600)))]));
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 320),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 6),
+          Flexible(child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontWeight: FontWeight.w600))),
+        ],
+      ),
+    );
   }
 
-  Widget _buildStat(String label, double amount, Color color) {
-    return SizedBox(width: 140, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey), maxLines: 1, overflow: TextOverflow.ellipsis), const SizedBox(height: 4), Text('R\$ ${amount.toStringAsFixed(2)}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color), maxLines: 1, overflow: TextOverflow.ellipsis)]));
+  Widget _stat(String label, double amount, Color color) {
+    return SizedBox(
+      width: 140,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey), maxLines: 1, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 4),
+          Text(_money(amount), style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color), maxLines: 1, overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
   }
 }
