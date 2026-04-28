@@ -128,6 +128,74 @@ void main() {
     text = text.replaceRange(debtStart, debtEnd, _asDartSource(replacement));
   }
 
+  final tileStart = text.indexOf('  Widget _buildTransactionTile(');
+  final tileEnd = text.indexOf('  String _statusLabel(', tileStart);
+  if (tileStart != -1 && tileEnd != -1) {
+    const replacement = r'''  Widget _buildTransactionTile(FinancialTransaction transaction, List<FinancialCategory> categories, List<Debt> debts) {
+    final isPaid = transaction.status == 'paid';
+    final isCanceled = transaction.status == 'canceled';
+    final category = _categoryOf(categories, transaction.categoryId);
+    final debt = _debtOf(debts, transaction.debtId);
+    final color = _transactionColor(transaction, category);
+    final expected = _expectedDate(transaction);
+    final subtitleParts = <String>[
+      expected == null ? 'Sem data' : 'Venc./Prev.: ${DateFormat('dd/MM/yyyy').format(expected)}',
+      if (category != null) category.name,
+      if (debt != null) 'Dívida: ${debt.name}',
+      if (transaction.installmentNumber != null) 'Parcela ${transaction.installmentNumber}/${transaction.totalInstallments ?? '-'}',
+    ];
+
+    final tile = ListTile(
+      leading: CircleAvatar(
+        backgroundColor: isCanceled ? Colors.grey.withValues(alpha: 0.2) : color.withValues(alpha: 0.18),
+        child: Icon(transaction.debtId != null ? Icons.payments_outlined : (transaction.type == 'income' ? Icons.arrow_upward : Icons.arrow_downward), color: isCanceled ? Colors.grey : color),
+      ),
+      title: Text(transaction.title, style: TextStyle(decoration: isCanceled ? TextDecoration.lineThrough : null, color: isCanceled ? Colors.grey : Colors.black87)),
+      subtitle: Text(subtitleParts.join(' • '), maxLines: 2, overflow: TextOverflow.ellipsis),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(_money(transaction.amount), style: TextStyle(color: isCanceled ? Colors.grey : (transaction.type == 'income' ? Colors.green : Colors.red), fontWeight: FontWeight.bold, decoration: isCanceled ? TextDecoration.lineThrough : null)),
+              Text(_statusLabel(transaction.status), style: TextStyle(color: _statusColor(transaction.status), fontSize: 12)),
+            ],
+          ),
+          Checkbox(value: isPaid, onChanged: isCanceled ? null : (value) { if (value != null) _togglePaid(transaction, value); }),
+        ],
+      ),
+      onTap: () => _openTransactionForm(transaction: transaction),
+    );
+
+    return Dismissible(
+      key: ValueKey('finance_transaction_${transaction.id ?? transaction.createdAt}_${transaction.status}'),
+      direction: isCanceled || isPaid ? DismissDirection.none : DismissDirection.startToEnd,
+      background: Container(
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        color: Colors.green.withValues(alpha: 0.12),
+        child: const Row(
+          children: [
+            Icon(Icons.check_circle_outline, color: Colors.green),
+            SizedBox(width: 8),
+            Text('Marcar como pago', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
+      confirmDismiss: (_) async {
+        await _togglePaid(transaction, true);
+        return false;
+      },
+      child: tile,
+    );
+  }
+
+''';
+    text = text.replaceRange(tileStart, tileEnd, _asDartSource(replacement));
+  }
+
   text = text.replaceAll(
     "filtered.isEmpty\n                  ? SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(32), child: Center(child: Text('Nenhuma movimentação para o período e filtros atuais.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600)))))",
     "filtered.isEmpty\n                  ? SliverToBoxAdapter(child: _buildEmptyTransactionsState())",
