@@ -57,6 +57,22 @@ jobs:
             exit 1
           fi
 
+      - name: Validar melhorias UX do formulário financeiro
+        run: |
+          echo "Validando organização do formulário financeiro..."
+          grep -q "class _TransactionFormSection" lib/features/finance/create_transaction_screen.dart
+          grep -q "Tipo e valor" lib/features/finance/create_transaction_screen.dart
+          grep -q "Datas e status" lib/features/finance/create_transaction_screen.dart
+          grep -q "Classificação" lib/features/finance/create_transaction_screen.dart
+          grep -q "Opções avançadas" lib/features/finance/create_transaction_screen.dart
+          grep -q "_parseMoney" lib/features/finance/create_transaction_screen.dart
+          grep -q "_isSaving" lib/features/finance/create_transaction_screen.dart
+
+          if grep -q "Icon(Icons.money_off" lib/features/finance/create_transaction_screen.dart; then
+            echo "ERRO: ícone money_off antigo ainda aparece no formulário financeiro." >&2
+            exit 1
+          fi
+
       - name: Validar identidade e dados locais
         run: |
           echo "Validando applicationId estável: $STABLE_APPLICATION_ID"
