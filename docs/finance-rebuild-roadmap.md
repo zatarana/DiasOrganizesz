@@ -2,7 +2,7 @@
 
 Este roadmap define como a aba **Finanças** será reconstruída tomando como referência funcional o manual do Minhas Finanças, mas preservando o core do DiasOrganize: tarefas, calendário, projetos, configurações, home, banco local e a aba Dívidas.
 
-A diretriz é transformar Finanças em um módulo central e completo, sem remover Dívidas. Dívidas continuará existindo como módulo próprio, mas será interconectada à aba Finanças por parcelas, vencimentos, pagamentos, atrasos, abatimentos, descontos e impacto no resumo mensal.
+A diretriz é transformar Finanças em um módulo central e completo. Dívidas existe dentro de Finanças como área própria, mas continua aparecendo separadamente na tela inicial como card/resumo rápido.
 
 ## Estado atual identificado
 
@@ -10,20 +10,22 @@ A diretriz é transformar Finanças em um módulo central e completo, sem remove
 - O app já possui `Debt` para dívidas.
 - Transações já podem se vincular a dívidas por `debtId`.
 - Dívidas já podem gerar parcelas financeiras.
-- A Home já exibe resumo financeiro e resumo de dívidas separadamente.
-- A aba Finanças ainda é simples perto do escopo desejado.
-- Não há ainda transferências completas, cartões/faturas, subcategorias, tags, anexos, relatórios avançados e gráficos financeiros completos.
+- A Home exibe resumo financeiro e resumo de dívidas separadamente.
+- Dívidas foi removida como módulo solto de navegação e passou a pertencer à aba Finanças.
+- A aba Finanças está em reconstrução gradual para alcançar o escopo desejado.
+- Não há ainda transferências completas, cartões/faturas, subcategorias, anexos, relatórios avançados e gráficos financeiros completos.
 
 ## Princípios de implementação
 
 1. Preservar o funcionamento das outras abas.
-2. Não remover a aba Dívidas.
-3. Não tratar Dívidas como simples despesa avulsa; dívida precisa ter leitura própria.
-4. Toda parcela de dívida deve aparecer em Finanças como despesa vinculada.
-5. Toda alteração de parcela deve recalcular a dívida.
-6. Toda alteração de dívida deve preservar ou atualizar os vínculos financeiros de forma previsível.
-7. Manter o app offline-first.
-8. Não incluir sincronização ou segurança neste ciclo.
+2. Manter Dívidas dentro da aba Finanças.
+3. Manter o card Dívidas na Home como resumo/atalho.
+4. Não tratar Dívidas como simples despesa avulsa; dívida precisa ter leitura própria.
+5. Toda parcela de dívida deve aparecer em Finanças como despesa vinculada.
+6. Toda alteração de parcela deve recalcular a dívida.
+7. Toda alteração de dívida deve preservar ou atualizar os vínculos financeiros de forma previsível.
+8. Manter o app offline-first.
+9. Não incluir sincronização ou segurança neste ciclo.
 
 ## Fase 0 — Planejamento e proteção do core
 
@@ -41,11 +43,11 @@ A diretriz é transformar Finanças em um módulo central e completo, sem remove
 - Roadmap versionado no repositório.
 - Fases claras para implementação.
 
-**Status:** em andamento.
+**Status:** concluída.
 
 ## Fase 1 — Finanças passa a enxergar Dívidas
 
-**Objetivo:** fazer Dívidas aparecerem diretamente na aba Finanças.
+**Objetivo:** fazer Dívidas existir dentro da aba Finanças, mantendo apenas o card separado na Home.
 
 ### Tarefas
 
@@ -55,14 +57,18 @@ A diretriz é transformar Finanças em um módulo central e completo, sem remove
 - Criar filtro `Dívidas` na listagem financeira.
 - Melhorar busca para encontrar dívida, credor, título, descrição, categoria e observações.
 - Marcar visualmente parcelas vinculadas a dívidas.
+- Remover Dívidas como módulo solto de `Mais módulos`.
+- Remover Dívidas como item independente do menu lateral.
+- Manter card Dívidas na Home como resumo/atalho para Finanças.
 
 ### Critério de conclusão
 
-- O usuário não precisa sair da lógica financeira para entender suas dívidas.
-- A aba Dívidas continua existindo e detalhando as dívidas.
+- O usuário consegue entender suas dívidas dentro de Finanças.
+- A Home continua mostrando Dívidas como resumo separado.
+- Dívidas não aparece mais como módulo solto fora de Finanças.
 - O pagamento de uma parcela altera o resumo de Finanças e de Dívidas.
 
-**Status:** pendente.
+**Status:** concluída estruturalmente; pendente refinamento visual e validação de build.
 
 ## Fase 2 — Novo modelo funcional de transações
 
@@ -77,12 +83,18 @@ A diretriz é transformar Finanças em um módulo central e completo, sem remove
 - Preparar suporte a observações avançadas.
 - Preparar suporte a anexos no futuro.
 - Melhorar recorrência fixa mensal sem duplicar registros.
+- Criar regras centralizadas de cálculo financeiro.
+- Criar resumo mensal baseado em regras.
+- Criar camada de dados da tela de Finanças.
+- Criar provider de dados da tela de Finanças.
+- Criar testes de regras financeiras.
 
 ### Critério de conclusão
 
 - Receitas e despesas terão base de dados pronta para relatórios, gráficos e resumo avançado.
+- As regras principais terão testes básicos.
 
-**Status:** pendente.
+**Status:** em andamento avançado.
 
 ## Fase 3 — Contas, saldos e transferências
 
@@ -201,9 +213,9 @@ A diretriz é transformar Finanças em um módulo central e completo, sem remove
 
 | Fase | Nome | Status |
 |---|---|---|
-| 0 | Planejamento e proteção do core | Em andamento |
-| 1 | Finanças enxerga Dívidas | Pendente |
-| 2 | Novo modelo de transações | Pendente |
+| 0 | Planejamento e proteção do core | Concluída |
+| 1 | Finanças enxerga Dívidas | Concluída estruturalmente |
+| 2 | Novo modelo de transações | Em andamento avançado |
 | 3 | Contas, saldos e transferências | Pendente |
 | 4 | Categorias, subcategorias e orçamentos | Pendente |
 | 5 | Cartões e faturas | Pendente |
@@ -213,4 +225,4 @@ A diretriz é transformar Finanças em um módulo central e completo, sem remove
 
 ## Observação importante
 
-A reconstrução deve ser feita em partes pequenas, testáveis e reversíveis. A aba Finanças mudará profundamente, mas o app não deve perder o funcionamento atual de tarefas, projetos, dívidas e configurações.
+A reconstrução deve ser feita em partes pequenas, testáveis e reversíveis. A aba Finanças mudará profundamente, mas o app não deve perder o funcionamento atual de tarefas, projetos, calendário, dívidas e configurações.
