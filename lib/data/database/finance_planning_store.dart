@@ -212,6 +212,16 @@ class FinancePlanningStore {
     if (transfer.amount <= 0) throw ArgumentError('O valor da transferência deve ser maior que zero.');
     if (transfer.fromAccountId == transfer.toAccountId) throw ArgumentError('A conta de origem e destino devem ser diferentes.');
 
+    final affectedAccountIds = <int>{transfer.fromAccountId, transfer.toAccountId};
+    if (transfer.id != null) {
+      final oldRows = await db.query('financial_transfers', where: 'id = ?', whereArgs: [transfer.id], limit: 1);
+      if (oldRows.isNotEmpty) {
+        final oldTransfer = FinancialTransfer.fromMap(oldRows.first);
+        affectedAccountIds.add(oldTransfer.fromAccountId);
+        affectedAccountIds.add(oldTransfer.toAccountId);
+      }
+    }
+
     late int transferId;
     await db.transaction((txn) async {
       if (transfer.id == null) {
@@ -221,8 +231,9 @@ class FinancePlanningStore {
         await txn.update('financial_transfers', transfer.toMap(), where: 'id = ?', whereArgs: [transfer.id]);
       }
     });
-    await recalculateAccountBalance(db, transfer.fromAccountId);
-    await recalculateAccountBalance(db, transfer.toAccountId);
+    for (final accountId in affectedAccountIds) {
+      await recalculateAccountBalance(db, accountId);
+    }
     return transferId;
   }
 
