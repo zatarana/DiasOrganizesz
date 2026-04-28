@@ -52,7 +52,7 @@ class _TaskSearchScreenState extends ConsumerState<TaskSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final settings = ref.watch(appSettingsProvider);
+    final settings = ref.watch(taskSettingsProvider);
     final sortKey = settings[TaskSettingsKeys.defaultSort] ?? TaskSettingsDefaults.defaultSort;
     final tasks = _filtered(ref.watch(tasksProvider), sortKey);
     final active = tasks.where(TaskSmartRules.isActive).length;
