@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../models/budget_model.dart';
 import '../models/financial_account_model.dart';
+import '../models/financial_balance_adjustment_model.dart';
 import '../models/financial_goal_model.dart';
 import '../models/financial_transfer_model.dart';
 
@@ -34,6 +35,20 @@ class FinancePlanningStore {
         description TEXT,
         notes TEXT,
         ignoreInReports INTEGER NOT NULL DEFAULT 0,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS financial_balance_adjustments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        accountId INTEGER NOT NULL,
+        previousBalance REAL NOT NULL,
+        newBalance REAL NOT NULL,
+        delta REAL NOT NULL,
+        adjustmentDate TEXT NOT NULL,
+        reason TEXT,
+        notes TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       )
@@ -79,6 +94,7 @@ class FinancePlanningStore {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_accounts_total ON financial_accounts(isArchived, ignoreInTotals)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_transfers_from_date ON financial_transfers(fromAccountId, transferDate)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_transfers_to_date ON financial_transfers(toAccountId, transferDate)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_balance_adjustments_account_date ON financial_balance_adjustments(accountId, adjustmentDate)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_financial_goals_status_account ON financial_goals(status, accountId)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_budgets_month_category ON budgets(month, categoryId, isArchived)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_transactions_status_account ON transactions(status, accountId)');
@@ -136,6 +152,18 @@ class FinancePlanningStore {
     return _asDouble(rows.first['delta']);
   }
 
+  static Future<double> _adjustmentDelta(Database db, int accountId) async {
+    final rows = await db.rawQuery(
+      '''
+      SELECT COALESCE(SUM(delta), 0) AS delta
+      FROM financial_balance_adjustments
+      WHERE accountId = ?
+      ''',
+      [accountId],
+    );
+    return _asDouble(rows.first['delta']);
+  }
+
   static Future<void> recalculateAccountBalance(Database db, int accountId) async {
     await ensureTables(db);
     final rows = await db.query('financial_accounts', where: 'id = ?', whereArgs: [accountId], limit: 1);
@@ -143,10 +171,11 @@ class FinancePlanningStore {
     final account = FinancialAccount.fromMap(rows.first);
     final transactionDelta = await _paidTransactionDelta(db, accountId);
     final transferDelta = await _transferDelta(db, accountId);
+    final adjustmentDelta = await _adjustmentDelta(db, accountId);
     await db.update(
       'financial_accounts',
       {
-        'currentBalance': account.initialBalance + transactionDelta + transferDelta,
+        'currentBalance': account.initialBalance + transactionDelta + transferDelta + adjustmentDelta,
         'updatedAt': DateTime.now().toIso8601String(),
       },
       where: 'id = ?',
@@ -174,6 +203,17 @@ class FinancePlanningStore {
     await ensureTables(db);
     final rows = await db.query('financial_transfers', orderBy: 'transferDate DESC, id DESC');
     return rows.map(FinancialTransfer.fromMap).toList();
+  }
+
+  static Future<List<FinancialBalanceAdjustment>> getBalanceAdjustments(Database db, {int? accountId}) async {
+    await ensureTables(db);
+    final rows = await db.query(
+      'financial_balance_adjustments',
+      where: accountId == null ? null : 'accountId = ?',
+      whereArgs: accountId == null ? null : [accountId],
+      orderBy: 'adjustmentDate DESC, id DESC',
+    );
+    return rows.map(FinancialBalanceAdjustment.fromMap).toList();
   }
 
   static Future<double> getActiveAccountsBalance(Database db) async {
@@ -240,6 +280,31 @@ class FinancePlanningStore {
     return transferId;
   }
 
+  static Future<int> createBalanceAdjustment(Database db, {required int accountId, required double newBalance, String? reason, String? notes}) async {
+    await ensureTables(db);
+    await recalculateAccountBalance(db, accountId);
+    final rows = await db.query('financial_accounts', where: 'id = ?', whereArgs: [accountId], limit: 1);
+    if (rows.isEmpty) throw ArgumentError('Conta não encontrada.');
+    final account = FinancialAccount.fromMap(rows.first);
+    final previousBalance = account.currentBalance;
+    final delta = newBalance - previousBalance;
+    final now = DateTime.now().toIso8601String();
+    final adjustment = FinancialBalanceAdjustment(
+      accountId: accountId,
+      previousBalance: previousBalance,
+      newBalance: newBalance,
+      delta: delta,
+      adjustmentDate: now,
+      reason: reason,
+      notes: notes,
+      createdAt: now,
+      updatedAt: now,
+    );
+    final id = await db.insert('financial_balance_adjustments', adjustment.toMap());
+    await recalculateAccountBalance(db, accountId);
+    return id;
+  }
+
   static Future<void> deleteTransfer(Database db, FinancialTransfer transfer) async {
     await ensureTables(db);
     if (transfer.id == null) return;
@@ -294,6 +359,7 @@ class FinancePlanningStore {
     await ensureTables(db);
     await db.delete('financial_accounts');
     await db.delete('financial_transfers');
+    await db.delete('financial_balance_adjustments');
     await db.delete('budgets');
     await db.delete('financial_goals');
   }
@@ -304,6 +370,7 @@ class FinancePlanningStore {
     return {
       'financial_accounts': await db.query('financial_accounts', orderBy: 'id ASC'),
       'financial_transfers': await db.query('financial_transfers', orderBy: 'id ASC'),
+      'financial_balance_adjustments': await db.query('financial_balance_adjustments', orderBy: 'id ASC'),
       'budgets': await db.query('budgets', orderBy: 'id ASC'),
       'financial_goals': await db.query('financial_goals', orderBy: 'id ASC'),
     };
