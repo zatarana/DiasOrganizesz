@@ -69,22 +69,29 @@ class FinancialGoal {
     );
   }
 
-  Map<String, dynamic> toMap() => {
-        'id': id,
-        'name': name,
-        'description': description,
-        'targetAmount': targetAmount,
-        'currentAmount': currentAmount,
-        'accountId': accountId,
-        'projectId': projectId,
-        'targetDate': targetDate,
-        'status': status,
-        'color': color,
-        'icon': icon,
-        'isArchived': isArchived ? 1 : 0,
-        'createdAt': createdAt,
-        'updatedAt': updatedAt,
-      };
+  Map<String, dynamic> toMap({bool includeExtendedFields = false}) {
+    final map = <String, dynamic>{
+      'id': id,
+      'name': name,
+      'description': description,
+      'targetAmount': targetAmount,
+      'currentAmount': currentAmount,
+      'accountId': accountId,
+      'targetDate': targetDate,
+      'status': status,
+      'color': color,
+      'icon': icon,
+      'createdAt': createdAt,
+      'updatedAt': updatedAt,
+    };
+
+    if (includeExtendedFields) {
+      map['projectId'] = projectId;
+      map['isArchived'] = isArchived ? 1 : 0;
+    }
+
+    return map;
+  }
 
   factory FinancialGoal.fromMap(Map<String, dynamic> map) {
     double asDouble(dynamic value) {
