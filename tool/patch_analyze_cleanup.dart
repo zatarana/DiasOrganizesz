@@ -20,11 +20,15 @@ void _cleanFinanceScreen() {
   text = _removeMethodByName(text, '_buildTypeFilters');
   text = _removeMethodByName(text, '_buildStatusFilters');
   text = _removeMethodByName(text, '_buildCategoryFilters');
+  text = _removeMethodByName(text, '_gap');
+  text = _removeMethodByName(text, '_filterChip');
 
   if (text.contains('_paidExpensesByCategory(') ||
       text.contains('Widget _buildTypeFilters(') ||
       text.contains('Widget _buildStatusFilters(') ||
-      text.contains('Widget _buildCategoryFilters(')) {
+      text.contains('Widget _buildCategoryFilters(') ||
+      text.contains('Widget _gap(') ||
+      text.contains('Widget _filterChip(')) {
     stderr.writeln('ERRO: não foi possível remover todas as funções antigas de filtros/análise.');
     exit(1);
   }
@@ -84,11 +88,7 @@ void _fixConstInfoHints() {
     '    const details = AndroidNotificationDetails(',
   );
 
-  _replaceInFile(
-    'lib/features/finance/create_transaction_screen.dart',
-    '            _TransactionFormSection(\n              title: \'Observações\'',
-    '            const _TransactionFormSection(\n              title: \'Observações\'',
-  );
+  // Não torna a seção de Observações const: ela contém TextField com controller dinâmico.
 
   _replaceInFile(
     'lib/features/finance/finance_entry_screen.dart',
