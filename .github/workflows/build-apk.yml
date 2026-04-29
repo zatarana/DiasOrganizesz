@@ -41,6 +41,9 @@ jobs:
       - name: Aplicar melhorias UX do formulário financeiro
         run: dart run tool/patch_transaction_form_ux.dart
 
+      - name: Limpar avisos conhecidos do analyzer
+        run: dart run tool/patch_analyze_cleanup.dart
+
       - name: Validar melhorias UX da aba Finanças
         run: |
           echo "Validando patch de UX da aba Finanças..."
@@ -57,6 +60,11 @@ jobs:
 
           if grep -q "withOpacity" lib/features/finance/finance_screen.dart; then
             echo "ERRO: uso depreciado de withOpacity ainda aparece na aba Finanças." >&2
+            exit 1
+          fi
+
+          if grep -q "_buildTypeFilters\|_buildStatusFilters\|_buildCategoryFilters\|_paidExpensesByCategory" lib/features/finance/finance_screen.dart; then
+            echo "ERRO: funções antigas não utilizadas ainda aparecem na aba Finanças." >&2
             exit 1
           fi
 
