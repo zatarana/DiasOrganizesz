@@ -60,12 +60,12 @@ class QuickAddTaskParser {
     }
 
     final normalizedLower = text.toLowerCase();
-    if (RegExp(r'\bamanh[ãa]\b').hasMatch(normalizedLower)) {
+    if (normalizedLower.contains('amanhã') || normalizedLower.contains('amanha')) {
       date = today.add(const Duration(days: 1));
-      text = text.replaceAll(RegExp(r'\bamanh[ãa]\b', caseSensitive: false), '').trim();
-    } else if (RegExp(r'\bhoje\b').hasMatch(normalizedLower)) {
+      text = _removeTokens(text, ['amanhã', 'amanha']);
+    } else if (normalizedLower.contains('hoje')) {
       date = today;
-      text = text.replaceAll(RegExp(r'\bhoje\b', caseSensitive: false), '').trim();
+      text = _removeTokens(text, ['hoje']);
     } else if (normalizedLower.contains('semana que vem') || normalizedLower.contains('próxima semana') || normalizedLower.contains('proxima semana')) {
       date = today.add(const Duration(days: 7));
       text = _removeTokens(text, ['semana que vem', 'próxima semana', 'proxima semana']);
@@ -237,7 +237,7 @@ class _QuickAddPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final dateLabel = parsed.date == null ? 'Inbox / sem data' : DateFormat('dd/MM/yyyy').format(parsed.date!);
     return Card(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.6),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Wrap(
