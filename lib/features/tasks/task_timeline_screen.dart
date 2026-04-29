@@ -138,7 +138,7 @@ class _TimelineSection extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              CircleAvatar(radius: 15, backgroundColor: color.withValues(alpha: 0.12), child: Icon(icon, color: color, size: 17)),
+              CircleAvatar(radius: 15, backgroundColor: color.withOpacity(0.12), child: Icon(icon, color: color, size: 17)),
               const SizedBox(width: 8),
               Expanded(child: Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold))),
               if (quickDate != null)
