@@ -13,7 +13,7 @@ class TaskPriorityMatrixScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final settings = ref.watch(appSettingsProvider);
+    final settings = ref.watch(taskSettingsProvider);
     final sortKey = settings[TaskSettingsKeys.defaultSort] ?? TaskSettingsDefaults.defaultSort;
     final tasks = ref.watch(tasksProvider).where((task) => TaskSmartRules.isParentTask(task) && TaskSmartRules.isActive(task)).toList();
     final urgentHigh = tasks.where((task) => task.priority == 'alta' && TaskSmartRules.hasDate(task)).toList();
