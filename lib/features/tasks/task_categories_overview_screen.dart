@@ -15,7 +15,7 @@ class TaskCategoriesOverviewScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final categories = ref.watch(categoriesProvider);
-    final settings = ref.watch(appSettingsProvider);
+    final settings = ref.watch(taskSettingsProvider);
     final sortKey = settings[TaskSettingsKeys.defaultSort] ?? TaskSettingsDefaults.defaultSort;
     final tasks = ref.watch(tasksProvider);
 
@@ -93,7 +93,7 @@ class TaskCategoryDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final settings = ref.watch(appSettingsProvider);
+    final settings = ref.watch(taskSettingsProvider);
     final sortKey = settings[TaskSettingsKeys.defaultSort] ?? TaskSettingsDefaults.defaultSort;
     final tasks = ref.watch(tasksProvider).where((task) {
       return TaskSmartRules.isParentTask(task) && !TaskSmartRules.isCanceled(task) && task.categoryId == categoryId;
