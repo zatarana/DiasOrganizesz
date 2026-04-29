@@ -161,7 +161,12 @@ class TaskSmartRules {
   }
 
   static TaskDayProgress dayProgress(Iterable<Task> tasks, {DateTime? now}) {
-    final todayTasks = tasks.where((task) => isExactlyToday(task, now: now) && isParentTask(task) && !isCanceled(task)).toList();
+    final base = now ?? DateTime.now();
+    final today = DateTime(base.year, base.month, base.day);
+    final todayTasks = tasks.where((task) {
+      if (!isParentTask(task) || isCanceled(task)) return false;
+      return dateOnly(task) == today;
+    }).toList();
     final total = todayTasks.length;
     final completed = todayTasks.where(isCompleted).length;
     return TaskDayProgress(total: total, completed: completed);
