@@ -13,7 +13,7 @@ class TaskKanbanScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final settings = ref.watch(appSettingsProvider);
+    final settings = ref.watch(taskSettingsProvider);
     final sortKey = settings[TaskSettingsKeys.defaultSort] ?? TaskSettingsDefaults.defaultSort;
     final allTasks = ref.watch(tasksProvider).where((task) => TaskSmartRules.isParentTask(task) && !TaskSmartRules.isCanceled(task)).toList();
     final overdue = allTasks.where((task) => TaskSmartRules.isOverdue(task)).toList();
