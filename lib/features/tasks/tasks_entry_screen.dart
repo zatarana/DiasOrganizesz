@@ -318,7 +318,7 @@ class _EntryCard extends StatelessWidget {
     return Card(
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: color.withValues(alpha: 0.12),
+          backgroundColor: color.withOpacity(0.12),
           child: Icon(icon, color: color),
         ),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -329,7 +329,7 @@ class _EntryCard extends StatelessWidget {
             if (count != null)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: color.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(999)),
+                decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(999)),
                 child: Text('$count', style: TextStyle(color: color, fontWeight: FontWeight.bold)),
               ),
             const SizedBox(width: 4),
