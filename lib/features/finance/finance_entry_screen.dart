@@ -26,10 +26,13 @@ class FinanceEntryScreen extends ConsumerStatefulWidget {
 
 class _FinanceEntryScreenState extends ConsumerState<FinanceEntryScreen> {
   late Future<double> _realBalanceFuture;
+  late DateTime _selectedMonth;
 
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now();
+    _selectedMonth = DateTime(now.year, now.month);
     _realBalanceFuture = _loadRealBalance();
   }
 
@@ -47,15 +50,29 @@ class _FinanceEntryScreenState extends ConsumerState<FinanceEntryScreen> {
     await nextBalanceFuture;
   }
 
+  void _changeMonth(int delta) {
+    setState(() {
+      _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + delta);
+    });
+  }
+
+  void _goToCurrentMonth() {
+    final now = DateTime.now();
+    setState(() => _selectedMonth = DateTime(now.year, now.month));
+  }
+
+  bool get _isCurrentMonth {
+    final now = DateTime.now();
+    return _selectedMonth.year == now.year && _selectedMonth.month == now.month;
+  }
+
   @override
   Widget build(BuildContext context) {
     final transactions = ref.watch(transactionsProvider);
     final debts = ref.watch(debtsProvider);
-    final now = DateTime.now();
-    final currentMonth = DateTime(now.year, now.month);
-    final monthTransactions = transactions.where((transaction) => _isSameMonth(_expectedDate(transaction), currentMonth)).toList();
+    final monthTransactions = transactions.where((transaction) => _isSameMonth(_expectedDate(transaction), _selectedMonth)).toList();
     final dashboard = _FinanceDashboard.from(monthTransactions, debts);
-    final upcoming = _upcomingTransactions(transactions);
+    final upcoming = _upcomingTransactionsForMonth(transactions, _selectedMonth);
     final recentMonthTransactions = _recentTransactions(monthTransactions);
 
     return Scaffold(
@@ -79,11 +96,19 @@ class _FinanceEntryScreenState extends ConsumerState<FinanceEntryScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
           children: [
+            _MonthNavigationBar(
+              selectedMonth: _selectedMonth,
+              isCurrentMonth: _isCurrentMonth,
+              onPrevious: () => _changeMonth(-1),
+              onNext: () => _changeMonth(1),
+              onToday: _goToCurrentMonth,
+            ),
+            const SizedBox(height: 10),
             FutureBuilder<double>(
               future: _realBalanceFuture,
               builder: (context, snapshot) {
                 return _MonthHeroCard(
-                  month: currentMonth,
+                  month: _selectedMonth,
                   dashboard: dashboard,
                   realBalance: snapshot.data,
                   isLoadingRealBalance: snapshot.connectionState == ConnectionState.waiting,
@@ -101,7 +126,7 @@ class _FinanceEntryScreenState extends ConsumerState<FinanceEntryScreen> {
             ),
             const SizedBox(height: 14),
             _SectionTitle(
-              title: 'Hoje, o que merece atenção?',
+              title: 'Atenção em ${_capitalize(DateFormat('MMMM', 'pt_BR').format(_selectedMonth))}',
               actionLabel: 'Ver tudo',
               onAction: () => _open(context, const FinanceScreen()),
             ),
@@ -109,7 +134,7 @@ class _FinanceEntryScreenState extends ConsumerState<FinanceEntryScreen> {
             _AttentionCard(dashboard: dashboard, upcoming: upcoming),
             const SizedBox(height: 14),
             _SectionTitle(
-              title: 'Próximas movimentações',
+              title: 'Vencimentos do mês',
               actionLabel: 'Abrir lista',
               onAction: () => _open(context, const FinanceScreen()),
             ),
@@ -117,8 +142,8 @@ class _FinanceEntryScreenState extends ConsumerState<FinanceEntryScreen> {
             if (upcoming.isEmpty)
               const _EmptyPanel(
                 icon: Icons.event_available_outlined,
-                title: 'Nada pendente nos próximos dias',
-                subtitle: 'Quando houver contas, receitas ou parcelas próximas, elas aparecem aqui.',
+                title: 'Nada pendente neste mês',
+                subtitle: 'Quando houver contas, receitas ou parcelas previstas para o mês selecionado, elas aparecem aqui.',
               )
             else
               ...upcoming.take(5).map((transaction) => _UpcomingTransactionTile(transaction: transaction)),
@@ -159,6 +184,50 @@ class _FinanceEntryScreenState extends ConsumerState<FinanceEntryScreen> {
 
   static void _open(BuildContext context, Widget screen) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+  }
+}
+
+class _MonthNavigationBar extends StatelessWidget {
+  final DateTime selectedMonth;
+  final bool isCurrentMonth;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+  final VoidCallback onToday;
+
+  const _MonthNavigationBar({
+    required this.selectedMonth,
+    required this.isCurrentMonth,
+    required this.onPrevious,
+    required this.onNext,
+    required this.onToday,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _capitalize(DateFormat('MMMM yyyy', 'pt_BR').format(selectedMonth));
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: Colors.grey.shade300)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: Row(
+          children: [
+            IconButton(tooltip: 'Mês anterior', onPressed: onPrevious, icon: const Icon(Icons.chevron_left)),
+            Expanded(
+              child: Column(
+                children: [
+                  Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text(isCurrentMonth ? 'Mês atual' : 'Visualizando outro mês', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
+                ],
+              ),
+            ),
+            IconButton(tooltip: 'Próximo mês', onPressed: onNext, icon: const Icon(Icons.chevron_right)),
+            if (!isCurrentMonth)
+              TextButton(onPressed: onToday, child: const Text('Hoje')),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -430,7 +499,7 @@ class _AttentionCard extends StatelessWidget {
       if (dashboard.openDebts > 0)
         _AttentionItem(Icons.payments_outlined, 'Dívidas abertas', '${dashboard.openDebts} registro(s)', Colors.blueGrey),
       if (upcoming.isNotEmpty)
-        _AttentionItem(Icons.event_note_outlined, 'Próximos vencimentos', '${upcoming.length} item(ns)', Colors.indigo),
+        _AttentionItem(Icons.event_note_outlined, 'Vencimentos do mês', '${upcoming.length} item(ns)', Colors.indigo),
     ];
 
     if (alerts.isEmpty) {
@@ -669,15 +738,10 @@ class _FinanceDashboard {
   }
 }
 
-List<FinancialTransaction> _upcomingTransactions(List<FinancialTransaction> transactions) {
-  final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
-  final limit = today.add(const Duration(days: 10));
+List<FinancialTransaction> _upcomingTransactionsForMonth(List<FinancialTransaction> transactions, DateTime month) {
   final upcoming = transactions.where((transaction) {
     if (transaction.status == 'paid' || transaction.status == 'canceled') return false;
-    final date = _expectedDate(transaction);
-    if (date == null) return false;
-    final normalized = DateTime(date.year, date.month, date.day);
-    return !normalized.isBefore(today) && !normalized.isAfter(limit);
+    return _isSameMonth(_expectedDate(transaction), month);
   }).toList();
 
   upcoming.sort((a, b) {
