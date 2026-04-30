@@ -56,6 +56,9 @@ jobs:
       - name: Aplicar Etapa 4 gráficos no dashboard financeiro
         run: dart run tool/patch_finance_dashboard_charts_m4.dart
 
+      - name: Aplicar Etapa 5 lançamento rápido
+        run: dart run tool/patch_quick_transaction_m5.dart
+
       - name: Aplicar refinamento UX da tela Hoje
         run: dart run tool/patch_today_tasks_ux.dart
 
@@ -117,6 +120,9 @@ jobs:
 
       - name: Validar Etapa 4 gráficos financeiros
         run: dart run tool/verify_finance_dashboard_charts_m4.dart
+
+      - name: Validar Etapa 5 lançamento rápido
+        run: dart run tool/verify_quick_transaction_m5.dart
 
       - name: Validar F-M4 dívidas
         run: |
