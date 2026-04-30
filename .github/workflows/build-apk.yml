@@ -41,6 +41,9 @@ jobs:
       - name: Aplicar melhorias UX do formulário financeiro
         run: dart run tool/patch_transaction_form_ux.dart
 
+      - name: Aplicar core compartilhado da entrada financeira
+        run: dart run tool/patch_finance_entry_core.dart
+
       - name: Limpar avisos conhecidos do analyzer
         run: dart run tool/patch_analyze_cleanup.dart
 
@@ -62,8 +65,8 @@ jobs:
           grep -q "_RecentTransactionTile" lib/features/finance/finance_entry_screen.dart
           grep -q "Novo lançamento" lib/features/finance/finance_entry_screen.dart
           grep -q "Saldo real agora" lib/features/finance/finance_entry_screen.dart
-          grep -q "recalculateAllAccountBalances" lib/features/finance/finance_entry_screen.dart
-          grep -q "getActiveAccountsBalance" lib/features/finance/finance_entry_screen.dart
+          grep -q "realAccountBalanceProvider" lib/features/finance/finance_entry_screen.dart
+          grep -q "MoneyFormatter.format" lib/features/finance/finance_entry_screen.dart
           grep -q "Atualizando saldo" lib/features/finance/finance_entry_screen.dart
           grep -q "Resultado previsto" lib/features/finance/finance_entry_screen.dart
           grep -q "A receber" lib/features/finance/finance_entry_screen.dart
@@ -72,6 +75,11 @@ jobs:
 
           if grep -q "Escolha o que quer fazer agora" lib/features/finance/finance_entry_screen.dart; then
             echo "ERRO: entrada antiga de Finanças ainda está presente." >&2
+            exit 1
+          fi
+
+          if grep -q "FutureBuilder<double>\|_realBalanceFuture\|_loadRealBalance\|FinancePlanningStore" lib/features/finance/finance_entry_screen.dart; then
+            echo "ERRO: entrada financeira ainda usa carregamento local de saldo em vez do provider central." >&2
             exit 1
           fi
 
