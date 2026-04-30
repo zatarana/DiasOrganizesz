@@ -88,11 +88,15 @@ void _fixInputSavePatcherInterpolation() {
   var text = file.readAsStringSync();
 
   text = text.replaceAll(
-    "stderr.writeln('ERRO salvamento inputs: faltou \"$check\".');",
+    r'''stderr.writeln('ERRO salvamento inputs: faltou "$check".');''',
+    "stderr.writeln('ERRO salvamento inputs: faltou requisito obrigatório.');",
+  );
+  text = text.replaceAll(
+    r'''stderr.writeln('ERRO salvamento inputs: faltou \"$check\".');''',
     "stderr.writeln('ERRO salvamento inputs: faltou requisito obrigatório.');",
   );
 
-  if (text.contains('faltou \"$check\"')) {
+  if (text.contains(r'''$check''')) {
     stderr.writeln('ERRO late analyzer: patch_input_save_reliability ainda referencia check em interpolação problemática.');
     exit(1);
   }
