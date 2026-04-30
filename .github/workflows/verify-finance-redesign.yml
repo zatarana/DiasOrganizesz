@@ -16,5 +16,21 @@ jobs:
       - name: Setup Dart
         uses: dart-lang/setup-dart@v1
 
+      - name: Aplicar patches financeiros antes da verificação
+        run: |
+          dart run tool/patch_finance_screen_ux.dart
+          dart run tool/patch_finance_transactions_m2.dart
+          dart run tool/patch_transaction_form_ux.dart
+          dart run tool/patch_debts_m4.dart
+          dart run tool/patch_finance_planning_money.dart
+          dart run tool/patch_finance_entry_core.dart
+          dart run tool/patch_finance_dashboard_charts_m4.dart
+          dart run tool/patch_quick_transaction_m5.dart
+          dart run tool/patch_finance_list_m6.dart
+          dart run tool/patch_finance_dashboard_planning_m7.dart
+
       - name: Validar redesenho financeiro completo
         run: dart run tool/verify_finance_redesign_all.dart
+
+      - name: Validar hub financeiro
+        run: dart run tool/verify_finance_hub_m8.dart
