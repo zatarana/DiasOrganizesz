@@ -15,6 +15,7 @@ void main() {
   _fixFinanceMobileOverflows();
   _applySmartTaskCapture();
   _fixTasksEntrySyntax();
+  _fixHomeDashboardCompatibility();
   stdout.writeln('Analyzer cleanup aplicado.');
 }
 
@@ -265,6 +266,39 @@ void _fixTasksEntrySyntax() {
     exit(1);
   }
   file.writeAsStringSync(text);
+}
+
+void _fixHomeDashboardCompatibility() {
+  final home = File('lib/features/dashboard/home_screen.dart');
+  if (home.existsSync()) {
+    var text = home.readAsStringSync();
+    text = text.replaceAll("import 'package:intl/intl.dart';\n", '');
+    home.writeAsStringSync(text);
+  }
+
+  final transaction = File('lib/features/finance/create_transaction_screen.dart');
+  if (!transaction.existsSync()) return;
+  var text = transaction.readAsStringSync();
+
+  if (text.contains('class CreateTransactionScreen extends ConsumerStatefulWidget') &&
+      !text.contains('final FinancialTransaction? transaction;')) {
+    text = text.replaceFirst(
+      'class CreateTransactionScreen extends ConsumerStatefulWidget {\n  const CreateTransactionScreen({super.key});',
+      'class CreateTransactionScreen extends ConsumerStatefulWidget {\n  final FinancialTransaction? transaction;\n  const CreateTransactionScreen({super.key, this.transaction});',
+    );
+  }
+
+  if (text.contains('class CreateTransactionScreen extends ConsumerStatefulWidget') &&
+      !text.contains('widget.transaction')) {
+    text = text.replaceFirst('  bool get _isEditing =>', '  bool get _isEditing => widget.transaction?.id != null ||');
+  }
+
+  if (!text.contains('final FinancialTransaction? transaction;')) {
+    stderr.writeln('ERRO: CreateTransactionScreen não aceita transaction para edição pela Home.');
+    exit(1);
+  }
+
+  transaction.writeAsStringSync(text);
 }
 
 String _addIsExpandedToDropdowns(String text) {
