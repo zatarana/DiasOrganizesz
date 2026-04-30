@@ -5,7 +5,6 @@ import '../../domain/providers.dart';
 import '../calendar/calendar_screen.dart';
 import '../projects/projects_screen.dart';
 import '../statistics/stats_screen.dart';
-import 'create_task_screen.dart';
 import 'inbox_tasks_screen.dart';
 import 'quick_add_task_button.dart';
 import 'task_categories_overview_screen.dart';
@@ -44,11 +43,6 @@ class TasksEntryScreen extends ConsumerWidget {
             tooltip: 'Configurações de tarefas',
             icon: const Icon(Icons.tune),
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TaskSettingsScreen())),
-          ),
-          IconButton(
-            tooltip: 'Criação completa',
-            icon: const Icon(Icons.edit_note),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateTaskScreen())),
           ),
         ],
       ),
@@ -221,7 +215,7 @@ class TasksEntryScreen extends ConsumerWidget {
           const SizedBox(height: 80),
         ],
       ),
-      floatingActionButton: const QuickAddTaskButton(label: 'Quick Add'),
+      floatingActionButton: const QuickAddTaskButton(label: 'Nova tarefa'),
     );
   }
 
@@ -318,7 +312,7 @@ class _EntryCard extends StatelessWidget {
     return Card(
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: color.withOpacity(0.12),
+          backgroundColor: color.withValues(alpha: 0.12),
           child: Icon(icon, color: color),
         ),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -329,7 +323,7 @@ class _EntryCard extends StatelessWidget {
             if (count != null)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(999)),
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(999)),
                 child: Text('$count', style: TextStyle(color: color, fontWeight: FontWeight.bold)),
               ),
             const SizedBox(width: 4),
