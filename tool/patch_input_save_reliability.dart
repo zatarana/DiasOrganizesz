@@ -268,8 +268,17 @@ void _patchCreateTransactionScreen() {
 
   if (!text.contains('Não foi possível salvar a movimentação')) {
     text = text.replaceFirst(
-      "      if (mounted) Navigator.pop(context);\n    } finally {",
-      "      if (mounted) Navigator.pop(context);\n    } on TimeoutException {\n      if (mounted) {\n        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O salvamento demorou demais. Tente novamente.')));\n      }\n    } catch (error) {\n      if (mounted) {\n        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Não foi possível salvar a movimentação: $error')));\n      }\n    } finally {",
+      '      if (mounted) Navigator.pop(context);\n    } finally {',
+      r'''      if (mounted) Navigator.pop(context);
+    } on TimeoutException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('O salvamento demorou demais. Tente novamente.')));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Não foi possível salvar a movimentação: $error')));
+      }
+    } finally {''',
     );
   }
 
@@ -295,7 +304,7 @@ void _validate() {
   final combined = '$providers\n$quick\n$full';
   for (final check in required) {
     if (!combined.contains(check)) {
-      stderr.writeln('ERRO salvamento inputs: faltou "$check".');
+      stderr.writeln('ERRO salvamento inputs: faltou requisito obrigatório.');
       exit(1);
     }
   }
