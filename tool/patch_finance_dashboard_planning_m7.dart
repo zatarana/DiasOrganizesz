@@ -8,18 +8,12 @@ void main() {
   }
   var text = file.readAsStringSync();
 
-  if (!text.contains("import '../../data/database/finance_planning_store.dart';")) {
-    text = text.replaceFirst(
-      "import '../../core/utils/money_formatter.dart';\n",
-      "import '../../core/utils/money_formatter.dart';\nimport '../../data/database/finance_planning_store.dart';\n",
-    );
-  }
-  if (!text.contains("import 'finance_dashboard_planning.dart';")) {
-    text = text.replaceFirst(
-      "import 'finance_dashboard_charts.dart';\n",
-      "import 'finance_dashboard_charts.dart';\nimport 'finance_dashboard_planning.dart';\n",
-    );
-  }
+  text = _ensureImport(text, "import '../../core/utils/money_formatter.dart';", "import '../../data/database/finance_planning_store.dart';");
+  text = _ensureImport(text, "import '../../data/models/debt_model.dart';", "import '../../data/models/budget_model.dart';");
+  text = _ensureImport(text, "import '../../data/models/financial_category_model.dart';", "import '../../data/models/financial_account_model.dart';");
+  text = _ensureImport(text, "import '../../data/models/financial_category_model.dart';", "import '../../data/models/financial_goal_model.dart';");
+  text = _ensureImport(text, "import 'finance_budget_rules.dart';", "import 'finance_budgets_screen.dart';");
+  text = _ensureImport(text, "import 'finance_dashboard_charts.dart';", "import 'finance_dashboard_planning.dart';");
 
   if (!text.contains('final planningDataAsync = ref.watch(_financeDashboardPlanningProvider);')) {
     text = text.replaceFirst(
@@ -62,6 +56,9 @@ class _FinanceDashboardPlanningData {
   }
 
   for (final check in [
+    "import '../../data/models/budget_model.dart';",
+    "import '../../data/models/financial_account_model.dart';",
+    "import '../../data/models/financial_goal_model.dart';",
     "import 'finance_dashboard_planning.dart';",
     '_financeDashboardPlanningProvider',
     'FinancePlanningStore.getAccounts',
@@ -80,4 +77,9 @@ class _FinanceDashboardPlanningData {
 
   file.writeAsStringSync(text);
   stdout.writeln('Etapa 7 aplicada: planejamento financeiro no dashboard.');
+}
+
+String _ensureImport(String text, String after, String importLine) {
+  if (text.contains(importLine)) return text;
+  return text.replaceFirst(after, '$after\n$importLine');
 }
