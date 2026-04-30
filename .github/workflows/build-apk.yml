@@ -48,6 +48,7 @@ jobs:
           dart run tool/patch_quick_transaction_m5.dart
           dart run tool/patch_finance_list_m6.dart
           dart run tool/patch_finance_dashboard_planning_m7.dart
+          dart run tool/patch_finance_dashboard_live_refresh.dart
           dart run tool/patch_today_tasks_ux.dart
           dart run tool/patch_today_tasks_m1.dart
           dart run tool/patch_analyze_cleanup.dart
@@ -92,6 +93,23 @@ jobs:
 
           if grep -q "FutureBuilder<double>\|_realBalanceFuture\|_loadRealBalance" lib/features/finance/finance_entry_screen.dart; then
             echo "ERRO: entrada financeira ainda usa carregamento local de saldo." >&2
+            exit 1
+          fi
+
+      - name: Validar refresh vivo do dashboard financeiro
+        run: |
+          echo "Validando atualização imediata de cards financeiros..."
+          grep -q "ref.invalidate(_financeDashboardPlanningProvider);" lib/features/finance/finance_entry_screen.dart
+          grep -q "ref.read(_financeDashboardPlanningProvider.future)" lib/features/finance/finance_entry_screen.dart
+          grep -q "Future<void> _openAndRefresh(Widget screen) async" lib/features/finance/finance_entry_screen.dart
+          grep -q "await _refreshData();" lib/features/finance/finance_entry_screen.dart
+          grep -q "_openAndRefresh(const FinancePlanningScreen())" lib/features/finance/finance_entry_screen.dart
+          grep -q "_openAndRefresh(const FinancialGoalsScreen())" lib/features/finance/finance_entry_screen.dart
+          grep -q "_openAndRefresh(const FinanceBudgetsScreen())" lib/features/finance/finance_entry_screen.dart
+          grep -q "WidgetsBinding.instance.addPostFrameCallback" lib/features/finance/finance_entry_screen.dart
+
+          if grep -q "_open(context," lib/features/finance/finance_entry_screen.dart; then
+            echo "ERRO: ainda existe navegação financeira sem refresh ao retornar." >&2
             exit 1
           fi
 
