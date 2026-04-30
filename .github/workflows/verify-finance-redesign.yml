@@ -1,0 +1,20 @@
+name: Verify Finance Redesign
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  verify-finance-redesign:
+    name: Verify finance redesign
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+
+      - name: Validar redesenho financeiro completo
+        run: dart run tool/verify_finance_redesign_all.dart
