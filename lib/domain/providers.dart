@@ -15,6 +15,12 @@ import '../core/notifications/notification_service.dart';
 
 final dbProvider = Provider<DatabaseHelper>((ref) => DatabaseHelper.instance);
 
+final realAccountBalanceProvider = FutureProvider<double>((ref) async {
+  final db = await ref.read(dbProvider).database;
+  await FinancePlanningStore.recalculateAllAccountBalances(db);
+  return FinancePlanningStore.getActiveAccountsBalance(db);
+});
+
 class AppSettingKeys {
   static const defaultCurrency = 'default_currency';
   static const homeShowFinancialValues = 'home_show_financial_values';
@@ -336,6 +342,7 @@ class TransactionNotifier extends StateNotifier<List<FinancialTransaction>> {
     state = [newTransaction, ...state];
     _syncTransactionReminder(newTransaction);
     await _checkDebtStatus(newTransaction.debtId);
+    ref.invalidate(realAccountBalanceProvider);
   }
 
   Future<void> updateTransaction(FinancialTransaction transaction) async {
@@ -350,6 +357,7 @@ class TransactionNotifier extends StateNotifier<List<FinancialTransaction>> {
     for (final debtId in affectedDebtIds) {
       await _checkDebtStatus(debtId);
     }
+    ref.invalidate(realAccountBalanceProvider);
   }
 
   Future<void> removeTransaction(int id) async {
@@ -358,6 +366,7 @@ class TransactionNotifier extends StateNotifier<List<FinancialTransaction>> {
     state = state.where((t) => t.id != id).toList();
     await NotificationService().cancelNotification(NotificationService().transactionReminderId(id));
     await _checkDebtStatus(transaction?.debtId);
+    ref.invalidate(realAccountBalanceProvider);
   }
 
   Future<void> clearCanceledTransactions() async {
@@ -372,6 +381,7 @@ class TransactionNotifier extends StateNotifier<List<FinancialTransaction>> {
     for (final debtId in affectedDebtIds) {
       await _checkDebtStatus(debtId);
     }
+    ref.invalidate(realAccountBalanceProvider);
   }
 
   void _syncTransactionReminder(FinancialTransaction t) {
