@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../data/models/task_model.dart';
 import '../../domain/providers.dart';
+import 'create_task_screen.dart';
 import 'task_settings_screen.dart';
 
 class QuickAddTaskContext {
@@ -101,12 +102,14 @@ class QuickAddTaskSheet extends ConsumerStatefulWidget {
   final QuickAddTaskContext contextData;
   final String title;
 
-  const QuickAddTaskSheet({super.key, this.contextData = const QuickAddTaskContext(), this.title = 'Captura rápida'});
+  const QuickAddTaskSheet({super.key, this.contextData = const QuickAddTaskContext(), this.title = 'Captura inteligente'});
 
-  static Future<void> show(BuildContext context, {QuickAddTaskContext contextData = const QuickAddTaskContext(), String title = 'Captura rápida'}) {
+  static Future<void> show(BuildContext context, {QuickAddTaskContext contextData = const QuickAddTaskContext(), String title = 'Captura inteligente'}) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
       builder: (_) => QuickAddTaskSheet(contextData: contextData, title: title),
     );
   }
@@ -117,11 +120,22 @@ class QuickAddTaskSheet extends ConsumerStatefulWidget {
 
 class _QuickAddTaskSheetState extends ConsumerState<QuickAddTaskSheet> {
   final _controller = TextEditingController();
+  final _tagController = TextEditingController();
   QuickAddTaskParserResult? _preview;
+  DateTime? _selectedDate;
+  String? _selectedTime;
+  String _priority = 'media';
+  String _recurrenceType = 'none';
+  int? _categoryId;
+  final List<String> _tags = [];
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
+    _selectedDate = widget.contextData.selectedDate;
+    _categoryId = widget.contextData.categoryId;
+    _priority = _defaultPriority();
     _controller.addListener(_updatePreview);
     _updatePreview();
   }
@@ -130,6 +144,7 @@ class _QuickAddTaskSheetState extends ConsumerState<QuickAddTaskSheet> {
   void dispose() {
     _controller.removeListener(_updatePreview);
     _controller.dispose();
+    _tagController.dispose();
     super.dispose();
   }
 
@@ -141,7 +156,7 @@ class _QuickAddTaskSheetState extends ConsumerState<QuickAddTaskSheet> {
   }
 
   DateTime? _fallbackDate() {
-    if (widget.contextData.selectedDate != null) return widget.contextData.selectedDate;
+    if (_selectedDate != null) return _selectedDate;
     final settings = ref.read(taskSettingsProvider);
     final inboxAsDefault = settings[TaskSettingsKeys.inboxAsDefaultCapture] ?? TaskSettingsDefaults.inboxAsDefaultCapture;
     if (inboxAsDefault == 'false') return DateTime.now();
@@ -149,77 +164,259 @@ class _QuickAddTaskSheetState extends ConsumerState<QuickAddTaskSheet> {
   }
 
   QuickAddTaskParserResult _parseCurrentText() {
-    return QuickAddTaskParser.parse(
+    final parsed = QuickAddTaskParser.parse(
       _controller.text,
       fallbackDate: _fallbackDate(),
-      defaultPriority: _defaultPriority(),
+      defaultPriority: _priority,
+    );
+    return QuickAddTaskParserResult(
+      title: parsed.title,
+      date: _selectedDate ?? parsed.date,
+      time: _selectedTime ?? parsed.time,
+      priority: _priority == parsed.priority ? parsed.priority : _priority,
     );
   }
 
   void _updatePreview() {
+    if (!mounted) return;
+    setState(() => _preview = _parseCurrentText());
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? now,
+      firstDate: DateTime(now.year - 2),
+      lastDate: DateTime(now.year + 10),
+    );
+    if (selected != null) setState(() => _selectedDate = DateTime(selected.year, selected.month, selected.day));
+  }
+
+  Future<void> _pickTime() async {
+    final selected = await showTimePicker(context: context, initialTime: TimeOfDay.now());
+    if (selected != null) {
+      setState(() => _selectedTime = '${selected.hour.toString().padLeft(2, '0')}:${selected.minute.toString().padLeft(2, '0')}');
+    }
+  }
+
+  void _cyclePriority() {
     setState(() {
-      _preview = _parseCurrentText();
+      _priority = switch (_priority) { 'baixa' => 'media', 'media' => 'alta', _ => 'baixa' };
     });
   }
 
-  Future<void> _save() async {
-    final parsed = _parseCurrentText();
-    if (parsed.title.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Digite o título da tarefa.')));
+  void _addTag(String value) {
+    final clean = value.trim().replaceAll(',', '');
+    if (clean.isEmpty) return;
+    if (_tags.any((tag) => tag.toLowerCase() == clean.toLowerCase())) {
+      _tagController.clear();
       return;
     }
+    setState(() {
+      _tags.add(clean);
+      _tagController.clear();
+    });
+  }
 
+  Future<void> _openTagDialog() async {
+    _tagController.clear();
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Adicionar tags'),
+        content: TextField(
+          controller: _tagController,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Ex: estudo, casa, urgente'),
+          onSubmitted: (value) {
+            for (final tag in value.split(',')) _addTag(tag);
+            Navigator.pop(ctx);
+          },
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          FilledButton(
+            onPressed: () {
+              for (final tag in _tagController.text.split(',')) _addTag(tag);
+              Navigator.pop(ctx);
+            },
+            child: const Text('Adicionar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _selectCategory() async {
+    final categories = ref.read(categoriesProvider);
+    if (categories.isEmpty) return;
+    final selected = await showModalBottomSheet<int?>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => ListView(
+        shrinkWrap: true,
+        children: [
+          const ListTile(title: Text('Lista / Categoria', style: TextStyle(fontWeight: FontWeight.bold))),
+          ListTile(leading: const Icon(Icons.inbox_outlined), title: const Text('Sem categoria'), onTap: () => Navigator.pop(ctx, null)),
+          ...categories.map((category) => ListTile(
+                leading: const Icon(Icons.folder_outlined),
+                title: Text(category.name, overflow: TextOverflow.ellipsis),
+                selected: category.id == _categoryId,
+                onTap: () => Navigator.pop(ctx, category.id),
+              )),
+        ],
+      ),
+    );
+    setState(() => _categoryId = selected);
+  }
+
+  Future<void> _selectRecurrence() async {
+    final selected = await showMenu<String>(
+      context: context,
+      position: const RelativeRect.fromLTRB(80, 420, 80, 0),
+      items: const [
+        PopupMenuItem(value: 'none', child: Text('Não repetir')),
+        PopupMenuItem(value: 'daily', child: Text('Diariamente')),
+        PopupMenuItem(value: 'weekly', child: Text('Semanalmente')),
+        PopupMenuItem(value: 'monthly', child: Text('Mensalmente')),
+      ],
+    );
+    if (selected != null) setState(() => _recurrenceType = selected);
+  }
+
+  Task? _buildPartialTask() {
+    final parsed = _parseCurrentText();
+    final title = parsed.title.trim();
+    if (title.isEmpty) return null;
     final now = DateTime.now().toIso8601String();
-    final task = Task(
-      title: parsed.title.trim(),
-      date: parsed.date == null ? null : DateFormat('yyyy-MM-dd').format(parsed.date!),
+    final date = parsed.date == null ? null : DateFormat('yyyy-MM-dd').format(parsed.date!);
+    return Task(
+      title: title,
+      date: date,
       time: parsed.time,
-      categoryId: widget.contextData.categoryId,
+      categoryId: _categoryId ?? widget.contextData.categoryId,
       projectId: widget.contextData.projectId,
       projectStepId: widget.contextData.projectId == null ? null : widget.contextData.projectStepId,
       parentTaskId: widget.contextData.parentTaskId,
       priority: parsed.priority,
       status: 'pendente',
-      reminderEnabled: false,
-      recurrenceType: 'none',
+      reminderEnabled: parsed.time != null,
+      recurrenceType: _recurrenceType,
+      tags: _tags.isEmpty ? null : _tags.join(', '),
+      reminderOffsets: parsed.time == null ? null : '0',
       createdAt: now,
       updatedAt: now,
     );
+  }
 
-    await ref.read(tasksProvider.notifier).addTask(task);
-    if (!mounted) return;
+  Future<void> _save() async {
+    if (_isSaving) return;
+    final task = _buildPartialTask();
+    if (task == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Digite o título da tarefa.')));
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      await ref.read(tasksProvider.notifier).addTask(task);
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tarefa criada.')));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  void _openFullEditor() {
+    final task = _buildPartialTask();
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tarefa criada.')));
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CreateTaskScreen(
+          task: task,
+          selectedDate: _selectedDate,
+          projectId: widget.contextData.projectId,
+          projectStepId: widget.contextData.projectStepId,
+          parentTaskId: widget.contextData.parentTaskId,
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final parsed = _preview ?? _parseCurrentText();
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     return Padding(
-      padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: MediaQuery.of(context).viewInsets.bottom + 16),
+      padding: EdgeInsets.only(left: 16, right: 16, bottom: bottomInset + 16),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+            Row(
+              children: [
+                CircleAvatar(backgroundColor: Theme.of(context).colorScheme.primaryContainer, child: const Icon(Icons.add_task)),
+                const SizedBox(width: 12),
+                Expanded(child: Text(widget.title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
+              ],
+            ),
             const SizedBox(height: 6),
-            const Text('Use termos como hoje, amanhã, 18:30, #alta ou #baixa.', style: TextStyle(color: Colors.grey)),
-            const SizedBox(height: 16),
+            const Text('Digite livremente ou use os atalhos. Ex: estudar amanhã 19:30 #alta.', style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 14),
             TextField(
               controller: _controller,
               autofocus: true,
               decoration: const InputDecoration(
-                labelText: 'Nova tarefa',
-                hintText: 'Ex: pagar conta amanhã 09:00 #alta',
+                labelText: 'O que precisa ser feito?',
+                hintText: 'Ex: revisar português amanhã 09:00 #alta',
                 border: OutlineInputBorder(),
               ),
               onSubmitted: (_) => _save(),
             ),
+            const SizedBox(height: 10),
+            _SmartShortcutBar(
+              priority: _priority,
+              recurrenceType: _recurrenceType,
+              onDate: _pickDate,
+              onTime: _pickTime,
+              onPriority: _cyclePriority,
+              onCategory: _selectCategory,
+              onTags: _openTagDialog,
+              onRepeat: _selectRecurrence,
+            ),
+            if (_tags.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _tags.map((tag) => InputChip(label: Text(tag), onDeleted: () => setState(() => _tags.remove(tag)))).toList(),
+              ),
+            ],
             const SizedBox(height: 12),
-            _QuickAddPreview(parsed: parsed, contextData: widget.contextData),
-            const SizedBox(height: 16),
-            FilledButton.icon(onPressed: _save, icon: const Icon(Icons.add), label: const Text('Criar tarefa')),
+            _QuickAddPreview(parsed: parsed, contextData: widget.contextData, recurrenceType: _recurrenceType),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isSaving ? null : _openFullEditor,
+                    icon: const Icon(Icons.open_in_full),
+                    label: const Text('Mais opções'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _isSaving ? null : _save,
+                    icon: _isSaving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.check),
+                    label: Text(_isSaving ? 'Salvando...' : 'Criar'),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -227,17 +424,64 @@ class _QuickAddTaskSheetState extends ConsumerState<QuickAddTaskSheet> {
   }
 }
 
+class _SmartShortcutBar extends StatelessWidget {
+  final String priority;
+  final String recurrenceType;
+  final VoidCallback onDate;
+  final VoidCallback onTime;
+  final VoidCallback onPriority;
+  final VoidCallback onCategory;
+  final VoidCallback onTags;
+  final VoidCallback onRepeat;
+
+  const _SmartShortcutBar({required this.priority, required this.recurrenceType, required this.onDate, required this.onTime, required this.onPriority, required this.onCategory, required this.onTags, required this.onRepeat});
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _ShortcutChip(icon: Icons.calendar_today, label: 'Data', onTap: onDate),
+          _ShortcutChip(icon: Icons.access_time, label: 'Hora', onTap: onTime),
+          _ShortcutChip(icon: Icons.flag, label: _priorityLabel(priority), onTap: onPriority),
+          _ShortcutChip(icon: Icons.folder_outlined, label: 'Lista', onTap: onCategory),
+          _ShortcutChip(icon: Icons.label_outline, label: 'Tags', onTap: onTags),
+          _ShortcutChip(icon: Icons.repeat, label: _recurrenceLabel(recurrenceType), onTap: onRepeat),
+        ],
+      ),
+    );
+  }
+}
+
+class _ShortcutChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _ShortcutChip({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ActionChip(avatar: Icon(icon, size: 18), label: Text(label), onPressed: onTap),
+    );
+  }
+}
+
 class _QuickAddPreview extends StatelessWidget {
   final QuickAddTaskParserResult parsed;
   final QuickAddTaskContext contextData;
+  final String recurrenceType;
 
-  const _QuickAddPreview({required this.parsed, required this.contextData});
+  const _QuickAddPreview({required this.parsed, required this.contextData, required this.recurrenceType});
 
   @override
   Widget build(BuildContext context) {
     final dateLabel = parsed.date == null ? 'Inbox / sem data' : DateFormat('dd/MM/yyyy').format(parsed.date!);
     return Card(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.6),
+      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Wrap(
@@ -247,7 +491,8 @@ class _QuickAddPreview extends StatelessWidget {
             _PreviewChip(icon: Icons.title, label: parsed.title.isEmpty ? 'Título pendente' : parsed.title),
             _PreviewChip(icon: Icons.event, label: dateLabel),
             if (parsed.time != null) _PreviewChip(icon: Icons.access_time, label: parsed.time!),
-            _PreviewChip(icon: Icons.flag, label: parsed.priority),
+            _PreviewChip(icon: Icons.flag, label: _priorityLabel(parsed.priority)),
+            if (recurrenceType != 'none') _PreviewChip(icon: Icons.repeat, label: _recurrenceLabel(recurrenceType)),
             if (contextData.projectId != null) const _PreviewChip(icon: Icons.rocket_launch, label: 'Projeto herdado'),
             if (contextData.parentTaskId != null) const _PreviewChip(icon: Icons.account_tree, label: 'Subtarefa'),
           ],
@@ -265,6 +510,9 @@ class _PreviewChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Chip(avatar: Icon(icon, size: 16), label: Text(label));
+    return Chip(avatar: Icon(icon, size: 16), label: Text(label, overflow: TextOverflow.ellipsis));
   }
 }
+
+String _priorityLabel(String value) => switch (value) { 'alta' => 'Alta', 'baixa' => 'Baixa', _ => 'Média' };
+String _recurrenceLabel(String value) => switch (value) { 'daily' => 'Diária', 'weekly' => 'Semanal', 'monthly' => 'Mensal', _ => 'Repetir' };
