@@ -54,6 +54,7 @@ jobs:
           dart run tool/patch_analyze_cleanup.dart
           dart run tool/patch_notifications_reliability.dart
           dart run tool/patch_input_save_reliability.dart
+          dart run tool/patch_late_analyzer_fixes.dart
 
       - name: Validar navegação financeira unificada
         run: |
