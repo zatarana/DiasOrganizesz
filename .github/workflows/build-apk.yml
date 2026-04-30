@@ -41,6 +41,9 @@ jobs:
       - name: Aplicar melhorias UX do formulário financeiro
         run: dart run tool/patch_transaction_form_ux.dart
 
+      - name: Aplicar correção F-M1 moeda no planejamento
+        run: dart run tool/patch_finance_planning_money.dart
+
       - name: Aplicar core compartilhado da entrada financeira
         run: dart run tool/patch_finance_entry_core.dart
 
@@ -52,6 +55,25 @@ jobs:
 
       - name: Limpar avisos conhecidos do analyzer
         run: dart run tool/patch_analyze_cleanup.dart
+
+      - name: Validar F-M1 moeda no planejamento
+        run: |
+          echo "Validando F-M1 no Planejamento Financeiro..."
+          grep -q "MoneyFormatter.format(value)" lib/features/finance/finance_planning_screen.dart
+          grep -q "MoneyFormatter.parse(" lib/features/finance/finance_planning_screen.dart
+          grep -q "MoneyInputFormatter" lib/features/finance/finance_planning_screen.dart
+          grep -q "formatForInput" lib/features/finance/finance_planning_screen.dart
+          grep -q "class MoneyInputFormatter extends TextInputFormatter" lib/core/utils/money_formatter.dart
+
+          if grep -q "String _money(num value) => 'R\\$" lib/features/finance/finance_planning_screen.dart; then
+            echo "ERRO: _money antigo ainda aparece na tela de Planejamento." >&2
+            exit 1
+          fi
+
+          if grep -q "replaceAll(',', '.')" lib/features/finance/finance_planning_screen.dart; then
+            echo "ERRO: parsing antigo de moeda ainda aparece na tela de Planejamento." >&2
+            exit 1
+          fi
 
       - name: Validar T-M3 Kanban
         run: |
