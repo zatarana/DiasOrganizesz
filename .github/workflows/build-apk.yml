@@ -42,6 +42,7 @@ jobs:
           dart run tool/patch_transaction_form_ux.dart
           dart run tool/patch_debts_m4.dart
           dart run tool/patch_finance_planning_money.dart
+          dart run tool/patch_finance_accounts_runtime.dart
           dart run tool/patch_finance_entry_core.dart
           dart run tool/patch_finance_dashboard_charts_m4.dart
           dart run tool/patch_quick_transaction_m5.dart
@@ -138,6 +139,24 @@ jobs:
 
           if grep -q "replaceAll(',', '.')" lib/features/finance/finance_planning_screen.dart; then
             echo "ERRO: parsing antigo de moeda ainda aparece na tela de Planejamento." >&2
+            exit 1
+          fi
+
+      - name: Validar contas financeiras
+        run: |
+          echo "Validando saldo negativo e estabilidade do diálogo de contas..."
+          grep -q "final bool allowNegative" lib/core/utils/money_formatter.dart
+          grep -q "MoneyInputFormatter(allowNegative: true)" lib/features/finance/finance_planning_screen.dart
+          grep -q "signed: true" lib/features/finance/finance_planning_screen.dart
+          grep -q "return negative ? -parsed : parsed;" lib/core/utils/money_formatter.dart
+
+          if grep -q "balanceController.dispose();" lib/features/finance/finance_planning_screen.dart; then
+            echo "ERRO: dispose imediato do controller de saldo ainda existe e pode causar assert _dependents.isEmpty." >&2
+            exit 1
+          fi
+
+          if grep -q "newBalanceController.dispose();" lib/features/finance/finance_planning_screen.dart; then
+            echo "ERRO: dispose imediato do controller de reajuste ainda existe e pode causar assert _dependents.isEmpty." >&2
             exit 1
           fi
 
