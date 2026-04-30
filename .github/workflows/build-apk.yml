@@ -44,8 +44,25 @@ jobs:
       - name: Aplicar core compartilhado da entrada financeira
         run: dart run tool/patch_finance_entry_core.dart
 
+      - name: Aplicar refinamento UX da tela Hoje
+        run: dart run tool/patch_today_tasks_ux.dart
+
       - name: Limpar avisos conhecidos do analyzer
         run: dart run tool/patch_analyze_cleanup.dart
+
+      - name: Validar tela Hoje
+        run: |
+          echo "Validando refinamento da tela Hoje..."
+          grep -q "Sugestões para hoje" lib/features/tasks/today_tasks_screen.dart
+          grep -q "_openSuggestionsSheet" lib/features/tasks/today_tasks_screen.dart
+          grep -q "Icons.lightbulb_outline" lib/features/tasks/today_tasks_screen.dart
+          grep -q "suggestionTasks" lib/features/tasks/today_tasks_screen.dart
+          grep -q "QuickAddTaskButton" lib/features/tasks/today_tasks_screen.dart
+
+          if grep -q "Criação completa para hoje" lib/features/tasks/today_tasks_screen.dart; then
+            echo "ERRO: ação duplicada de criação completa ainda está na AppBar da tela Hoje." >&2
+            exit 1
+          fi
 
       - name: Validar nova entrada de Finanças
         run: |
