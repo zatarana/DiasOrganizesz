@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_const_declarations, prefer_const_constructors, prefer_interpolation_to_compose_strings
+
 import 'dart:io';
 
 void main() {
@@ -11,11 +13,11 @@ void main() {
   ]);
   _fixConstInfoHints();
   _fixAnalyzerCompileErrors();
-  _fixDeprecatedFlutterApis();
   _fixFinanceMobileOverflows();
   _applySmartTaskCapture();
   _fixTasksEntrySyntax();
   _fixHomeDashboardCompatibility();
+  _fixHomeGlobalFabOverlap();
   stdout.writeln('Analyzer cleanup aplicado.');
 }
 
@@ -24,12 +26,16 @@ void _cleanFinanceScreen() {
   if (!file.existsSync()) return;
 
   var text = file.readAsStringSync();
-  text = _removeMethodByName(text, '_paidExpensesByCategory');
-  text = _removeMethodByName(text, '_buildTypeFilters');
-  text = _removeMethodByName(text, '_buildStatusFilters');
-  text = _removeMethodByName(text, '_buildCategoryFilters');
-  text = _removeMethodByName(text, '_gap');
-  text = _removeMethodByName(text, '_filterChip');
+  for (final method in [
+    '_paidExpensesByCategory',
+    '_buildTypeFilters',
+    '_buildStatusFilters',
+    '_buildCategoryFilters',
+    '_gap',
+    '_filterChip',
+  ]) {
+    text = _removeMethodByName(text, method);
+  }
 
   if (text.contains('_paidExpensesByCategory(') ||
       text.contains('Widget _buildTypeFilters(') ||
@@ -37,7 +43,7 @@ void _cleanFinanceScreen() {
       text.contains('Widget _buildCategoryFilters(') ||
       text.contains('Widget _gap(') ||
       text.contains('Widget _filterChip(')) {
-    stderr.writeln('ERRO: não foi possível remover todas as funções antigas de filtros/análise.');
+    stderr.writeln('ERRO: não foi possível remover funções antigas da FinanceScreen.');
     exit(1);
   }
 
@@ -47,117 +53,59 @@ void _cleanFinanceScreen() {
 void _cleanFinanceEntryScreen() {
   final file = File('lib/features/finance/finance_entry_screen.dart');
   if (!file.existsSync()) return;
+
   var text = file.readAsStringSync();
-  text = _removeClassByName(text, '_QuickChartsCard');
-  text = _removeMethodByName(text, '_categoryHighlights');
-  if (text.contains('class _QuickChartsCard') || text.contains('List<_CategoryHighlight> _categoryHighlights(')) {
-    stderr.writeln('ERRO: não foi possível remover gráficos antigos não utilizados da entrada financeira.');
+  for (final className in ['_QuickChartsCard', '_CategoryHighlightRow', '_MiniPiePainter']) {
+    text = _removeClassByName(text, className);
+  }
+  for (final method in ['_categoryHighlights', '_categoryColor']) {
+    text = _removeMethodByName(text, method);
+  }
+
+  if (text.contains('class _QuickChartsCard') ||
+      text.contains('class _CategoryHighlightRow') ||
+      text.contains('class _MiniPiePainter') ||
+      text.contains('List<_CategoryHighlight> _categoryHighlights(') ||
+      text.contains('Color _categoryColor(')) {
+    stderr.writeln('ERRO: não foi possível remover restos antigos da entrada financeira.');
     exit(1);
   }
+
   file.writeAsStringSync(text);
 }
 
 void _cleanDebtsScreen() {
   final file = File('lib/features/debts/debts_screen.dart');
   if (!file.existsSync()) return;
-  var text = file.readAsStringSync();
 
-  // Remove apenas a linha de helper _money, sem engolir o método seguinte.
+  var text = file.readAsStringSync();
   text = text.replaceAll(RegExp(r"\n\s*String _money\(num value\) => MoneyFormatter\.format\(value\);\s*\n"), '\n');
 
   if (!text.contains('void _openCreateDebt()')) {
-    final marker = '  String _currentFilterLabel() {';
+    const marker = '  String _currentFilterLabel() {';
     if (!text.contains(marker)) {
       stderr.writeln('ERRO: marcador _currentFilterLabel não encontrado em debts_screen.dart.');
       exit(1);
     }
-    text = text.replaceFirst(marker, "  void _openCreateDebt() {\n    Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateDebtScreen()));\n  }\n\n$marker");
+    text = text.replaceFirst(
+      marker,
+      "  void _openCreateDebt() {\n    Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateDebtScreen()));\n  }\n\n$marker",
+    );
   }
 
-  if (text.contains('String _money(')) {
-    stderr.writeln('ERRO: não foi possível remover _money não utilizado de debts_screen.dart.');
+  if (text.contains('String _money(') || !text.contains('void _openCreateDebt()')) {
+    stderr.writeln('ERRO: debts_screen.dart ficou inconsistente após limpeza.');
     exit(1);
   }
-  if (!text.contains('void _openCreateDebt()')) {
-    stderr.writeln('ERRO: _openCreateDebt ausente em debts_screen.dart.');
-    exit(1);
-  }
+
   file.writeAsStringSync(text);
-}
-
-String _removeMethodByName(String source, String methodName) {
-  var text = source;
-  while (true) {
-    final nameIndex = text.indexOf(methodName);
-    if (nameIndex == -1) return text;
-
-    final openParenIndex = text.indexOf('(', nameIndex);
-    if (openParenIndex == -1) return text;
-    final openBraceIndex = text.indexOf('{', openParenIndex);
-    if (openBraceIndex == -1) return text;
-
-    var start = text.lastIndexOf('\n', nameIndex);
-    start = start == -1 ? 0 : start + 1;
-
-    var depth = 0;
-    var end = -1;
-    for (var i = openBraceIndex; i < text.length; i++) {
-      final char = text[i];
-      if (char == '{') depth++;
-      if (char == '}') {
-        depth--;
-        if (depth == 0) {
-          end = i + 1;
-          break;
-        }
-      }
-    }
-
-    if (end == -1) return text;
-    while (end < text.length && (text[end] == '\n' || text[end] == '\r')) {
-      end++;
-    }
-    text = text.replaceRange(start, end, '');
-  }
-}
-
-String _removeClassByName(String source, String className) {
-  var text = source;
-  while (true) {
-    final classIndex = text.indexOf('class $className');
-    if (classIndex == -1) return text;
-    final openBraceIndex = text.indexOf('{', classIndex);
-    if (openBraceIndex == -1) return text;
-    var start = text.lastIndexOf('\n', classIndex);
-    start = start == -1 ? 0 : start + 1;
-
-    var depth = 0;
-    var end = -1;
-    for (var i = openBraceIndex; i < text.length; i++) {
-      final char = text[i];
-      if (char == '{') depth++;
-      if (char == '}') {
-        depth--;
-        if (depth == 0) {
-          end = i + 1;
-          break;
-        }
-      }
-    }
-    if (end == -1) return text;
-    while (end < text.length && (text[end] == '\n' || text[end] == '\r')) {
-      end++;
-    }
-    text = text.replaceRange(start, end, '');
-  }
 }
 
 void _replaceDeprecatedOpacity(List<String> paths) {
   for (final path in paths) {
     final file = File(path);
     if (!file.existsSync()) continue;
-    final text = file.readAsStringSync().replaceAll('.withOpacity(', '.withValues(alpha: ');
-    file.writeAsStringSync(text);
+    file.writeAsStringSync(file.readAsStringSync().replaceAll('.withOpacity(', '.withValues(alpha: '));
   }
 }
 
@@ -184,54 +132,42 @@ void _fixAnalyzerCompileErrors() {
   final quick = File('lib/features/finance/widgets/quick_transaction_bottom_sheet.dart');
   if (quick.existsSync()) {
     var text = quick.readAsStringSync();
-    text = text.replaceAll('inputFormatters: const [MoneyInputFormatter(), LengthLimitingTextInputFormatter(18)],', 'inputFormatters: [MoneyInputFormatter(), LengthLimitingTextInputFormatter(18)],');
+    text = text.replaceAll(
+      'inputFormatters: const [MoneyInputFormatter(), LengthLimitingTextInputFormatter(18)],',
+      'inputFormatters: [MoneyInputFormatter(), LengthLimitingTextInputFormatter(18)],',
+    );
     text = text.replaceAll('value: _categoryId,', 'initialValue: _categoryId,');
     quick.writeAsStringSync(text);
   }
 }
 
-void _fixDeprecatedFlutterApis() {
-  final kanban = File('lib/features/tasks/task_kanban_screen.dart');
-  if (kanban.existsSync()) {
-    var text = kanban.readAsStringSync();
-    text = text.replaceAll('onWillAccept: (task) => task != null && _taskForColumn(task) != column.type,', 'onWillAcceptWithDetails: (details) => _taskForColumn(details.data) != column.type,');
-    text = text.replaceAll('onAccept: (task) => onTaskMoved(task, column.type),', 'onAcceptWithDetails: (details) => onTaskMoved(details.data, column.type),');
-    kanban.writeAsStringSync(text);
-  }
-}
-
 void _fixFinanceMobileOverflows() {
-  _fixFinanceEntryHeaderOverflow();
-  _fixCreateTransactionDropdownOverflow();
-}
+  final entry = File('lib/features/finance/finance_entry_screen.dart');
+  if (entry.existsSync()) {
+    var text = entry.readAsStringSync();
+    text = text.replaceAll('expandedHeight: 245,', 'expandedHeight: 316,');
+    text = text.replaceAll('padding: const EdgeInsets.fromLTRB(20, 66, 20, 18),', 'padding: const EdgeInsets.fromLTRB(20, 76, 20, 16),');
+    text = text.replaceAll('style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: realColor)', 'style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: realColor)');
+    text = text.replaceAll('const SizedBox(height: 6),\n          Text(_money(value)', 'const SizedBox(height: 4),\n          Text(_money(value)');
+    text = text.replaceAll('const SizedBox(height: 8),\n          ClipRRect(', 'const SizedBox(height: 6),\n          ClipRRect(');
+    text = text.replaceAll('padding: const EdgeInsets.all(12),\n      decoration: BoxDecoration', 'padding: const EdgeInsets.all(10),\n      decoration: BoxDecoration');
+    entry.writeAsStringSync(text);
+  }
 
-void _fixFinanceEntryHeaderOverflow() {
-  final file = File('lib/features/finance/finance_entry_screen.dart');
-  if (!file.existsSync()) return;
-  var text = file.readAsStringSync();
-  text = text.replaceAll('expandedHeight: 245,', 'expandedHeight: 316,');
-  text = text.replaceAll('padding: const EdgeInsets.fromLTRB(20, 66, 20, 18),', 'padding: const EdgeInsets.fromLTRB(20, 76, 20, 16),');
-  text = text.replaceAll('style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: realColor)', 'style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: realColor)');
-  text = text.replaceAll('const SizedBox(height: 6),\n          Text(_money(value)', 'const SizedBox(height: 4),\n          Text(_money(value)');
-  text = text.replaceAll('const SizedBox(height: 8),\n          ClipRRect(', 'const SizedBox(height: 6),\n          ClipRRect(');
-  text = text.replaceAll('padding: const EdgeInsets.all(12),\n      decoration: BoxDecoration', 'padding: const EdgeInsets.all(10),\n      decoration: BoxDecoration');
-  file.writeAsStringSync(text);
-}
-
-void _fixCreateTransactionDropdownOverflow() {
-  final file = File('lib/features/finance/create_transaction_screen.dart');
-  if (!file.existsSync()) return;
-  var text = file.readAsStringSync();
-  text = _addIsExpandedToDropdowns(text);
-  text = text.replaceAll("child: Text('Forma de Pagamento (Nenhuma)')", "child: Text('Nenhuma', overflow: TextOverflow.ellipsis)");
-  text = text.replaceAll("child: Text('Sem Categoria')", "child: Text('Sem Categoria', overflow: TextOverflow.ellipsis)");
-  text = text.replaceAll("child: Text('Sem Subcategoria')", "child: Text('Sem Subcategoria', overflow: TextOverflow.ellipsis)");
-  text = text.replaceAll("child: Text('Sem conta')", "child: Text('Sem conta', overflow: TextOverflow.ellipsis)");
-  text = text.replaceAll('child: Text(account.name)', 'child: Text(account.name, overflow: TextOverflow.ellipsis)');
-  text = text.replaceAll('child: Text(category.name)', 'child: Text(category.name, overflow: TextOverflow.ellipsis)');
-  text = text.replaceAll('child: Text(subcategory.name)', 'child: Text(subcategory.name, overflow: TextOverflow.ellipsis)');
-  text = text.replaceAll('child: Text(method)', 'child: Text(method, overflow: TextOverflow.ellipsis)');
-  file.writeAsStringSync(text);
+  final transaction = File('lib/features/finance/create_transaction_screen.dart');
+  if (transaction.existsSync()) {
+    var text = transaction.readAsStringSync();
+    text = _addIsExpandedToDropdowns(text);
+    text = text.replaceAll("child: Text('Forma de Pagamento (Nenhuma)')", "child: Text('Nenhuma', overflow: TextOverflow.ellipsis)");
+    text = text.replaceAll("child: Text('Sem Categoria')", "child: Text('Sem Categoria', overflow: TextOverflow.ellipsis)");
+    text = text.replaceAll("child: Text('Sem Subcategoria')", "child: Text('Sem Subcategoria', overflow: TextOverflow.ellipsis)");
+    text = text.replaceAll("child: Text('Sem conta')", "child: Text('Sem conta', overflow: TextOverflow.ellipsis)");
+    text = text.replaceAll('child: Text(account.name)', 'child: Text(account.name, overflow: TextOverflow.ellipsis)');
+    text = text.replaceAll('child: Text(category.name)', 'child: Text(category.name, overflow: TextOverflow.ellipsis)');
+    text = text.replaceAll('child: Text(subcategory.name)', 'child: Text(subcategory.name, overflow: TextOverflow.ellipsis)');
+    text = text.replaceAll('child: Text(method)', 'child: Text(method, overflow: TextOverflow.ellipsis)');
+    transaction.writeAsStringSync(text);
+  }
 }
 
 void _applySmartTaskCapture() {
@@ -239,25 +175,37 @@ void _applySmartTaskCapture() {
   final button = File('lib/features/tasks/quick_add_task_button.dart');
   final sheet = File('lib/features/tasks/quick_add_task_sheet.dart');
   if (!entry.existsSync() || !button.existsSync() || !sheet.existsSync()) return;
+
   var entryText = entry.readAsStringSync();
-  entryText = entryText.replaceAll("floatingActionButton: const QuickAddTaskButton(label: 'Nova tarefa'),", "floatingActionButton: const SmartTaskActionButton(label: 'Capturar tarefa'),");
+  entryText = entryText.replaceAll(
+    "floatingActionButton: const QuickAddTaskButton(label: 'Nova tarefa'),",
+    "floatingActionButton: const SmartTaskActionButton(label: 'Capturar tarefa'),",
+  );
   entry.writeAsStringSync(entryText);
+
   final combined = '${entry.readAsStringSync()}\n${button.readAsStringSync()}\n${sheet.readAsStringSync()}';
-  for (final check in ['SmartTaskActionButton', "label: 'Capturar tarefa'", 'Captura inteligente', '_SmartShortcutBar', 'Mais opções', 'CreateTaskScreen(', 'recurrenceType: _recurrenceType', 'tags: _tags.isEmpty ? null : _tags.join', 'reminderEnabled: parsed.time != null']) {
+  for (final check in [
+    'SmartTaskActionButton',
+    "label: 'Capturar tarefa'",
+    'Captura inteligente',
+    '_SmartShortcutBar',
+    'Mais opções',
+    'CreateTaskScreen(',
+    'recurrenceType: _recurrenceType',
+    'tags: _tags.isEmpty ? null : _tags.join',
+    'reminderEnabled: parsed.time != null',
+  ]) {
     if (!combined.contains(check)) {
       stderr.writeln('ERRO Captura Inteligente: faltou "$check".');
       exit(1);
     }
-  }
-  if (entry.readAsStringSync().contains("QuickAddTaskButton(label: 'Nova tarefa')")) {
-    stderr.writeln('ERRO Captura Inteligente: ainda existe FAB antigo Nova tarefa.');
-    exit(1);
   }
 }
 
 void _fixTasksEntrySyntax() {
   final file = File('lib/features/tasks/tasks_entry_screen.dart');
   if (!file.existsSync()) return;
+
   var text = file.readAsStringSync();
   text = text.replaceAll('}\\n\nclass _CompactSmartLists', '}\n\nclass _CompactSmartLists');
   text = text.replaceAll('}\\nclass _CompactSmartLists', '}\nclass _CompactSmartLists');
@@ -280,16 +228,14 @@ void _fixHomeDashboardCompatibility() {
   if (!transaction.existsSync()) return;
   var text = transaction.readAsStringSync();
 
-  if (text.contains('class CreateTransactionScreen extends ConsumerStatefulWidget') &&
-      !text.contains('final FinancialTransaction? transaction;')) {
+  if (text.contains('class CreateTransactionScreen extends ConsumerStatefulWidget') && !text.contains('final FinancialTransaction? transaction;')) {
     text = text.replaceFirst(
       'class CreateTransactionScreen extends ConsumerStatefulWidget {\n  const CreateTransactionScreen({super.key});',
       'class CreateTransactionScreen extends ConsumerStatefulWidget {\n  final FinancialTransaction? transaction;\n  const CreateTransactionScreen({super.key, this.transaction});',
     );
   }
 
-  if (text.contains('class CreateTransactionScreen extends ConsumerStatefulWidget') &&
-      !text.contains('widget.transaction')) {
+  if (text.contains('class CreateTransactionScreen extends ConsumerStatefulWidget') && !text.contains('widget.transaction')) {
     text = text.replaceFirst('  bool get _isEditing =>', '  bool get _isEditing => widget.transaction?.id != null ||');
   }
 
@@ -299,6 +245,86 @@ void _fixHomeDashboardCompatibility() {
   }
 
   transaction.writeAsStringSync(text);
+}
+
+void _fixHomeGlobalFabOverlap() {
+  final home = File('lib/features/dashboard/home_screen.dart');
+  if (!home.existsSync()) return;
+
+  var text = home.readAsStringSync();
+  text = text.replaceAll(
+    'floatingActionButton: const UniversalQuickActionButton(),',
+    'floatingActionButton: _currentIndex == 0 ? const UniversalQuickActionButton() : null,',
+  );
+
+  if (text.contains('floatingActionButton: const UniversalQuickActionButton(),')) {
+    stderr.writeln('ERRO: FAB universal global ainda aparece em todas as abas.');
+    exit(1);
+  }
+  if (!text.contains('floatingActionButton: _currentIndex == 0 ? const UniversalQuickActionButton() : null,')) {
+    stderr.writeln('ERRO: regra de FAB universal apenas na Home não foi aplicada.');
+    exit(1);
+  }
+
+  home.writeAsStringSync(text);
+}
+
+String _removeMethodByName(String source, String methodName) {
+  var text = source;
+  while (true) {
+    final nameIndex = text.indexOf(methodName);
+    if (nameIndex == -1) return text;
+    final openParenIndex = text.indexOf('(', nameIndex);
+    if (openParenIndex == -1) return text;
+    final openBraceIndex = text.indexOf('{', openParenIndex);
+    if (openBraceIndex == -1) return text;
+
+    var start = text.lastIndexOf('\n', nameIndex);
+    start = start == -1 ? 0 : start + 1;
+    var depth = 0;
+    var end = -1;
+    for (var i = openBraceIndex; i < text.length; i++) {
+      if (text[i] == '{') depth++;
+      if (text[i] == '}') {
+        depth--;
+        if (depth == 0) {
+          end = i + 1;
+          break;
+        }
+      }
+    }
+    if (end == -1) return text;
+    while (end < text.length && (text[end] == '\n' || text[end] == '\r')) end++;
+    text = text.replaceRange(start, end, '');
+  }
+}
+
+String _removeClassByName(String source, String className) {
+  var text = source;
+  while (true) {
+    final classIndex = text.indexOf('class $className');
+    if (classIndex == -1) return text;
+    final openBraceIndex = text.indexOf('{', classIndex);
+    if (openBraceIndex == -1) return text;
+
+    var start = text.lastIndexOf('\n', classIndex);
+    start = start == -1 ? 0 : start + 1;
+    var depth = 0;
+    var end = -1;
+    for (var i = openBraceIndex; i < text.length; i++) {
+      if (text[i] == '{') depth++;
+      if (text[i] == '}') {
+        depth--;
+        if (depth == 0) {
+          end = i + 1;
+          break;
+        }
+      }
+    }
+    if (end == -1) return text;
+    while (end < text.length && (text[end] == '\n' || text[end] == '\r')) end++;
+    text = text.replaceRange(start, end, '');
+  }
 }
 
 String _addIsExpandedToDropdowns(String text) {
@@ -335,9 +361,8 @@ String _addIsExpandedToDropdowns(String text) {
 int _findCallEnd(String text, int openParenIndex) {
   var depth = 0;
   for (var i = openParenIndex; i < text.length; i++) {
-    final char = text[i];
-    if (char == '(') depth++;
-    if (char == ')') {
+    if (text[i] == '(') depth++;
+    if (text[i] == ')') {
       depth--;
       if (depth == 0) {
         var end = i + 1;
@@ -353,7 +378,5 @@ void _replaceInFile(String path, String from, String to) {
   final file = File(path);
   if (!file.existsSync()) return;
   final text = file.readAsStringSync();
-  if (text.contains(from)) {
-    file.writeAsStringSync(text.replaceFirst(from, to));
-  }
+  if (text.contains(from)) file.writeAsStringSync(text.replaceFirst(from, to));
 }
