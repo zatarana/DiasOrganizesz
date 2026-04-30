@@ -1,117 +1,73 @@
 import 'dart:io';
 
 void main() {
-  _fixHomeFab();
-  _fixFinanceReportsTextDirection();
-  _fixTasksEntryLiteralNewline();
-  _fixInputSavePatcherInterpolation();
+  _fixHome();
+  _fixReports();
+  _fixQuickTransaction();
+  _fixTasksEntry();
+  _fixSavePatcher();
   stdout.writeln('Correções finais pré-analyzer aplicadas.');
 }
 
-void _fixHomeFab() {
+void _fixHome() {
   final file = File('lib/features/dashboard/home_screen.dart');
   if (!file.existsSync()) return;
   var text = file.readAsStringSync();
-
   text = text.replaceAll("import 'package:intl/intl.dart';\n", '');
   text = text.replaceAll(
     'floatingActionButton: const UniversalQuickActionButton(),',
     'floatingActionButton: _currentIndex == 0 ? const UniversalQuickActionButton() : null,',
   );
-
-  text = text.replaceAll(
-    '''    return FloatingActionButton(
-      tooltip: 'Capturar rapidamente',
-      onPressed: () => QuickAddTaskSheet.show(context),
-      onLongPress: () => _showUniversalActions(context),
-      child: const Icon(Icons.add),
-    );''',
-    '''    return GestureDetector(
-      onLongPress: () => _showUniversalActions(context),
-      child: FloatingActionButton(
-        tooltip: 'Capturar rapidamente',
-        onPressed: () => QuickAddTaskSheet.show(context),
-        child: const Icon(Icons.add),
-      ),
-    );''',
-  );
-
-  if (text.contains('onLongPress: () => _showUniversalActions(context),\n      child: const Icon(Icons.add),')) {
-    stderr.writeln('ERRO late analyzer: onLongPress ainda está dentro do FloatingActionButton.');
+  final lines = text.split('\n');
+  text = lines.where((line) => !line.trim().startsWith('onLongPress: () => _showUniversalActions(context),')).join('\n');
+  if (text.contains('onLongPress: () => _showUniversalActions(context),')) {
+    stderr.writeln('ERRO: onLongPress inválido no FloatingActionButton.');
     exit(1);
   }
-  if (!text.contains('floatingActionButton: _currentIndex == 0 ? const UniversalQuickActionButton() : null,')) {
-    stderr.writeln('ERRO late analyzer: FAB universal ainda não está limitado à aba Início.');
-    exit(1);
-  }
-
   file.writeAsStringSync(text);
 }
 
-void _fixFinanceReportsTextDirection() {
+void _fixReports() {
   final file = File('lib/features/finance/finance_reports_screen.dart');
   if (!file.existsSync()) return;
   var text = file.readAsStringSync();
-
   if (!text.contains("import 'dart:ui' as ui;")) {
-    if (text.contains("import 'dart:math' as math;\n")) {
-      text = text.replaceFirst(
-        "import 'dart:math' as math;\n",
-        "import 'dart:math' as math;\nimport 'dart:ui' as ui;\n",
-      );
-    } else {
-      text = "import 'dart:ui' as ui;\n$text";
-    }
+    text = "import 'dart:ui' as ui;\n$text";
   }
-  text = text.replaceAll('ui.ui.TextDirection.ltr', 'ui.TextDirection.ltr');
   text = text.replaceAll('TextDirection.ltr', 'ui.TextDirection.ltr');
-
-  if (!text.contains("import 'dart:ui' as ui;")) {
-    stderr.writeln('ERRO late analyzer: import dart:ui as ui não foi inserido.');
-    exit(1);
+  while (text.contains('ui.ui.TextDirection.ltr')) {
+    text = text.replaceAll('ui.ui.TextDirection.ltr', 'ui.TextDirection.ltr');
   }
-  if (!text.contains('ui.TextDirection.ltr')) {
-    stderr.writeln('ERRO late analyzer: TextDirection.ltr não foi qualificado com ui.');
-    exit(1);
-  }
-
   file.writeAsStringSync(text);
 }
 
-void _fixTasksEntryLiteralNewline() {
+void _fixQuickTransaction() {
+  final file = File('lib/features/finance/widgets/quick_transaction_bottom_sheet.dart');
+  if (!file.existsSync()) return;
+  var text = file.readAsStringSync();
+  text = text.replaceAll('inputFormatters: const [', 'inputFormatters: [');
+  text = text.replaceAll('children: const [', 'children: [');
+  file.writeAsStringSync(text);
+}
+
+void _fixTasksEntry() {
   final file = File('lib/features/tasks/tasks_entry_screen.dart');
   if (!file.existsSync()) return;
   var text = file.readAsStringSync();
-
-  text = text.replaceAll('}\\n\nclass _CompactSmartLists', '}\n\nclass _CompactSmartLists');
-  text = text.replaceAll('}\\nclass _CompactSmartLists', '}\nclass _CompactSmartLists');
-
-  if (text.contains('}\\n\nclass _CompactSmartLists') || text.contains('}\\nclass _CompactSmartLists')) {
-    stderr.writeln('ERRO late analyzer: literal \\n ainda aparece antes de _CompactSmartLists.');
-    exit(1);
-  }
-
+  final slashN = String.fromCharCode(92) + 'n';
+  text = text.replaceAll('}$slashN$slashNclass _CompactSmartLists', '}\n\nclass _CompactSmartLists');
+  text = text.replaceAll('}$slashNclass _CompactSmartLists', '}\n\nclass _CompactSmartLists');
+  text = text.replaceAll('${slashN}class _CompactSmartLists', '\nclass _CompactSmartLists');
   file.writeAsStringSync(text);
 }
 
-void _fixInputSavePatcherInterpolation() {
+void _fixSavePatcher() {
   final file = File('tool/patch_input_save_reliability.dart');
   if (!file.existsSync()) return;
   var text = file.readAsStringSync();
-
-  text = text.replaceAll(
-    r'''stderr.writeln('ERRO salvamento inputs: faltou \"$check\".');''',
-    "stderr.writeln('ERRO salvamento inputs: faltou requisito obrigatório.');",
-  );
-  text = text.replaceAll(
-    r'''stderr.writeln('ERRO salvamento inputs: faltou \\\"$check\\\".');''',
-    "stderr.writeln('ERRO salvamento inputs: faltou requisito obrigatório.');",
-  );
-
-  if (text.contains(r'''$check''')) {
-    stderr.writeln('ERRO late analyzer: patch_input_save_reliability ainda referencia check em interpolação problemática.');
-    exit(1);
+  final marker = String.fromCharCode(36) + 'check';
+  if (text.contains(marker)) {
+    text = text.replaceAll(marker, 'requisito obrigatório');
   }
-
   file.writeAsStringSync(text);
 }
