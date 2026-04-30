@@ -34,16 +34,6 @@ String _patchDebtsScreen(String text) {
     "child: _buildEmptyDebtState(),",
   );
 
-  text = text.replaceAll("Text('R\\\$ \\${debt.totalAmount.toStringAsFixed(2)}'", "Text(_money(debt.totalAmount)");
-  text = text.replaceAll("Text('Abatido: R\\\$ \\${paid.toStringAsFixed(2)}'", "Text('Abatido: \\${_money(paid)}'");
-  text = text.replaceAll("Text('Falta: R\\\$ \\${remaining.toStringAsFixed(2)}'", "Text('Falta: \\${_money(remaining)}'");
-  text = text.replaceAll("Text('Pago em dinheiro: R\\\$ \\${paidMoney.toStringAsFixed(2)}'", "Text('Pago em dinheiro: \\${_money(paidMoney)}'");
-  text = text.replaceAll("Text('Atraso: R\\\$ \\${(summary['overdueAmount'] as double).toStringAsFixed(2)} (\\${summary['overdueInstallments']} parcelas)'", "Text('Atraso: \\${_money(summary['overdueAmount'] as double)} (\\${summary['overdueInstallments']} parcelas)'");
-  text = text.replaceAll("Text('Economia gerada: R\\\$ \\${(summary['totalDiscount'] as double).toStringAsFixed(2)}'", "Text('Economia gerada: \\${_money(summary['totalDiscount'] as double)}'");
-  text = text.replaceAll("Text('R\\\$ \\${dividas.toStringAsFixed(2)}'", "Text(_money(dividas)");
-  text = text.replaceAll("Text('R\\\$ \\${pendente.toStringAsFixed(2)}'", "Text(_money(pendente)");
-  text = text.replaceAll("Text('R\\\$ \\${amount.toStringAsFixed(2)}'", "Text(_money(amount)");
-
   text = text.replaceFirst(
     "      floatingActionButton: FloatingActionButton(\n        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateDebtScreen())),\n        child: const Icon(Icons.add),\n      ),",
     "      floatingActionButton: FloatingActionButton.extended(\n        onPressed: _openCreateDebt,\n        icon: const Icon(Icons.add),\n        label: const Text('Nova dívida'),\n      ),",
@@ -51,6 +41,10 @@ String _patchDebtsScreen(String text) {
 
   final insertBefore = "  String _currentFilterLabel() {";
   if (!text.contains("void _openCreateDebt()")) {
+    if (!text.contains(insertBefore)) {
+      stderr.writeln('F-M4 DebtsScreen: marcador _currentFilterLabel não encontrado.');
+      exit(1);
+    }
     text = text.replaceFirst(insertBefore, _debtsScreenHelpers + insertBefore);
   }
 
@@ -140,7 +134,7 @@ String _patchDebtDetailsScreen(String text) {
   text = _ensureImport(text, "import 'package:intl/intl.dart';", "import '../../core/utils/money_formatter.dart';");
 
   text = text.replaceFirst(
-    "  String _money(num value) => 'R\\\$ \\${value.toDouble().toStringAsFixed(2)}';",
+    r"  String _money(num value) => 'R\$ ${value.toDouble().toStringAsFixed(2)}';",
     "  String _money(num value) => MoneyFormatter.format(value);",
   );
   text = text.replaceFirst(
@@ -148,10 +142,12 @@ String _patchDebtDetailsScreen(String text) {
     "  double _parseMoney(String text) => MoneyFormatter.parse(text) ?? 0.0;",
   );
 
-  text = text.replaceFirst(
-    "          _buildHeader(currentDebt, paidAmount, discounts, abatido, remaining, progress, valueDiff),\n          Padding(",
-    "          _buildHeader(currentDebt, paidAmount, discounts, abatido, remaining, progress, valueDiff),\n          _buildDebtInfoCard(currentDebt, installments, remaining),\n          Padding(",
-  );
+  if (!text.contains('_buildDebtInfoCard(currentDebt, installments, remaining)')) {
+    text = text.replaceFirst(
+      "          _buildHeader(currentDebt, paidAmount, discounts, abatido, remaining, progress, valueDiff),\n          Padding(",
+      "          _buildHeader(currentDebt, paidAmount, discounts, abatido, remaining, progress, valueDiff),\n          _buildDebtInfoCard(currentDebt, installments, remaining),\n          Padding(",
+    );
+  }
 
   text = text.replaceFirst(
     "                ? const Center(child: Text('Nenhuma parcela ou pagamento lançado. Use “Iniciar pagamento” para criar os lançamentos no Financeiro.'))",
@@ -160,6 +156,10 @@ String _patchDebtDetailsScreen(String text) {
 
   final insertBefore = "  Widget _buildHeader(Debt debt, double paidAmount, double discounts, double abatido, double remaining, double progress, double valueDiff) {";
   if (!text.contains("Widget _buildDebtInfoCard")) {
+    if (!text.contains(insertBefore)) {
+      stderr.writeln('F-M4 DebtDetails: marcador _buildHeader não encontrado.');
+      exit(1);
+    }
     text = text.replaceFirst(insertBefore, _detailsHelpers + insertBefore);
   }
 
@@ -179,7 +179,7 @@ String _patchDebtDetailsScreen(String text) {
     }
   }
 
-  if (text.contains("String _money(num value) => 'R\\\$ ") || text.contains("replaceAll(',', '.')")) {
+  if (text.contains("String _money(num value) => 'R\\$ ") || text.contains("replaceAll(',', '.')")) {
     stderr.writeln('F-M4 DebtDetails ainda contém moeda/parsing antigo.');
     exit(1);
   }
