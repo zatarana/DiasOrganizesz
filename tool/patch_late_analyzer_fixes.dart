@@ -145,6 +145,7 @@ void _fixPlanningCards() {
 
   text = text.replaceAll('          height: 126,', '          height: 146,');
   text = text.replaceAll('        width: 205,', '        width: 198,');
+  text = text.replaceAll('        child: Card(\n          elevation: 0,', '        child: Card(\n          margin: EdgeInsets.zero,\n          elevation: 0,');
   text = text.replaceAll('          child: Card(\n          elevation: 0,', '          child: Card(\n          margin: EdgeInsets.zero,\n          elevation: 0,');
   text = text.replaceAll('              padding: const EdgeInsets.all(14),\n              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [\n                CircleAvatar(backgroundColor: color.withValues(alpha: 0.12), child: Icon(Icons.account_balance_wallet_outlined, color: color)),\n                const Spacer(),', '              padding: const EdgeInsets.all(12),\n              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [\n                CircleAvatar(radius: 18, backgroundColor: color.withValues(alpha: 0.12), child: Icon(Icons.account_balance_wallet_outlined, color: color, size: 20)),\n                const SizedBox(height: 8),');
   text = text.replaceAll('style: TextStyle(color: color, fontWeight: FontWeight.w900)),\n              ])', 'style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 16)),\n              ])');
