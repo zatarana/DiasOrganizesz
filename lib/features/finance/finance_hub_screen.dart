@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../debts/debts_screen.dart';
 import 'credit_cards_screen.dart';
+import 'finance_budgets_screen.dart';
 import 'finance_categories_screen.dart';
 import 'finance_export_screen.dart';
 import 'finance_planning_screen.dart';
@@ -14,80 +15,88 @@ class FinanceHubScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Central Financeira')),
+      appBar: AppBar(title: const Text('Ferramentas financeiras')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const _HubHeader(),
+          const _ToolsHeader(),
           const SizedBox(height: 16),
-          _HubSection(
-            title: 'Visão e planejamento',
-            subtitle: 'Organize contas, metas, limites e estrutura financeira.',
+          _ToolsSection(
+            title: 'Configurar e organizar',
+            subtitle: 'Cadastros e estruturas que alimentam o dashboard financeiro.',
             children: [
-              _HubActionCard(
+              _ToolActionCard(
                 icon: Icons.account_balance_wallet_outlined,
-                title: 'Contas, saldos e planejamento',
-                subtitle: 'Gerencie contas, saldos, transferências, reajustes e orçamentos.',
+                title: 'Contas e saldos',
+                subtitle: 'Contas, saldos, transferências e ajustes manuais.',
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinancePlanningScreen())),
               ),
-              _HubActionCard(
-                icon: Icons.flag_outlined,
-                title: 'Objetivos financeiros',
-                subtitle: 'Acompanhe metas, progresso e sugestão de aporte mensal.',
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinancialGoalsScreen())),
-              ),
-              _HubActionCard(
+              _ToolActionCard(
                 icon: Icons.category_outlined,
-                title: 'Categorias e organização',
-                subtitle: 'Ajuste categorias para relatórios, filtros e orçamento.',
+                title: 'Categorias',
+                subtitle: 'Organização para filtros, relatórios e orçamentos.',
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceCategoriesScreen())),
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _HubSection(
-            title: 'Compromissos e meios de pagamento',
-            subtitle: 'Separe dívidas, cartão e pagamentos sem misturar conceitos.',
-            children: [
-              _HubActionCard(
-                icon: Icons.money_off,
-                title: 'Dívidas',
-                subtitle: 'Veja dívidas, parcelas, atrasos e abatimentos dentro de Finanças.',
-                highlightColor: Colors.deepOrange,
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtsScreen())),
-              ),
-              _HubActionCard(
+              _ToolActionCard(
                 icon: Icons.credit_card,
                 title: 'Cartões e faturas',
-                subtitle: 'Cadastre cartões, lance compras, mova faturas e registre pagamentos.',
+                subtitle: 'Cartões, compras, faturas e pagamentos vinculados.',
                 highlightColor: Colors.deepPurple,
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreditCardsScreen())),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          _HubSection(
-            title: 'Análise e exportação',
-            subtitle: 'Entenda padrões, compare períodos e leve dados para fora do app.',
+          _ToolsSection(
+            title: 'Planejar',
+            subtitle: 'Limites, metas e compromissos financeiros.',
             children: [
-              _HubActionCard(
+              _ToolActionCard(
+                icon: Icons.speed_outlined,
+                title: 'Orçamentos',
+                subtitle: 'Limites mensais por categoria e acompanhamento de uso.',
+                highlightColor: Colors.orange,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceBudgetsScreen())),
+              ),
+              _ToolActionCard(
+                icon: Icons.flag_outlined,
+                title: 'Metas financeiras',
+                subtitle: 'Objetivos de economia, progresso e valor alvo.',
+                highlightColor: Colors.green,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinancialGoalsScreen())),
+              ),
+              _ToolActionCard(
+                icon: Icons.payments_outlined,
+                title: 'Dívidas',
+                subtitle: 'Dívidas, acordos, parcelas, atrasos e abatimentos.',
+                highlightColor: Colors.deepOrange,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtsScreen())),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _ToolsSection(
+            title: 'Analisar e exportar',
+            subtitle: 'Leitura de dados e saída para uso externo.',
+            children: [
+              _ToolActionCard(
                 icon: Icons.analytics_outlined,
-                title: 'Central de relatórios',
-                subtitle: 'Evolução mensal, débito vs crédito, categorias, subcategorias e previsto x realizado.',
+                title: 'Relatórios',
+                subtitle: 'Gráficos, evolução mensal e distribuição por categoria.',
                 highlightColor: Colors.blue,
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceReportsScreen())),
               ),
-              _HubActionCard(
+              _ToolActionCard(
                 icon: Icons.file_download_outlined,
                 title: 'Exportação CSV',
-                subtitle: 'Gere e copie CSV de transações, evolução mensal e débito vs crédito.',
+                subtitle: 'Exportar transações e resumos financeiros.',
                 highlightColor: Colors.teal,
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceExportScreen())),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          const _HubNoteCard(),
+          const _ToolsNoteCard(),
           const SizedBox(height: 80),
         ],
       ),
@@ -95,35 +104,36 @@ class FinanceHubScreen extends StatelessWidget {
   }
 }
 
-class _HubHeader extends StatelessWidget {
-  const _HubHeader();
+class _ToolsHeader extends StatelessWidget {
+  const _ToolsHeader();
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22), side: BorderSide(color: Colors.grey.shade300)),
       child: Padding(
         padding: const EdgeInsets.all(18),
-        child: Column(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: const [
-                CircleAvatar(child: Icon(Icons.auto_graph)),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Tudo que move seu dinheiro, em um só lugar',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
+            CircleAvatar(
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              child: Icon(Icons.tune, color: Theme.of(context).colorScheme.primary),
             ),
-            const SizedBox(height: 10),
-            Text(
-              'Use esta central para acessar rapidamente planejamento, dívidas, cartões, objetivos, relatórios e exportações sem transformar a aba Finanças numa salada de botões.',
-              style: TextStyle(color: Colors.grey.shade700),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Ferramentas de gestão', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 6),
+                  Text(
+                    'O dashboard principal fica na aba Finanças. Esta área reúne cadastros, configurações, relatórios e módulos auxiliares.',
+                    style: TextStyle(color: Colors.grey.shade700, height: 1.35),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -132,12 +142,12 @@ class _HubHeader extends StatelessWidget {
   }
 }
 
-class _HubSection extends StatelessWidget {
+class _ToolsSection extends StatelessWidget {
   final String title;
   final String subtitle;
   final List<Widget> children;
 
-  const _HubSection({required this.title, required this.subtitle, required this.children});
+  const _ToolsSection({required this.title, required this.subtitle, required this.children});
 
   @override
   Widget build(BuildContext context) {
@@ -149,7 +159,7 @@ class _HubSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
               const SizedBox(height: 2),
               Text(subtitle, style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
             ],
@@ -161,31 +171,25 @@ class _HubSection extends StatelessWidget {
   }
 }
 
-class _HubActionCard extends StatelessWidget {
+class _ToolActionCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
   final Color? highlightColor;
   final VoidCallback onTap;
 
-  const _HubActionCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    this.highlightColor,
-  });
+  const _ToolActionCard({required this.icon, required this.title, required this.subtitle, required this.onTap, this.highlightColor});
 
   @override
   Widget build(BuildContext context) {
     final color = highlightColor ?? Theme.of(context).colorScheme.primary;
     return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: color.withValues(alpha: 0.14))),
       child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: color.withValues(alpha: 0.12),
-          child: Icon(icon, color: color),
-        ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        leading: CircleAvatar(backgroundColor: color.withValues(alpha: 0.12), child: Icon(icon, color: color)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right),
         onTap: onTap,
@@ -194,13 +198,15 @@ class _HubActionCard extends StatelessWidget {
   }
 }
 
-class _HubNoteCard extends StatelessWidget {
-  const _HubNoteCard();
+class _ToolsNoteCard extends StatelessWidget {
+  const _ToolsNoteCard();
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: Colors.grey.withValues(alpha: 0.08),
+      elevation: 0,
+      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.65),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: const Padding(
         padding: EdgeInsets.all(14),
         child: Row(
@@ -209,9 +215,7 @@ class _HubNoteCard extends StatelessWidget {
             Icon(Icons.info_outline),
             SizedBox(width: 10),
             Expanded(
-              child: Text(
-                'Esta central é modular: ela pode ser encaixada na aba Finanças sem alterar as telas internas já criadas nas fases anteriores.',
-              ),
+              child: Text('Use esta tela para gerenciar o sistema financeiro. Para acompanhar saldo, vencimentos, gráficos e lançamentos recentes, volte ao dashboard de Finanças.'),
             ),
           ],
         ),
