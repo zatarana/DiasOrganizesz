@@ -111,6 +111,9 @@ jobs:
             exit 1
           fi
 
+      - name: Validar Etapa 3 atenção imediata financeira
+        run: dart run tool/verify_finance_attention_m3.dart
+
       - name: Validar F-M4 dívidas
         run: |
           echo "Validando F-M4 no módulo de dívidas..."
