@@ -64,21 +64,12 @@ void _fixQuickTransaction() {
   final file = File('lib/features/finance/widgets/quick_transaction_bottom_sheet.dart');
   if (!file.existsSync()) return;
   var text = file.readAsStringSync();
+
   text = text.replaceAll('inputFormatters: const [', 'inputFormatters: [');
   text = text.replaceAll('children: const [', 'children: [');
 
-  if (!text.contains("import '../../../data/database/finance_planning_store.dart';")) {
-    text = text.replaceFirst(
-      "import '../../../core/utils/money_formatter.dart';",
-      "import '../../../core/utils/money_formatter.dart';\nimport '../../../data/database/finance_planning_store.dart';",
-    );
-  }
-  if (!text.contains("import '../../../data/models/financial_account_model.dart';")) {
-    text = text.replaceFirst(
-      "import '../../../data/models/financial_category_model.dart';",
-      "import '../../../data/models/financial_account_model.dart';\nimport '../../../data/models/financial_category_model.dart';",
-    );
-  }
+  text = _ensureImport(text, "import '../../../core/utils/money_formatter.dart';", "import '../../../data/database/finance_planning_store.dart';");
+  text = _ensureImport(text, "import '../../../data/models/financial_category_model.dart';", "import '../../../data/models/financial_account_model.dart';");
 
   if (!text.contains('List<FinancialAccount> _accounts = [];')) {
     text = text.replaceFirst(
@@ -165,26 +156,17 @@ void _fixQuickTransaction() {
   }
 
   if (!text.contains("labelText: 'Conta'")) {
-    text = text.replaceFirst(
-      '''              DropdownButtonFormField<int?>(
-                value: _categoryId,
-                decoration: const InputDecoration(labelText: 'Categoria', prefixIcon: Icon(Icons.category_outlined), border: OutlineInputBorder()),
-                items: [
-                  const DropdownMenuItem<int?>(value: null, child: Text('Sem categoria')),
-                  ...categories.map((c) => DropdownMenuItem<int?>(value: c.id, child: Text(c.name))),
-                ],
-                onChanged: _isSaving ? null : (value) => setState(() => _categoryId = value),
-              ),
-              const SizedBox(height: 16),''',
-      '''              DropdownButtonFormField<int?>(
-                value: _categoryId,
-                decoration: const InputDecoration(labelText: 'Categoria', prefixIcon: Icon(Icons.category_outlined), border: OutlineInputBorder()),
-                items: [
-                  const DropdownMenuItem<int?>(value: null, child: Text('Sem categoria')),
-                  ...categories.map((c) => DropdownMenuItem<int?>(value: c.id, child: Text(c.name))),
-                ],
-                onChanged: _isSaving ? null : (value) => setState(() => _categoryId = value),
-              ),
+    final categoryStart = text.indexOf('DropdownButtonFormField<int?>(\n                value: _categoryId,');
+    if (categoryStart == -1) {
+      stderr.writeln('ERRO: não foi possível localizar o campo de categoria do lançamento rápido.');
+      exit(1);
+    }
+    final categoryEnd = _findCallEnd(text, categoryStart);
+    if (categoryEnd == -1) {
+      stderr.writeln('ERRO: não foi possível localizar o fim do campo de categoria do lançamento rápido.');
+      exit(1);
+    }
+    text = text.replaceRange(categoryEnd, categoryEnd, r'''
               const SizedBox(height: 12),
               DropdownButtonFormField<int?>(
                 value: safeAccountId,
@@ -196,8 +178,7 @@ void _fixQuickTransaction() {
                 onChanged: _isSaving || _loadingAccounts ? null : (value) => setState(() => _accountId = value),
                 validator: (_) => safeAccountId == null ? 'Selecione uma conta.' : null,
               ),
-              const SizedBox(height: 16),''',
-    );
+''');
   }
 
   for (final check in [
@@ -223,9 +204,6 @@ void _fixTasksEntry() {
   if (!file.existsSync()) return;
   var text = file.readAsStringSync();
   final slashN = String.fromCharCode(92) + 'n';
-
-  // Evita que o Dart interprete "$slashNclass" como uma única variável
-  // inexistente durante a execução do patch no GitHub Actions.
   text = text.replaceAll('}' + slashN + slashN + 'class _CompactSmartLists', '}\n\nclass _CompactSmartLists');
   text = text.replaceAll('}' + slashN + 'class _CompactSmartLists', '}\n\nclass _CompactSmartLists');
   text = text.replaceAll(slashN + 'class _CompactSmartLists', '\nclass _CompactSmartLists');
@@ -351,4 +329,30 @@ void _fixFinanceDashboardPlanningRefresh() {
   }
 
   file.writeAsStringSync(text);
+}
+
+String _ensureImport(String text, String after, String importLine) {
+  if (text.contains(importLine)) return text;
+  if (!text.contains(after)) {
+    stderr.writeln('ERRO: import âncora não encontrado para inserir $importLine');
+    exit(1);
+  }
+  return text.replaceFirst(after, '$after\n$importLine');
+}
+
+int _findCallEnd(String text, int start) {
+  var depth = 0;
+  for (var i = start; i < text.length; i++) {
+    final char = text[i];
+    if (char == '(') depth++;
+    if (char == ')') {
+      depth--;
+      if (depth == 0) {
+        var end = i + 1;
+        if (end < text.length && text[end] == ',') end++;
+        return end;
+      }
+    }
+  }
+  return -1;
 }
