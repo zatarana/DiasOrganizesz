@@ -12,6 +12,8 @@ class Task {
   final String status; // 'pendente', 'concluida', 'atrasada', 'canceled'
   final bool reminderEnabled;
   final String recurrenceType; // 'none', 'daily', 'weekly', 'monthly'
+  final String? tags; // tags separadas por vírgula
+  final String? reminderOffsets; // minutos antes, separados por vírgula. Ex: 0,10,60
   final String createdAt;
   final String updatedAt;
 
@@ -29,6 +31,8 @@ class Task {
     required this.status,
     required this.reminderEnabled,
     this.recurrenceType = 'none',
+    this.tags,
+    this.reminderOffsets,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -48,6 +52,8 @@ class Task {
       'status': status,
       'reminderEnabled': reminderEnabled ? 1 : 0,
       'recurrenceType': recurrenceType,
+      'tags': tags,
+      'reminderOffsets': reminderOffsets,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
     };
@@ -68,6 +74,8 @@ class Task {
       status: map['status'] ?? 'pendente',
       reminderEnabled: map['reminderEnabled'] == 1,
       recurrenceType: map['recurrenceType'] ?? 'none',
+      tags: map['tags'],
+      reminderOffsets: map['reminderOffsets'],
       createdAt: map['createdAt'] ?? DateTime.now().toIso8601String(),
       updatedAt: map['updatedAt'] ?? DateTime.now().toIso8601String(),
     );
@@ -95,6 +103,10 @@ class Task {
     String? status,
     bool? reminderEnabled,
     String? recurrenceType,
+    String? tags,
+    bool clearTags = false,
+    String? reminderOffsets,
+    bool clearReminderOffsets = false,
     String? createdAt,
     String? updatedAt,
   }) {
@@ -112,6 +124,8 @@ class Task {
       status: status ?? this.status,
       reminderEnabled: reminderEnabled ?? this.reminderEnabled,
       recurrenceType: recurrenceType ?? this.recurrenceType,
+      tags: clearTags ? null : (tags ?? this.tags),
+      reminderOffsets: clearReminderOffsets ? null : (reminderOffsets ?? this.reminderOffsets),
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
