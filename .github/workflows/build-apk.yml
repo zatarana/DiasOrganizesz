@@ -59,6 +59,26 @@ jobs:
       - name: Limpar avisos conhecidos do analyzer
         run: dart run tool/patch_analyze_cleanup.dart
 
+      - name: Validar F-M3 relatórios financeiros
+        run: |
+          echo "Validando F-M3 nos relatórios financeiros..."
+          grep -q "class FinanceReportsScreen extends ConsumerStatefulWidget" lib/features/finance/finance_reports_screen.dart
+          grep -q "_ExpenseDonutReportCard" lib/features/finance/finance_reports_screen.dart
+          grep -q "_MonthlyIncomeExpenseBarCard" lib/features/finance/finance_reports_screen.dart
+          grep -q "_DonutChartPainter" lib/features/finance/finance_reports_screen.dart
+          grep -q "_MonthlyBarChartPainter" lib/features/finance/finance_reports_screen.dart
+          grep -q "Despesas por categoria" lib/features/finance/finance_reports_screen.dart
+          grep -q "Receita vs despesa mensal" lib/features/finance/finance_reports_screen.dart
+          grep -q "transactionsProvider" lib/features/finance/finance_reports_screen.dart
+          grep -q "financialCategoriesProvider" lib/features/finance/finance_reports_screen.dart
+          grep -q "MoneyFormatter.format" lib/features/finance/finance_reports_screen.dart
+          grep -q "CustomPaint" lib/features/finance/finance_reports_screen.dart
+
+          if grep -q "Próximos recursos\|Gráficos visuais com biblioteca dedicada\|_ComingSoonCard" lib/features/finance/finance_reports_screen.dart; then
+            echo "ERRO: placeholders de relatórios ainda aparecem." >&2
+            exit 1
+          fi
+
       - name: Validar F-M2 UI de transações
         run: |
           echo "Validando F-M2 na UI de transações..."
