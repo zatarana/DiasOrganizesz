@@ -53,6 +53,23 @@ jobs:
       - name: Limpar avisos conhecidos do analyzer
         run: dart run tool/patch_analyze_cleanup.dart
 
+      - name: Validar T-M3 Kanban
+        run: |
+          echo "Validando T-M3 no Kanban..."
+          grep -q "LongPressDraggable<Task>" lib/features/tasks/task_kanban_screen.dart
+          grep -q "DragTarget<Task>" lib/features/tasks/task_kanban_screen.dart
+          grep -q "onAccept:" lib/features/tasks/task_kanban_screen.dart
+          grep -q "_moveTaskToColumn" lib/features/tasks/task_kanban_screen.dart
+          grep -q "_KanbanQuickAdd" lib/features/tasks/task_kanban_screen.dart
+          grep -q "Adicionar card rápido" lib/features/tasks/task_kanban_screen.dart
+          grep -q "_taskForColumn" lib/features/tasks/task_kanban_screen.dart
+          grep -q "_KanbanColumnType" lib/features/tasks/task_kanban_screen.dart
+
+          if grep -q "targetStatus" lib/features/tasks/task_kanban_screen.dart; then
+            echo "ERRO: Kanban antigo por targetStatus ainda aparece; drag real deve usar tipo de coluna." >&2
+            exit 1
+          fi
+
       - name: Validar T-M2 formulário de tarefas
         run: |
           echo "Validando T-M2 no formulário de tarefas..."
