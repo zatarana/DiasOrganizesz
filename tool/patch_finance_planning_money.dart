@@ -11,7 +11,7 @@ void main() {
 
   text = _ensureImport(text);
   text = text.replaceFirst(
-    "  String _money(num value) => 'R\\\$ \\${value.toDouble().toStringAsFixed(2)}';",
+    r'''  String _money(num value) => 'R\$ ${value.toDouble().toStringAsFixed(2)}';''',
     '  String _money(num value) => MoneyFormatter.format(value);',
   );
 
@@ -33,7 +33,7 @@ void main() {
     }
   }
 
-  if (text.contains("String _money(num value) => 'R\\\$ ") || text.contains(".replaceAll(',', '.')")) {
+  if (text.contains(r'''String _money(num value) => 'R\$ ''') || text.contains(".replaceAll(',', '.')")) {
     stderr.writeln('ERRO: formatação/parsing monetário antigo ainda existe em finance_planning_screen.dart.');
     exit(1);
   }
