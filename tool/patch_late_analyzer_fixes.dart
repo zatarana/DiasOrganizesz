@@ -55,9 +55,12 @@ void _fixTasksEntry() {
   if (!file.existsSync()) return;
   var text = file.readAsStringSync();
   final slashN = String.fromCharCode(92) + 'n';
-  text = text.replaceAll('}$slashN$slashNclass _CompactSmartLists', '}\n\nclass _CompactSmartLists');
-  text = text.replaceAll('}$slashNclass _CompactSmartLists', '}\n\nclass _CompactSmartLists');
-  text = text.replaceAll('${slashN}class _CompactSmartLists', '\nclass _CompactSmartLists');
+
+  // Evita que o Dart interprete "$slashNclass" como uma única variável
+  // inexistente durante a execução do patch no GitHub Actions.
+  text = text.replaceAll('}' + slashN + slashN + 'class _CompactSmartLists', '}\n\nclass _CompactSmartLists');
+  text = text.replaceAll('}' + slashN + 'class _CompactSmartLists', '}\n\nclass _CompactSmartLists');
+  text = text.replaceAll(slashN + 'class _CompactSmartLists', '\nclass _CompactSmartLists');
   file.writeAsStringSync(text);
 }
 
