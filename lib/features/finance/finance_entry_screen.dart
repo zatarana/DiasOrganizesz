@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../data/database/finance_planning_store.dart';
 import '../../data/models/debt_model.dart';
 import '../../data/models/transaction_model.dart';
 import '../../domain/providers.dart';
@@ -16,11 +17,38 @@ import 'finance_reports_screen.dart';
 import 'finance_screen.dart';
 import 'financial_goals_screen.dart';
 
-class FinanceEntryScreen extends ConsumerWidget {
+class FinanceEntryScreen extends ConsumerStatefulWidget {
   const FinanceEntryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<FinanceEntryScreen> createState() => _FinanceEntryScreenState();
+}
+
+class _FinanceEntryScreenState extends ConsumerState<FinanceEntryScreen> {
+  late Future<double> _realBalanceFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _realBalanceFuture = _loadRealBalance();
+  }
+
+  Future<double> _loadRealBalance() async {
+    final db = await ref.read(dbProvider).database;
+    await FinancePlanningStore.recalculateAllAccountBalances(db);
+    return FinancePlanningStore.getActiveAccountsBalance(db);
+  }
+
+  Future<void> _refreshData() async {
+    await ref.read(transactionsProvider.notifier).loadTransactions();
+    await ref.read(debtsProvider.notifier).loadDebts();
+    final nextBalanceFuture = _loadRealBalance();
+    if (mounted) setState(() => _realBalanceFuture = nextBalanceFuture);
+    await nextBalanceFuture;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final transactions = ref.watch(transactionsProvider);
     final debts = ref.watch(debtsProvider);
     final now = DateTime.now();
@@ -47,14 +75,21 @@ class FinanceEntryScreen extends ConsumerWidget {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () async {
-          await ref.read(transactionsProvider.notifier).loadTransactions();
-          await ref.read(debtsProvider.notifier).loadDebts();
-        },
+        onRefresh: _refreshData,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
           children: [
-            _MonthHeroCard(month: currentMonth, dashboard: dashboard),
+            FutureBuilder<double>(
+              future: _realBalanceFuture,
+              builder: (context, snapshot) {
+                return _MonthHeroCard(
+                  month: currentMonth,
+                  dashboard: dashboard,
+                  realBalance: snapshot.data,
+                  isLoadingRealBalance: snapshot.connectionState == ConnectionState.waiting,
+                );
+              },
+            ),
             const SizedBox(height: 14),
             _QuickActionsGrid(
               onNewTransaction: () => _open(context, const CreateTransactionScreen()),
@@ -130,13 +165,22 @@ class FinanceEntryScreen extends ConsumerWidget {
 class _MonthHeroCard extends StatelessWidget {
   final DateTime month;
   final _FinanceDashboard dashboard;
+  final double? realBalance;
+  final bool isLoadingRealBalance;
 
-  const _MonthHeroCard({required this.month, required this.dashboard});
+  const _MonthHeroCard({
+    required this.month,
+    required this.dashboard,
+    required this.realBalance,
+    required this.isLoadingRealBalance,
+  });
 
   @override
   Widget build(BuildContext context) {
     final monthLabel = DateFormat('MMMM yyyy', 'pt_BR').format(month);
-    final balanceColor = dashboard.monthResult >= 0 ? Colors.green : Colors.red;
+    final resolvedRealBalance = realBalance ?? 0;
+    final realBalanceColor = resolvedRealBalance >= 0 ? Colors.green : Colors.red;
+    final resultColor = dashboard.monthResult >= 0 ? Colors.green : Colors.red;
     final forecastColor = dashboard.forecastResult >= 0 ? Colors.green : Colors.red;
 
     return Card(
@@ -154,16 +198,29 @@ class _MonthHeroCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Resumo de ${_capitalize(monthLabel)}', style: TextStyle(color: Colors.grey.shade800)),
+                      Text('Saldo real agora', style: TextStyle(color: Colors.grey.shade800, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 6),
-                      Text(
-                        _money(dashboard.monthResult),
-                        style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: balanceColor),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 180),
+                        child: isLoadingRealBalance
+                            ? Row(
+                                key: const ValueKey('loading-balance'),
+                                children: const [
+                                  SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)),
+                                  SizedBox(width: 10),
+                                  Text('Atualizando saldo...', style: TextStyle(fontWeight: FontWeight.w700)),
+                                ],
+                              )
+                            : Text(
+                                _money(resolvedRealBalance),
+                                key: const ValueKey('real-balance'),
+                                style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: realBalanceColor),
+                              ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 4),
                       Text(
-                        dashboard.monthResult >= 0 ? 'Resultado realizado no mês' : 'Atenção: despesas pagas acima das receitas recebidas',
-                        style: TextStyle(color: Colors.grey.shade700),
+                        'Soma das contas ativas, já recalculada com lançamentos pagos e transferências.',
+                        style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
                       ),
                     ],
                   ),
@@ -171,7 +228,7 @@ class _MonthHeroCard extends StatelessWidget {
                 CircleAvatar(
                   radius: 28,
                   backgroundColor: Colors.white.withValues(alpha: 0.8),
-                  child: Icon(dashboard.monthResult >= 0 ? Icons.trending_up : Icons.trending_down, color: balanceColor, size: 30),
+                  child: Icon(Icons.account_balance_wallet_outlined, color: realBalanceColor, size: 30),
                 ),
               ],
             ),
@@ -191,7 +248,7 @@ class _MonthHeroCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Resultado previsto', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                        Text('Resultado previsto em ${_capitalize(monthLabel)}', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
                         Text(_money(dashboard.forecastResult), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: forecastColor)),
                       ],
                     ),
@@ -203,25 +260,25 @@ class _MonthHeroCard extends StatelessWidget {
             const SizedBox(height: 8),
             Row(
               children: [
+                Expanded(child: _HeroMetric(label: 'Resultado do mês', value: _money(dashboard.monthResult), color: resultColor)),
+                const SizedBox(width: 8),
                 Expanded(child: _HeroMetric(label: 'Recebido', value: _money(dashboard.paidIncome), color: Colors.green)),
-                const SizedBox(width: 8),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
                 Expanded(child: _HeroMetric(label: 'Pago', value: _money(dashboard.paidExpense), color: Colors.red)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
+                const SizedBox(width: 8),
                 Expanded(child: _HeroMetric(label: 'A receber', value: _money(dashboard.pendingIncome), color: Colors.teal)),
-                const SizedBox(width: 8),
-                Expanded(child: _HeroMetric(label: 'A pagar', value: _money(dashboard.pendingExpense), color: Colors.deepOrange)),
               ],
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(child: _HeroMetric(label: 'Dívidas abertas', value: dashboard.openDebts.toString(), color: Colors.blueGrey)),
+                Expanded(child: _HeroMetric(label: 'A pagar', value: _money(dashboard.pendingExpense), color: Colors.deepOrange)),
                 const SizedBox(width: 8),
-                Expanded(child: _HeroMetric(label: 'Total em dívidas', value: _money(dashboard.openDebtAmount), color: Colors.brown)),
+                Expanded(child: _HeroMetric(label: 'Dívidas', value: '${dashboard.openDebts} · ${_money(dashboard.openDebtAmount)}', color: Colors.brown)),
               ],
             ),
           ],
