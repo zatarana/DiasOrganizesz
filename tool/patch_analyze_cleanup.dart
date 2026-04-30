@@ -13,6 +13,7 @@ void main() {
   _fixAnalyzerCompileErrors();
   _fixDeprecatedFlutterApis();
   _fixFinanceMobileOverflows();
+  _applySmartTaskCapture();
   stdout.writeln('Analyzer cleanup aplicado.');
 }
 
@@ -252,6 +253,44 @@ void _fixCreateTransactionDropdownOverflow() {
   text = text.replaceAll('child: Text(method)', 'child: Text(method, overflow: TextOverflow.ellipsis)');
 
   file.writeAsStringSync(text);
+}
+
+void _applySmartTaskCapture() {
+  final entry = File('lib/features/tasks/tasks_entry_screen.dart');
+  final button = File('lib/features/tasks/quick_add_task_button.dart');
+  final sheet = File('lib/features/tasks/quick_add_task_sheet.dart');
+
+  if (!entry.existsSync() || !button.existsSync() || !sheet.existsSync()) return;
+
+  var entryText = entry.readAsStringSync();
+  entryText = entryText.replaceAll(
+    "floatingActionButton: const QuickAddTaskButton(label: 'Nova tarefa'),",
+    "floatingActionButton: const SmartTaskActionButton(label: 'Capturar tarefa'),",
+  );
+  entry.writeAsStringSync(entryText);
+
+  final combined = '${entry.readAsStringSync()}\n${button.readAsStringSync()}\n${sheet.readAsStringSync()}';
+  for (final check in [
+    'SmartTaskActionButton',
+    "label: 'Capturar tarefa'",
+    'Captura inteligente',
+    '_SmartShortcutBar',
+    'Mais opções',
+    'CreateTaskScreen(',
+    'recurrenceType: _recurrenceType',
+    'tags: _tags.isEmpty ? null : _tags.join',
+    'reminderEnabled: parsed.time != null',
+  ]) {
+    if (!combined.contains(check)) {
+      stderr.writeln('ERRO Captura Inteligente: faltou "$check".');
+      exit(1);
+    }
+  }
+
+  if (entry.readAsStringSync().contains("QuickAddTaskButton(label: 'Nova tarefa')")) {
+    stderr.writeln('ERRO Captura Inteligente: ainda existe FAB antigo Nova tarefa.');
+    exit(1);
+  }
 }
 
 String _addIsExpandedToDropdowns(String text) {
