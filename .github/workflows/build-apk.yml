@@ -44,6 +44,9 @@ jobs:
       - name: Aplicar melhorias UX do formulário financeiro
         run: dart run tool/patch_transaction_form_ux.dart
 
+      - name: Aplicar F-M4 fluxo de dívidas
+        run: dart run tool/patch_debts_m4.dart
+
       - name: Aplicar correção F-M1 moeda no planejamento
         run: dart run tool/patch_finance_planning_money.dart
 
@@ -58,6 +61,32 @@ jobs:
 
       - name: Limpar avisos conhecidos do analyzer
         run: dart run tool/patch_analyze_cleanup.dart
+
+      - name: Validar F-M4 dívidas
+        run: |
+          echo "Validando F-M4 no módulo de dívidas..."
+          grep -q "Cadastrar dívida" lib/features/debts/debts_screen.dart
+          grep -q "FloatingActionButton.extended" lib/features/debts/debts_screen.dart
+          grep -q "Nova dívida" lib/features/debts/debts_screen.dart
+          grep -q "_buildEmptyDebtState" lib/features/debts/debts_screen.dart
+          grep -q "Nenhuma dívida cadastrada" lib/features/debts/debts_screen.dart
+          grep -q "MoneyFormatter.format" lib/features/debts/debts_screen.dart
+          grep -q "_buildDebtInfoCard" lib/features/debts/debt_details_screen.dart
+          grep -q "Dados da dívida" lib/features/debts/debt_details_screen.dart
+          grep -q "_buildEmptyInstallmentsState" lib/features/debts/debt_details_screen.dart
+          grep -q "Nenhuma parcela criada" lib/features/debts/debt_details_screen.dart
+          grep -q "MoneyFormatter.format" lib/features/debts/debt_details_screen.dart
+          grep -q "MoneyFormatter.parse" lib/features/debts/debt_details_screen.dart
+
+          if grep -q "String _money(num value) => 'R\\$" lib/features/debts/debt_details_screen.dart; then
+            echo "ERRO: detalhes de dívida ainda usa _money antigo." >&2
+            exit 1
+          fi
+
+          if grep -q "replaceAll(',', '.')" lib/features/debts/debt_details_screen.dart; then
+            echo "ERRO: detalhes de dívida ainda usa parsing monetário antigo." >&2
+            exit 1
+          fi
 
       - name: Validar F-M3 relatórios financeiros
         run: |
