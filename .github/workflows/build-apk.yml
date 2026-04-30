@@ -52,8 +52,13 @@ jobs:
           grep -q "_QuickActionsGrid" lib/features/finance/finance_entry_screen.dart
           grep -q "_AttentionCard" lib/features/finance/finance_entry_screen.dart
           grep -q "_UpcomingTransactionTile" lib/features/finance/finance_entry_screen.dart
+          grep -q "_RecentTransactionTile" lib/features/finance/finance_entry_screen.dart
           grep -q "Novo lançamento" lib/features/finance/finance_entry_screen.dart
           grep -q "Resumo de" lib/features/finance/finance_entry_screen.dart
+          grep -q "Resultado previsto" lib/features/finance/finance_entry_screen.dart
+          grep -q "A receber" lib/features/finance/finance_entry_screen.dart
+          grep -q "Total em dívidas" lib/features/finance/finance_entry_screen.dart
+          grep -q "Últimas movimentações do mês" lib/features/finance/finance_entry_screen.dart
 
           if grep -q "Escolha o que quer fazer agora" lib/features/finance/finance_entry_screen.dart; then
             echo "ERRO: entrada antiga de Finanças ainda está presente." >&2
