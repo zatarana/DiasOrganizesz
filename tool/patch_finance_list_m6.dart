@@ -25,8 +25,7 @@ void main() {
     'Slidable(',
     'ActionPane(',
     'SlidableAction(',
-    "label: 'Pagar'",
-    "label: 'Desmarcar'",
+    "label: isPaid ? 'Desmarcar' : 'Pagar'",
     "label: 'Editar'",
     "label: 'Excluir'",
     'DrawerMotion()',
@@ -52,15 +51,35 @@ void main() {
 String _insertQuickFilters(String text) {
   if (text.contains('Widget _buildQuickFilterBar()')) return text;
 
-  text = text.replaceFirst(
-    "                      TextField(\n",
-    "                      _buildQuickFilterBar(),\n                      const SizedBox(height: 12),\n                      TextField(\n",
-  );
+  if (text.contains("                      TextField(\n")) {
+    text = text.replaceFirst(
+      "                      TextField(\n",
+      "                      _buildQuickFilterBar(),\n                      const SizedBox(height: 12),\n                      TextField(\n",
+    );
+  } else if (text.contains("TextField(\n                controller: _searchController")) {
+    text = text.replaceFirst(
+      "TextField(\n                controller: _searchController",
+      "_buildQuickFilterBar(),\n                      const SizedBox(height: 12),\n                      TextField(\n                controller: _searchController",
+    );
+  } else {
+    stderr.writeln('ERRO Etapa 6: campo de busca não encontrado para inserir filtros rápidos.');
+    exit(1);
+  }
 
-  final marker = '  Widget _gap() => const SizedBox(width: 8);';
-  final index = text.indexOf(marker);
+  final insertionMarkers = <String>[
+    '  Future<void> _confirmDeleteTransaction(',
+    '  Widget _buildTransactionTile(',
+    '  String _statusLabel(',
+  ];
+
+  var index = -1;
+  for (final marker in insertionMarkers) {
+    index = text.indexOf(marker);
+    if (index != -1) break;
+  }
+
   if (index == -1) {
-    stderr.writeln('ERRO Etapa 6: marcador para filtros rápidos não encontrado.');
+    stderr.writeln('ERRO Etapa 6: marcador robusto para filtros rápidos não encontrado.');
     exit(1);
   }
 
