@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -55,6 +57,7 @@ jobs:
           dart run tool/patch_notifications_reliability.dart
           dart run tool/patch_input_save_reliability.dart
           dart run tool/patch_late_analyzer_fixes.dart
+          dart run tool/patch_finance_planning_layout.dart
 
       - name: Validar navegação financeira unificada
         run: |
@@ -183,6 +186,8 @@ jobs:
           grep -q "MoneyInputFormatter(allowNegative: true)" lib/features/finance/finance_planning_screen.dart
           grep -q "signed: true" lib/features/finance/finance_planning_screen.dart
           grep -q "return negative ? -parsed : parsed;" lib/core/utils/money_formatter.dart
+          grep -q "_planningActionsWrap" lib/features/finance/finance_planning_screen.dart
+          grep -q "_AccountPlanningCard" lib/features/finance/finance_planning_screen.dart
 
           if grep -q "balanceController.dispose();" lib/features/finance/finance_planning_screen.dart; then
             echo "ERRO: dispose imediato do controller de saldo ainda existe e pode causar assert _dependents.isEmpty." >&2
@@ -299,12 +304,15 @@ jobs:
 
       - name: Preparar versionamento automático do APK
         run: |
-          BASE_VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
-          BUILD_NUMBER=$((VERSION_CODE_OFFSET + GITHUB_RUN_NUMBER))
-          echo "BUILD_NAME=$BASE_VERSION" >> "$GITHUB_ENV"
+          VERSION_MAJOR=1
+          VERSION_MINOR=0
+          PATCH_NUMBER=$(git rev-list --count HEAD)
+          BUILD_NUMBER=$((VERSION_CODE_OFFSET + PATCH_NUMBER))
+          BUILD_NAME="$VERSION_MAJOR.$VERSION_MINOR.$PATCH_NUMBER"
+          echo "BUILD_NAME=$BUILD_NAME" >> "$GITHUB_ENV"
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
-          echo "APK_ARTIFACT_NAME=DiasOrganize-${BASE_VERSION}+${BUILD_NUMBER}-debug-apk" >> "$GITHUB_ENV"
-          echo "Versão Android gerada: versionName=$BASE_VERSION / versionCode=$BUILD_NUMBER"
+          echo "APK_ARTIFACT_NAME=DiasOrganize-${BUILD_NAME}+${BUILD_NUMBER}-debug-apk" >> "$GITHUB_ENV"
+          echo "Versão Android gerada: versionName=$BUILD_NAME / versionCode=$BUILD_NUMBER"
 
       - name: Instalar dependências
         run: flutter pub get
