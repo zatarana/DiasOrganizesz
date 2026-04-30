@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/database/finance_planning_store.dart';
+import '../../data/models/budget_model.dart';
 import '../../data/models/financial_subcategory_model.dart';
 import '../../domain/providers.dart';
 import 'finance_screen_data.dart';
@@ -70,6 +71,11 @@ class FinanceScreenFilters {
 final financeSubcategoriesProvider = FutureProvider<List<FinancialSubcategory>>((ref) async {
   final db = await ref.watch(dbProvider).database;
   return FinancePlanningStore.getSubcategories(db, includeArchived: true);
+});
+
+final financeBudgetsProvider = FutureProvider<List<Budget>>((ref) async {
+  final db = await ref.watch(dbProvider).database;
+  return FinancePlanningStore.getBudgets(db);
 });
 
 final financeScreenDataProvider = Provider.family<FinanceScreenData, FinanceScreenFilters>((ref, filters) {
