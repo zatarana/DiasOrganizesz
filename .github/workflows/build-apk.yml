@@ -62,6 +62,23 @@ jobs:
       - name: Limpar avisos conhecidos do analyzer
         run: dart run tool/patch_analyze_cleanup.dart
 
+      - name: Validar navegação unificada de Finanças
+        run: |
+          echo "Validando Drawer apontando para o hub financeiro..."
+          grep -q "finance_entry_screen.dart" lib/features/dashboard/app_drawer.dart
+          grep -q "FinanceEntryScreen" lib/features/dashboard/app_drawer.dart
+          grep -q "Dashboard financeiro, transações, contas, metas e dívidas" lib/features/dashboard/app_drawer.dart
+
+          if grep -q "finance_screen.dart" lib/features/dashboard/app_drawer.dart; then
+            echo "ERRO: Drawer ainda importa FinanceScreen diretamente." >&2
+            exit 1
+          fi
+
+          if grep -q "FinanceScreen()" lib/features/dashboard/app_drawer.dart; then
+            echo "ERRO: Drawer ainda navega diretamente para a lista de transações." >&2
+            exit 1
+          fi
+
       - name: Validar F-M4 dívidas
         run: |
           echo "Validando F-M4 no módulo de dívidas..."
