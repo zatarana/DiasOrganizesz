@@ -53,6 +53,9 @@ jobs:
       - name: Aplicar core compartilhado da entrada financeira
         run: dart run tool/patch_finance_entry_core.dart
 
+      - name: Aplicar Etapa 4 gráficos no dashboard financeiro
+        run: dart run tool/patch_finance_dashboard_charts_m4.dart
+
       - name: Aplicar refinamento UX da tela Hoje
         run: dart run tool/patch_today_tasks_ux.dart
 
@@ -92,11 +95,9 @@ jobs:
           grep -q "_SliverBalanceHeader" lib/features/finance/finance_entry_screen.dart
           grep -q "_CompactMonthNavigationBar" lib/features/finance/finance_entry_screen.dart
           grep -q "_ImmediateAttentionCarousel" lib/features/finance/finance_entry_screen.dart
-          grep -q "_QuickChartsCard" lib/features/finance/finance_entry_screen.dart
           grep -q "_FinanceToolCard" lib/features/finance/finance_entry_screen.dart
           grep -q "Saldo consolidado" lib/features/finance/finance_entry_screen.dart
           grep -q "Atenção imediata" lib/features/finance/finance_entry_screen.dart
-          grep -q "Distribuição de despesas" lib/features/finance/finance_entry_screen.dart
           grep -q "Transações recentes" lib/features/finance/finance_entry_screen.dart
           grep -q "Ferramentas financeiras" lib/features/finance/finance_entry_screen.dart
           grep -q "MoneyFormatter.format" lib/features/finance/finance_entry_screen.dart
@@ -113,6 +114,9 @@ jobs:
 
       - name: Validar Etapa 3 atenção imediata financeira
         run: dart run tool/verify_finance_attention_m3.dart
+
+      - name: Validar Etapa 4 gráficos financeiros
+        run: dart run tool/verify_finance_dashboard_charts_m4.dart
 
       - name: Validar F-M4 dívidas
         run: |
