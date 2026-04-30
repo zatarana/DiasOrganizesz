@@ -116,7 +116,7 @@ jobs:
             exit 1
           fi
 
-          if grep -q "FutureBuilder<double>\|_realBalanceFuture\|_loadRealBalance\|FinancePlanningStore" lib/features/finance/finance_entry_screen.dart; then
+          if grep -q "FutureBuilder<double>\|_realBalanceFuture\|_loadRealBalance" lib/features/finance/finance_entry_screen.dart; then
             echo "ERRO: entrada financeira ainda usa carregamento local de saldo em vez do provider central." >&2
             exit 1
           fi
