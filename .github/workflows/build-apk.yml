@@ -48,6 +48,13 @@ jobs:
         run: |
           echo "Validando dashboard da entrada de Finanças..."
           grep -q "class FinanceEntryScreen extends ConsumerStatefulWidget" lib/features/finance/finance_entry_screen.dart
+          grep -q "_MonthNavigationBar" lib/features/finance/finance_entry_screen.dart
+          grep -q "_selectedMonth" lib/features/finance/finance_entry_screen.dart
+          grep -q "_changeMonth" lib/features/finance/finance_entry_screen.dart
+          grep -q "_goToCurrentMonth" lib/features/finance/finance_entry_screen.dart
+          grep -q "Mês anterior" lib/features/finance/finance_entry_screen.dart
+          grep -q "Próximo mês" lib/features/finance/finance_entry_screen.dart
+          grep -q "Hoje" lib/features/finance/finance_entry_screen.dart
           grep -q "_MonthHeroCard" lib/features/finance/finance_entry_screen.dart
           grep -q "_QuickActionsGrid" lib/features/finance/finance_entry_screen.dart
           grep -q "_AttentionCard" lib/features/finance/finance_entry_screen.dart
