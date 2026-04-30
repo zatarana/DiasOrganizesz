@@ -156,7 +156,12 @@ void _fixQuickTransaction() {
   }
 
   if (!text.contains("labelText: 'Conta'")) {
-    final categoryStart = text.indexOf('DropdownButtonFormField<int?>(\n                value: _categoryId,');
+    final categoryLabelIndex = text.indexOf("labelText: 'Categoria'");
+    if (categoryLabelIndex == -1) {
+      stderr.writeln('ERRO: não foi possível localizar o label Categoria do lançamento rápido.');
+      exit(1);
+    }
+    final categoryStart = text.lastIndexOf('DropdownButtonFormField', categoryLabelIndex);
     if (categoryStart == -1) {
       stderr.writeln('ERRO: não foi possível localizar o campo de categoria do lançamento rápido.');
       exit(1);
