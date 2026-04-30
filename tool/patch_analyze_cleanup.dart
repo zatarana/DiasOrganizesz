@@ -18,6 +18,7 @@ void main() {
   _fixTasksEntrySyntax();
   _fixHomeDashboardCompatibility();
   _fixHomeGlobalFabOverlap();
+  _fixUniversalFabLongPress();
   stdout.writeln('Analyzer cleanup aplicado.');
 }
 
@@ -263,6 +264,28 @@ void _fixHomeGlobalFabOverlap() {
   }
   if (!text.contains('floatingActionButton: _currentIndex == 0 ? const UniversalQuickActionButton() : null,')) {
     stderr.writeln('ERRO: regra de FAB universal apenas na Home não foi aplicada.');
+    exit(1);
+  }
+
+  home.writeAsStringSync(text);
+}
+
+void _fixUniversalFabLongPress() {
+  final home = File('lib/features/dashboard/home_screen.dart');
+  if (!home.existsSync()) return;
+
+  var text = home.readAsStringSync();
+  text = text.replaceAll(
+    "    return FloatingActionButton(\n      tooltip: 'Capturar rapidamente',\n      onPressed: () => QuickAddTaskSheet.show(context),\n      onLongPress: () => _showUniversalActions(context),\n      child: const Icon(Icons.add),\n    );",
+    "    return GestureDetector(\n      onLongPress: () => _showUniversalActions(context),\n      child: FloatingActionButton(\n        tooltip: 'Capturar rapidamente',\n        onPressed: () => QuickAddTaskSheet.show(context),\n        child: const Icon(Icons.add),\n      ),\n    );",
+  );
+
+  if (text.contains('onLongPress: () => _showUniversalActions(context),\n      child: const Icon(Icons.add),')) {
+    stderr.writeln('ERRO: onLongPress ainda está dentro do FloatingActionButton.');
+    exit(1);
+  }
+  if (!text.contains('return GestureDetector(') || !text.contains('onLongPress: () => _showUniversalActions(context),')) {
+    stderr.writeln('ERRO: GestureDetector do FAB universal não foi aplicado.');
     exit(1);
   }
 
