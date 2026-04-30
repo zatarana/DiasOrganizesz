@@ -8,6 +8,7 @@ void main() {
     'lib/features/tasks/tasks_entry_screen.dart',
   ]);
   _fixConstInfoHints();
+  _fixAnalyzerCompileErrors();
   stdout.writeln('Analyzer cleanup aplicado.');
 }
 
@@ -104,6 +105,30 @@ void _fixConstInfoHints() {
     'lib/features/finance/finance_reports_screen.dart',
     '            FinanceScreen(),',
     '            const FinanceScreen(),',
+  );
+}
+
+void _fixAnalyzerCompileErrors() {
+  _replaceInFile(
+    'lib/features/finance/finance_dashboard_planning.dart',
+    'MoneyFormatter.format(usage.plannedSpent)',
+    'MoneyFormatter.format(usage.plannedAmount)',
+  );
+
+  final reports = File('lib/features/finance/finance_reports_screen.dart');
+  if (reports.existsSync()) {
+    var text = reports.readAsStringSync();
+    if (!text.contains("import 'dart:ui' as ui;")) {
+      text = text.replaceFirst("import 'dart:math' as math;\n", "import 'dart:math' as math;\nimport 'dart:ui' as ui;\n");
+    }
+    text = text.replaceAll('TextDirection.ltr', 'ui.TextDirection.ltr');
+    reports.writeAsStringSync(text);
+  }
+
+  _replaceInFile(
+    'lib/features/finance/widgets/quick_transaction_bottom_sheet.dart',
+    'inputFormatters: const [MoneyInputFormatter(), LengthLimitingTextInputFormatter(18)],',
+    'inputFormatters: [MoneyInputFormatter(), LengthLimitingTextInputFormatter(18)],',
   );
 }
 
