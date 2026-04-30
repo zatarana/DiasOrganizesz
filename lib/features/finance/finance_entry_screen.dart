@@ -10,6 +10,8 @@ import '../../domain/providers.dart';
 import '../debts/debts_screen.dart';
 import 'create_transaction_screen.dart';
 import 'credit_cards_screen.dart';
+import 'finance_budget_rules.dart';
+import 'finance_budgets_screen.dart';
 import 'finance_categories_screen.dart';
 import 'finance_export_screen.dart';
 import 'finance_hub_screen.dart';
@@ -50,8 +52,12 @@ class _FinanceEntryScreenState extends ConsumerState<FinanceEntryScreen> {
   Future<void> _refreshData() async {
     await ref.read(transactionsProvider.notifier).loadTransactions();
     await ref.read(debtsProvider.notifier).loadDebts();
+    ref.invalidate(financeBudgetsProvider);
     ref.invalidate(realAccountBalanceProvider);
-    await ref.read(realAccountBalanceProvider.future);
+    await Future.wait([
+      ref.read(realAccountBalanceProvider.future),
+      ref.read(financeBudgetsProvider.future),
+    ]);
   }
 
   void _changeMonth(int delta) {
@@ -72,9 +78,18 @@ class _FinanceEntryScreenState extends ConsumerState<FinanceEntryScreen> {
   Widget build(BuildContext context) {
     final data = ref.watch(financeScreenDataProvider(_filters));
     final realBalanceAsync = ref.watch(realAccountBalanceProvider);
+    final budgetsAsync = ref.watch(financeBudgetsProvider);
     final debts = ref.watch(debtsProvider);
     final categories = ref.watch(financialCategoriesProvider);
-    final attention = _FinanceAttentionSnapshot.from(data: data, debts: debts);
+    final transactions = ref.watch(transactionsProvider);
+    final budgetUsages = budgetsAsync.maybeWhen(
+      data: (budgets) => FinanceBudgetRules.usageForAll(
+        budgets.where((budget) => budget.month == _monthKey(_selectedMonth)).toList(),
+        transactions,
+      ),
+      orElse: () => const <FinanceBudgetUsage>[],
+    );
+    final attention = _FinanceAttentionSnapshot.from(data: data, debts: debts, budgetUsages: budgetUsages);
     final recentMonthTransactions = _recentTransactions(data.filteredTransactions);
     final categoryHighlights = _categoryHighlights(data, categories);
 
@@ -126,9 +141,10 @@ class _FinanceEntryScreenState extends ConsumerState<FinanceEntryScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
                 child: _ImmediateAttentionCarousel(
                   snapshot: attention,
+                  isLoadingBudgets: budgetsAsync.isLoading,
                   onDebts: () => _open(context, const DebtsScreen()),
                   onTransactions: () => _open(context, const FinanceScreen()),
-                  onPlanning: () => _open(context, const FinancePlanningScreen()),
+                  onBudgets: () => _open(context, const FinanceBudgetsScreen()),
                 ),
               ),
             ),
@@ -237,12 +253,7 @@ class _SliverBalanceHeader extends StatelessWidget {
   final double? realBalance;
   final bool isLoadingRealBalance;
 
-  const _SliverBalanceHeader({
-    required this.month,
-    required this.data,
-    required this.realBalance,
-    required this.isLoadingRealBalance,
-  });
+  const _SliverBalanceHeader({required this.month, required this.data, required this.realBalance, required this.isLoadingRealBalance});
 
   @override
   Widget build(BuildContext context) {
@@ -258,10 +269,7 @@ class _SliverBalanceHeader extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.95),
-            Theme.of(context).colorScheme.surface,
-          ],
+          colors: [Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.95), Theme.of(context).colorScheme.surface],
         ),
       ),
       child: SafeArea(
@@ -279,43 +287,18 @@ class _SliverBalanceHeader extends StatelessWidget {
                     ? Row(
                         key: const ValueKey('loading-balance'),
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)),
-                          SizedBox(width: 10),
-                          Text('Atualizando saldo', style: TextStyle(fontWeight: FontWeight.w800)),
-                        ],
+                        children: const [SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)), SizedBox(width: 10), Text('Atualizando saldo', style: TextStyle(fontWeight: FontWeight.w800))],
                       )
-                    : Text(
-                        _money(real),
-                        key: const ValueKey('real-balance'),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: realColor),
-                      ),
+                    : Text(_money(real), key: const ValueKey('real-balance'), textAlign: TextAlign.center, style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: realColor)),
               ),
               const SizedBox(height: 4),
               Text('Resultado de $monthLabel: ${_money(summary.realizedResult)}', style: TextStyle(color: resultColor, fontWeight: FontWeight.w700)),
               const Spacer(),
               Row(
                 children: [
-                  Expanded(
-                    child: _FlowMiniCard(
-                      title: 'Receitas',
-                      value: summary.paidIncome,
-                      expected: summary.expectedIncome,
-                      icon: Icons.arrow_upward,
-                      color: Colors.green,
-                    ),
-                  ),
+                  Expanded(child: _FlowMiniCard(title: 'Receitas', value: summary.paidIncome, expected: summary.expectedIncome, icon: Icons.arrow_upward, color: Colors.green)),
                   const SizedBox(width: 10),
-                  Expanded(
-                    child: _FlowMiniCard(
-                      title: 'Despesas',
-                      value: summary.paidExpense,
-                      expected: summary.expectedExpense,
-                      icon: Icons.arrow_downward,
-                      color: Colors.red,
-                    ),
-                  ),
+                  Expanded(child: _FlowMiniCard(title: 'Despesas', value: summary.paidExpense, expected: summary.expectedExpense, icon: Icons.arrow_downward, color: Colors.red)),
                 ],
               ),
               const SizedBox(height: 8),
@@ -347,11 +330,7 @@ class _FlowMiniCard extends StatelessWidget {
     final ratio = expected <= 0 ? 0.0 : (value / expected).clamp(0.0, 1.0).toDouble();
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.86),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withValues(alpha: 0.14)),
-      ),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.86), borderRadius: BorderRadius.circular(18), border: Border.all(color: color.withValues(alpha: 0.14))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -359,10 +338,7 @@ class _FlowMiniCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(_money(value), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(value: ratio, minHeight: 5, color: color, backgroundColor: color.withValues(alpha: 0.14)),
-          ),
+          ClipRRect(borderRadius: BorderRadius.circular(999), child: LinearProgressIndicator(value: ratio, minHeight: 5, color: color, backgroundColor: color.withValues(alpha: 0.14))),
         ],
       ),
     );
@@ -383,11 +359,7 @@ class _CompactMonthNavigationBar extends StatelessWidget {
     final label = _capitalize(DateFormat('MMMM yyyy', 'pt_BR').format(selectedMonth));
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
+      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(999), border: Border.all(color: Colors.grey.shade300)),
       child: Row(
         children: [
           IconButton(tooltip: 'Mês anterior', onPressed: onPrevious, icon: const Icon(Icons.chevron_left)),
@@ -402,11 +374,12 @@ class _CompactMonthNavigationBar extends StatelessWidget {
 
 class _ImmediateAttentionCarousel extends StatelessWidget {
   final _FinanceAttentionSnapshot snapshot;
+  final bool isLoadingBudgets;
   final VoidCallback onDebts;
   final VoidCallback onTransactions;
-  final VoidCallback onPlanning;
+  final VoidCallback onBudgets;
 
-  const _ImmediateAttentionCarousel({required this.snapshot, required this.onDebts, required this.onTransactions, required this.onPlanning});
+  const _ImmediateAttentionCarousel({required this.snapshot, required this.isLoadingBudgets, required this.onDebts, required this.onTransactions, required this.onBudgets});
 
   @override
   Widget build(BuildContext context) {
@@ -416,15 +389,17 @@ class _ImmediateAttentionCarousel extends StatelessWidget {
         title: 'Vencimentos próximos',
         value: snapshot.pendingTransactions == 0 ? 'Tudo certo' : '${snapshot.pendingTransactions} item(ns)',
         subtitle: snapshot.pendingAmount == 0 ? 'Nada pendente no mês' : _money(snapshot.pendingAmount),
-        color: Colors.deepOrange,
+        color: snapshot.pendingTransactions == 0 ? Colors.green : Colors.deepOrange,
+        urgency: snapshot.pendingTransactions == 0 ? _AttentionUrgency.good : _AttentionUrgency.warning,
         onTap: onTransactions,
       ),
       _AttentionMiniCard(
         icon: Icons.payments_outlined,
-        title: 'Dívidas em aberto',
-        value: snapshot.openDebts == 0 ? 'Sem dívidas' : '${snapshot.openDebts} ativa(s)',
-        subtitle: _money(snapshot.openDebtAmount),
-        color: Colors.brown,
+        title: 'Dívidas críticas',
+        value: snapshot.criticalDebts == 0 ? 'Sem alerta' : '${snapshot.criticalDebts} crítica(s)',
+        subtitle: snapshot.openDebts == 0 ? 'Sem dívidas abertas' : '${snapshot.openDebts} abertas · ${_money(snapshot.openDebtAmount)}',
+        color: snapshot.criticalDebts == 0 ? Colors.green : Colors.red,
+        urgency: snapshot.criticalDebts == 0 ? _AttentionUrgency.good : _AttentionUrgency.danger,
         onTap: onDebts,
       ),
       _AttentionMiniCard(
@@ -432,16 +407,18 @@ class _ImmediateAttentionCarousel extends StatelessWidget {
         title: 'Atrasos',
         value: snapshot.overdueTransactions == 0 ? 'Sem atraso' : '${snapshot.overdueTransactions} atraso(s)',
         subtitle: _money(snapshot.overdueAmount),
-        color: Colors.red,
+        color: snapshot.overdueTransactions == 0 ? Colors.green : Colors.red,
+        urgency: snapshot.overdueTransactions == 0 ? _AttentionUrgency.good : _AttentionUrgency.danger,
         onTap: onTransactions,
       ),
       _AttentionMiniCard(
-        icon: Icons.savings_outlined,
-        title: 'Planejamento',
-        value: 'Metas e contas',
-        subtitle: 'Ver orçamento',
-        color: Colors.indigo,
-        onTap: onPlanning,
+        icon: Icons.speed_outlined,
+        title: 'Orçamentos no limite',
+        value: isLoadingBudgets ? 'Carregando' : (snapshot.budgetsAtLimit == 0 ? 'Tudo ok' : '${snapshot.budgetsAtLimit} alerta(s)'),
+        subtitle: isLoadingBudgets ? 'Verificando limites' : (snapshot.worstBudgetName ?? 'Nenhum orçamento acima de 80%'),
+        color: snapshot.budgetsAtLimit == 0 ? Colors.indigo : Colors.deepOrange,
+        urgency: snapshot.budgetsAtLimit == 0 ? _AttentionUrgency.good : _AttentionUrgency.warning,
+        onTap: onBudgets,
       ),
     ];
 
@@ -451,10 +428,10 @@ class _ImmediateAttentionCarousel extends StatelessWidget {
         const _DashboardSectionTitle(title: 'Atenção imediata'),
         const SizedBox(height: 8),
         SizedBox(
-          height: 126,
+          height: 138,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemBuilder: (context, index) => SizedBox(width: 220, child: cards[index]),
+            itemBuilder: (context, index) => SizedBox(width: 232, child: cards[index]),
             separatorBuilder: (_, __) => const SizedBox(width: 10),
             itemCount: cards.length,
           ),
@@ -464,21 +441,29 @@ class _ImmediateAttentionCarousel extends StatelessWidget {
   }
 }
 
+enum _AttentionUrgency { good, warning, danger }
+
 class _AttentionMiniCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String value;
   final String subtitle;
   final Color color;
+  final _AttentionUrgency urgency;
   final VoidCallback onTap;
 
-  const _AttentionMiniCard({required this.icon, required this.title, required this.value, required this.subtitle, required this.color, required this.onTap});
+  const _AttentionMiniCard({required this.icon, required this.title, required this.value, required this.subtitle, required this.color, required this.urgency, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    final badgeLabel = switch (urgency) {
+      _AttentionUrgency.good => 'OK',
+      _AttentionUrgency.warning => 'Atenção',
+      _AttentionUrgency.danger => 'Crítico',
+    };
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: color.withValues(alpha: 0.18))),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: color.withValues(alpha: 0.22))),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: onTap,
@@ -487,7 +472,17 @@ class _AttentionMiniCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(backgroundColor: color.withValues(alpha: 0.12), child: Icon(icon, color: color)),
+              Row(
+                children: [
+                  CircleAvatar(backgroundColor: color.withValues(alpha: 0.12), child: Icon(icon, color: color)),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(999)),
+                    child: Text(badgeLabel, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 11)),
+                  ),
+                ],
+              ),
               const Spacer(),
               Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
               Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 17)),
@@ -517,20 +512,7 @@ class _QuickChartsCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            SizedBox(
-              width: 96,
-              height: 96,
-              child: CustomPaint(
-                painter: _MiniPiePainter(items: categoryHighlights),
-                child: Center(
-                  child: Text(
-                    totalExpenses <= 0 ? '0%' : 'Top\n${categoryHighlights.length}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-                  ),
-                ),
-              ),
-            ),
+            SizedBox(width: 96, height: 96, child: CustomPaint(painter: _MiniPiePainter(items: categoryHighlights), child: Center(child: Text(totalExpenses <= 0 ? '0%' : 'Top\n${categoryHighlights.length}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800))))),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -641,13 +623,7 @@ class _RecentTransactionTile extends StatelessWidget {
     final isIncome = transaction.type == 'income';
     final isCanceled = transaction.status == 'canceled';
     final color = isCanceled ? Colors.grey : (isIncome ? Colors.green : Colors.red);
-    final statusLabel = switch (transaction.status) {
-      'paid' => 'Pago',
-      'pending' => 'Pendente',
-      'overdue' => 'Atrasado',
-      'canceled' => 'Cancelado',
-      _ => transaction.status,
-    };
+    final statusLabel = switch (transaction.status) { 'paid' => 'Pago', 'pending' => 'Pendente', 'overdue' => 'Atrasado', 'canceled' => 'Cancelado', _ => transaction.status };
 
     return Card(
       elevation: 0,
@@ -712,19 +688,7 @@ class _EmptyFinancePanel extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: Colors.grey.shade300)),
       child: Padding(
         padding: const EdgeInsets.all(18),
-        child: Row(
-          children: [
-            Icon(icon, size: 34, color: Colors.grey.shade600),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 4),
-                Text(subtitle, style: TextStyle(color: Colors.grey.shade700)),
-              ]),
-            ),
-          ],
-        ),
+        child: Row(children: [Icon(icon, size: 34, color: Colors.grey.shade600), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text(subtitle, style: TextStyle(color: Colors.grey.shade700))]))]),
       ),
     );
   }
@@ -736,21 +700,34 @@ class _FinanceAttentionSnapshot {
   final int overdueTransactions;
   final double overdueAmount;
   final int openDebts;
+  final int criticalDebts;
   final double openDebtAmount;
+  final int budgetsAtLimit;
+  final String? worstBudgetName;
 
-  const _FinanceAttentionSnapshot({required this.pendingTransactions, required this.pendingAmount, required this.overdueTransactions, required this.overdueAmount, required this.openDebts, required this.openDebtAmount});
+  const _FinanceAttentionSnapshot({required this.pendingTransactions, required this.pendingAmount, required this.overdueTransactions, required this.overdueAmount, required this.openDebts, required this.criticalDebts, required this.openDebtAmount, required this.budgetsAtLimit, required this.worstBudgetName});
 
-  factory _FinanceAttentionSnapshot.from({required FinanceScreenData data, required List<Debt> debts}) {
+  factory _FinanceAttentionSnapshot.from({required FinanceScreenData data, required List<Debt> debts, required List<FinanceBudgetUsage> budgetUsages}) {
     final activeTransactions = data.filteredTransactions.where((transaction) => transaction.status != 'paid' && transaction.status != 'canceled').toList();
     final overdueTransactions = activeTransactions.where((transaction) => transaction.status == 'overdue' || FinanceTransactionRules.isOverdue(transaction)).toList();
     final openDebts = debts.where((debt) => debt.status != 'paid' && debt.status != 'canceled').toList();
+    final criticalDebts = openDebts.where((debt) => debt.status == 'overdue').length;
+    final budgetAlerts = budgetUsages.where((usage) => usage.plannedRatio >= 0.8 || usage.isOverPlanned).toList()
+      ..sort((a, b) => b.plannedRatio.compareTo(a.plannedRatio));
+    final worstBudget = budgetAlerts.isEmpty ? null : budgetAlerts.first;
+    final worstBudgetName = worstBudget == null
+        ? null
+        : '${worstBudget.budget.name} · ${(worstBudget.plannedRatio * 100).clamp(0, 999).toStringAsFixed(0)}%';
     return _FinanceAttentionSnapshot(
       pendingTransactions: activeTransactions.length,
       pendingAmount: activeTransactions.fold<double>(0, (sum, transaction) => sum + transaction.amount),
       overdueTransactions: overdueTransactions.length,
       overdueAmount: overdueTransactions.fold<double>(0, (sum, transaction) => sum + transaction.amount),
       openDebts: openDebts.length,
+      criticalDebts: criticalDebts,
       openDebtAmount: openDebts.fold<double>(0, (sum, debt) => sum + debt.totalAmount),
+      budgetsAtLimit: budgetAlerts.length,
+      worstBudgetName: worstBudgetName,
     );
   }
 }
@@ -768,11 +745,7 @@ List<_CategoryHighlight> _categoryHighlights(FinanceScreenData data, List<Financ
   final entries = data.summary.paidExpensesByCategory.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
   return entries.take(5).map((entry) {
     final category = categoryMap[entry.key];
-    return _CategoryHighlight(
-      name: category?.name ?? 'Sem categoria',
-      amount: entry.value,
-      color: _categoryColor(category),
-    );
+    return _CategoryHighlight(name: category?.name ?? 'Sem categoria', amount: entry.value, color: _categoryColor(category));
   }).toList();
 }
 
@@ -792,6 +765,8 @@ Color _categoryColor(FinancialCategory? category) {
   if (parsed == null) return Colors.blueGrey;
   return Color(parsed);
 }
+
+String _monthKey(DateTime month) => '${month.year.toString().padLeft(4, '0')}-${month.month.toString().padLeft(2, '0')}';
 
 String _money(num value) => MoneyFormatter.format(value);
 
