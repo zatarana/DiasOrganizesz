@@ -47,6 +47,9 @@ jobs:
       - name: Aplicar refinamento UX da tela Hoje
         run: dart run tool/patch_today_tasks_ux.dart
 
+      - name: Aplicar Today M1
+        run: dart run tool/patch_today_tasks_m1.dart
+
       - name: Limpar avisos conhecidos do analyzer
         run: dart run tool/patch_analyze_cleanup.dart
 
@@ -58,6 +61,11 @@ jobs:
           grep -q "Icons.lightbulb_outline" lib/features/tasks/today_tasks_screen.dart
           grep -q "suggestionTasks" lib/features/tasks/today_tasks_screen.dart
           grep -q "QuickAddTaskButton" lib/features/tasks/today_tasks_screen.dart
+          grep -q "TweenAnimationBuilder<double>" lib/features/tasks/today_tasks_screen.dart
+          grep -q "Celebração do dia" lib/features/tasks/today_tasks_screen.dart
+          grep -q "Dismissible(" lib/features/tasks/today_tasks_screen.dart
+          grep -q "Adiar para amanhã" lib/features/tasks/today_tasks_screen.dart
+          grep -q "label: 'Atrasada'" lib/features/tasks/today_tasks_screen.dart
 
           if grep -q "Criação completa para hoje" lib/features/tasks/today_tasks_screen.dart; then
             echo "ERRO: ação duplicada de criação completa ainda está na AppBar da tela Hoje." >&2
