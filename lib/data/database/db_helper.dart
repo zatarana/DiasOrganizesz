@@ -12,7 +12,7 @@ import '../models/task_model.dart';
 import '../models/transaction_model.dart';
 
 class DatabaseHelper {
-  static const int schemaVersion = 17;
+  static const int schemaVersion = 18;
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
 
@@ -37,6 +37,7 @@ class DatabaseHelper {
     if (await target.exists()) return;
 
     const legacyNames = [
+      'diasorganize_v17.db',
       'diasorganize_v16.db',
       'diasorganize_v15.db',
       'diasorganize_v14.db',
@@ -171,11 +172,16 @@ class DatabaseHelper {
     if (oldVersion < 17) {
       await _ensureFinancialTransactionColumns(db);
     }
+    if (oldVersion < 18) {
+      await _ensureTaskColumns(db);
+    }
   }
 
   Future<void> _ensureTaskColumns(Database db) async {
     await _addColumnIfMissing(db, 'tasks', 'parentTaskId INTEGER');
     await _addColumnIfMissing(db, 'tasks', 'recurrenceType TEXT NOT NULL DEFAULT "none"');
+    await _addColumnIfMissing(db, 'tasks', 'tags TEXT');
+    await _addColumnIfMissing(db, 'tasks', 'reminderOffsets TEXT');
   }
 
   Future<void> _ensureFinancialTransactionColumns(Database db) async {
@@ -219,6 +225,8 @@ class DatabaseHelper {
         status TEXT NOT NULL,
         reminderEnabled INTEGER NOT NULL,
         recurrenceType TEXT NOT NULL DEFAULT 'none',
+        tags TEXT,
+        reminderOffsets TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       )
