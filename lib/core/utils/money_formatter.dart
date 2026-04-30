@@ -21,6 +21,9 @@ class MoneyFormatter {
     value = value.replaceAll(RegExp(r'[^0-9,.-]'), '');
     if (value.isEmpty || value == '-' || value == ',' || value == '.') return null;
 
+    final negative = value.startsWith('-') || value.endsWith('-');
+    value = value.replaceAll('-', '');
+
     final lastComma = value.lastIndexOf(',');
     final lastDot = value.lastIndexOf('.');
 
@@ -32,22 +35,28 @@ class MoneyFormatter {
       value = value.replaceAll(',', '.');
     }
 
-    return double.tryParse(value);
+    final parsed = double.tryParse(value);
+    if (parsed == null) return null;
+    return negative ? -parsed : parsed;
   }
 }
 
 class MoneyInputFormatter extends TextInputFormatter {
-  const MoneyInputFormatter();
+  final bool allowNegative;
+
+  const MoneyInputFormatter({this.allowNegative = false});
 
   @override
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    final isNegative = allowNegative && newValue.text.contains('-');
     final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.isEmpty) {
-      return const TextEditingValue(text: '', selection: TextSelection.collapsed(offset: 0));
+      final text = isNegative ? '-' : '';
+      return TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length));
     }
 
     final cents = int.parse(digits);
-    final value = cents / 100;
+    final value = (cents / 100) * (isNegative ? -1 : 1);
     final formatted = MoneyFormatter.formatForInput(value);
     return TextEditingValue(
       text: formatted,
