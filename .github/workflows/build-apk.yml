@@ -79,6 +79,38 @@ jobs:
             exit 1
           fi
 
+      - name: Validar Etapa 2 dashboard financeiro
+        run: |
+          echo "Validando FinanceEntryScreen como dashboard com Slivers..."
+          grep -q "class FinanceEntryScreen extends ConsumerStatefulWidget" lib/features/finance/finance_entry_screen.dart
+          grep -q "CustomScrollView" lib/features/finance/finance_entry_screen.dart
+          grep -q "SliverAppBar" lib/features/finance/finance_entry_screen.dart
+          grep -q "FlexibleSpaceBar" lib/features/finance/finance_entry_screen.dart
+          grep -q "financeScreenDataProvider" lib/features/finance/finance_entry_screen.dart
+          grep -q "FinanceScreenFilters" lib/features/finance/finance_entry_screen.dart
+          grep -q "realAccountBalanceProvider" lib/features/finance/finance_entry_screen.dart
+          grep -q "_SliverBalanceHeader" lib/features/finance/finance_entry_screen.dart
+          grep -q "_CompactMonthNavigationBar" lib/features/finance/finance_entry_screen.dart
+          grep -q "_ImmediateAttentionCarousel" lib/features/finance/finance_entry_screen.dart
+          grep -q "_QuickChartsCard" lib/features/finance/finance_entry_screen.dart
+          grep -q "_FinanceToolCard" lib/features/finance/finance_entry_screen.dart
+          grep -q "Saldo consolidado" lib/features/finance/finance_entry_screen.dart
+          grep -q "Atenção imediata" lib/features/finance/finance_entry_screen.dart
+          grep -q "Distribuição de despesas" lib/features/finance/finance_entry_screen.dart
+          grep -q "Transações recentes" lib/features/finance/finance_entry_screen.dart
+          grep -q "Ferramentas financeiras" lib/features/finance/finance_entry_screen.dart
+          grep -q "MoneyFormatter.format" lib/features/finance/finance_entry_screen.dart
+
+          if grep -q "ListView(" lib/features/finance/finance_entry_screen.dart; then
+            echo "ERRO: FinanceEntryScreen voltou a usar ListView como estrutura principal." >&2
+            exit 1
+          fi
+
+          if grep -q "FutureBuilder<double>\|_realBalanceFuture\|_loadRealBalance\|FinancePlanningStore" lib/features/finance/finance_entry_screen.dart; then
+            echo "ERRO: entrada financeira ainda usa carregamento local de saldo em vez do provider central." >&2
+            exit 1
+          fi
+
       - name: Validar F-M4 dívidas
         run: |
           echo "Validando F-M4 no módulo de dívidas..."
@@ -217,42 +249,6 @@ jobs:
 
           if grep -q "Criação completa para hoje" lib/features/tasks/today_tasks_screen.dart; then
             echo "ERRO: ação duplicada de criação completa ainda está na AppBar da tela Hoje." >&2
-            exit 1
-          fi
-
-      - name: Validar nova entrada de Finanças
-        run: |
-          echo "Validando dashboard da entrada de Finanças..."
-          grep -q "class FinanceEntryScreen extends ConsumerStatefulWidget" lib/features/finance/finance_entry_screen.dart
-          grep -q "_MonthNavigationBar" lib/features/finance/finance_entry_screen.dart
-          grep -q "_selectedMonth" lib/features/finance/finance_entry_screen.dart
-          grep -q "_changeMonth" lib/features/finance/finance_entry_screen.dart
-          grep -q "_goToCurrentMonth" lib/features/finance/finance_entry_screen.dart
-          grep -q "Mês anterior" lib/features/finance/finance_entry_screen.dart
-          grep -q "Próximo mês" lib/features/finance/finance_entry_screen.dart
-          grep -q "Hoje" lib/features/finance/finance_entry_screen.dart
-          grep -q "_MonthHeroCard" lib/features/finance/finance_entry_screen.dart
-          grep -q "_QuickActionsGrid" lib/features/finance/finance_entry_screen.dart
-          grep -q "_AttentionCard" lib/features/finance/finance_entry_screen.dart
-          grep -q "_UpcomingTransactionTile" lib/features/finance/finance_entry_screen.dart
-          grep -q "_RecentTransactionTile" lib/features/finance/finance_entry_screen.dart
-          grep -q "Novo lançamento" lib/features/finance/finance_entry_screen.dart
-          grep -q "Saldo real agora" lib/features/finance/finance_entry_screen.dart
-          grep -q "realAccountBalanceProvider" lib/features/finance/finance_entry_screen.dart
-          grep -q "MoneyFormatter.format" lib/features/finance/finance_entry_screen.dart
-          grep -q "Atualizando saldo" lib/features/finance/finance_entry_screen.dart
-          grep -q "Resultado previsto" lib/features/finance/finance_entry_screen.dart
-          grep -q "A receber" lib/features/finance/finance_entry_screen.dart
-          grep -q "Dívidas" lib/features/finance/finance_entry_screen.dart
-          grep -q "Últimas movimentações do mês" lib/features/finance/finance_entry_screen.dart
-
-          if grep -q "Escolha o que quer fazer agora" lib/features/finance/finance_entry_screen.dart; then
-            echo "ERRO: entrada antiga de Finanças ainda está presente." >&2
-            exit 1
-          fi
-
-          if grep -q "FutureBuilder<double>\|_realBalanceFuture\|_loadRealBalance\|FinancePlanningStore" lib/features/finance/finance_entry_screen.dart; then
-            echo "ERRO: entrada financeira ainda usa carregamento local de saldo em vez do provider central." >&2
             exit 1
           fi
 
