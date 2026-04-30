@@ -1,0 +1,20 @@
+name: Verify Finance Hub
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  verify-finance-hub:
+    name: Verify finance hub positioning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+
+      - name: Validar Etapa 8 ferramentas financeiras
+        run: dart run tool/verify_finance_hub_m8.dart
