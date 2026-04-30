@@ -38,6 +38,9 @@ jobs:
       - name: Aplicar melhorias UX da aba Finanças
         run: dart run tool/patch_finance_screen_ux.dart
 
+      - name: Aplicar F-M2 UI de transações
+        run: dart run tool/patch_finance_transactions_m2.dart
+
       - name: Aplicar melhorias UX do formulário financeiro
         run: dart run tool/patch_transaction_form_ux.dart
 
@@ -55,6 +58,20 @@ jobs:
 
       - name: Limpar avisos conhecidos do analyzer
         run: dart run tool/patch_analyze_cleanup.dart
+
+      - name: Validar F-M2 UI de transações
+        run: |
+          echo "Validando F-M2 na UI de transações..."
+          grep -q "_confirmDeleteTransaction" lib/features/finance/finance_screen.dart
+          grep -q "_buildSwipeActionBackground" lib/features/finance/finance_screen.dart
+          grep -q "Editar movimentação" lib/features/finance/finance_screen.dart
+          grep -q "Excluir movimentação" lib/features/finance/finance_screen.dart
+          grep -q "Quer excluir esta movimentação?" lib/features/finance/finance_screen.dart
+          grep -q "secondaryBackground:" lib/features/finance/finance_screen.dart
+          grep -q "DismissDirection.horizontal" lib/features/finance/finance_screen.dart
+          grep -q "Nenhuma movimentação por aqui" lib/features/finance/finance_screen.dart
+          grep -q "Nova movimentação" lib/features/finance/finance_screen.dart
+          grep -q "Limpar filtros" lib/features/finance/finance_screen.dart
 
       - name: Validar F-M1 moeda no planejamento
         run: |
