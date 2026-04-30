@@ -35,7 +35,7 @@ jobs:
       - name: Habilitar desugaring Android
         run: dart run tool/patch_android_desugaring.dart
 
-      - name: Aplicar patches financeiros e de tarefas
+      - name: Aplicar patches financeiros, tarefas e notificações
         run: |
           dart run tool/patch_finance_screen_ux.dart
           dart run tool/patch_finance_transactions_m2.dart
@@ -50,6 +50,7 @@ jobs:
           dart run tool/patch_today_tasks_ux.dart
           dart run tool/patch_today_tasks_m1.dart
           dart run tool/patch_analyze_cleanup.dart
+          dart run tool/patch_notifications_reliability.dart
 
       - name: Validar navegação financeira unificada
         run: |
@@ -101,6 +102,25 @@ jobs:
           dart run tool/verify_finance_dashboard_planning_m7.dart
           dart run tool/verify_finance_hub_m8.dart
           dart run tool/verify_finance_redesign_all.dart
+
+      - name: Validar notificações
+        run: |
+          echo "Validando confiabilidade de notificações..."
+          grep -q "DarwinInitializationSettings" lib/core/notifications/notification_service.dart
+          grep -q "requestPermissions(alert: true, badge: true, sound: true)" lib/core/notifications/notification_service.dart
+          grep -q "Future<void> syncTaskReminder(Task task)" lib/core/notifications/notification_service.dart
+          grep -q "Future<void> cancelTaskReminderSet(int taskId)" lib/core/notifications/notification_service.dart
+          grep -q "taskReminderOffsetId(taskId, index)" lib/core/notifications/notification_service.dart
+          grep -q "Future<void> rescheduleAllActiveNotifications(DatabaseHelper db)" lib/core/notifications/notification_service.dart
+          grep -q "await notificationService.rescheduleAllActiveNotifications(DatabaseHelper.instance);" lib/main.dart
+          grep -q "await NotificationService().syncTaskReminder(newTask);" lib/domain/providers.dart
+          grep -q "await NotificationService().syncTaskReminder(task);" lib/domain/providers.dart
+          grep -q "await NotificationService().cancelTaskReminderSet(id);" lib/domain/providers.dart
+
+          if grep -q "cancelNotification(NotificationService().taskReminderId" lib/domain/providers.dart; then
+            echo "ERRO: cancelamento de tarefas ainda usa apenas taskReminderId." >&2
+            exit 1
+          fi
 
       - name: Validar moeda no planejamento
         run: |
