@@ -19,8 +19,10 @@ class CreateTaskScreen extends ConsumerStatefulWidget {
 }
 
 class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
+  final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
+  final _tagController = TextEditingController();
   String _date = DateFormat('yyyy-MM-dd').format(DateTime.now());
   String? _time;
   String _priority = 'media';
@@ -30,6 +32,11 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
   int? _projectStepId;
   int? _parentTaskId;
   bool _hasReminder = false;
+  bool _isSaving = false;
+  final List<String> _tags = [];
+  final List<int> _reminderOffsets = [];
+
+  static const List<int> _availableReminderOffsets = [0, 5, 10, 30, 60, 1440];
 
   @override
   void initState() {
@@ -51,6 +58,9 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
       _projectStepId = task.projectStepId ?? widget.projectStepId;
       _parentTaskId = task.parentTaskId ?? widget.parentTaskId;
       _hasReminder = task.reminderEnabled && task.time != null;
+      _tags.addAll(_parseTags(task.tags));
+      _reminderOffsets.addAll(_parseReminderOffsets(task.reminderOffsets));
+      if (_hasReminder && _reminderOffsets.isEmpty) _reminderOffsets.add(0);
     }
   }
 
@@ -58,6 +68,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
   void dispose() {
     _titleController.dispose();
     _descController.dispose();
+    _tagController.dispose();
     super.dispose();
   }
 
@@ -82,63 +93,80 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
   }
 
   Future<void> _save() async {
-    if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Título é obrigatório.')));
-      return;
-    }
+    if (_isSaving) return;
+    FocusScope.of(context).unfocus();
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
     final categories = ref.read(categoriesProvider);
     final categoryStillExists = _categoryId != null && categories.any((category) => category.id == _categoryId);
     final catId = categoryStillExists ? _categoryId : (categories.isNotEmpty ? categories.first.id : 1);
-    final hasValidReminder = _hasReminder && _time != null;
     final isSubtask = _parentTaskId != null;
+    final reminderOffsets = _time == null || !_hasReminder ? <int>[] : _reminderOffsets.take(3).toList()..sort();
+    final hasValidReminder = reminderOffsets.isNotEmpty;
 
-    final task = Task(
-      id: widget.task?.id,
-      title: _titleController.text.trim(),
-      description: _descController.text.trim().isEmpty ? null : _descController.text.trim(),
-      date: _date,
-      time: _time,
-      categoryId: catId!,
-      projectId: _projectId,
-      projectStepId: _projectId == null ? null : _projectStepId,
-      parentTaskId: _parentTaskId,
-      priority: _priority,
-      status: _normalizedStatusForSave(),
-      reminderEnabled: hasValidReminder,
-      recurrenceType: isSubtask ? 'none' : _recurrenceType,
-      createdAt: widget.task?.createdAt ?? DateTime.now().toIso8601String(),
-      updatedAt: DateTime.now().toIso8601String(),
-    );
+    setState(() => _isSaving = true);
+    try {
+      final task = Task(
+        id: widget.task?.id,
+        title: _titleController.text.trim(),
+        description: _descController.text.trim().isEmpty ? null : _descController.text.trim(),
+        date: _date,
+        time: _time,
+        categoryId: catId!,
+        projectId: _projectId,
+        projectStepId: _projectId == null ? null : _projectStepId,
+        parentTaskId: _parentTaskId,
+        priority: _priority,
+        status: _normalizedStatusForSave(),
+        reminderEnabled: hasValidReminder,
+        recurrenceType: isSubtask ? 'none' : _recurrenceType,
+        tags: _tags.isEmpty ? null : _tags.join(', '),
+        reminderOffsets: hasValidReminder ? reminderOffsets.join(',') : null,
+        createdAt: widget.task?.createdAt ?? DateTime.now().toIso8601String(),
+        updatedAt: DateTime.now().toIso8601String(),
+      );
 
-    if (widget.task == null) {
-      final insertedTask = await ref.read(tasksProvider.notifier).addTaskWithReturn(task);
-      await _syncReminder(insertedTask);
-    } else {
-      await ref.read(tasksProvider.notifier).updateTask(task);
-      await _syncReminder(task);
+      if (widget.task == null) {
+        final insertedTask = await ref.read(tasksProvider.notifier).addTaskWithReturn(task);
+        await _syncReminder(insertedTask);
+      } else {
+        await ref.read(tasksProvider.notifier).updateTask(task);
+        await _syncReminder(task);
+      }
+      if (mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
-    if (mounted) Navigator.pop(context);
   }
 
   Future<void> _syncReminder(Task task) async {
     if (task.id == null) return;
-    final reminderId = NotificationService().taskReminderId(task.id!);
-    if (!task.reminderEnabled || task.time == null || task.date == null || task.status == 'concluida' || task.status == 'canceled') {
-      await NotificationService().cancelNotification(reminderId);
-      return;
-    }
+    final notificationService = NotificationService();
+    await notificationService.cancelTaskReminderSet(task.id!);
+
+    if (!task.reminderEnabled || task.time == null || task.date == null || task.status == 'concluida' || task.status == 'canceled') return;
+    final offsets = _parseReminderOffsets(task.reminderOffsets);
+    if (offsets.isEmpty) return;
+
     try {
       final parts = task.time!.split(':');
       final currentDate = DateTime.parse(task.date!);
-      final reminderTime = DateTime(currentDate.year, currentDate.month, currentDate.day, int.parse(parts[0]), int.parse(parts[1]));
-      if (!reminderTime.isAfter(DateTime.now())) {
-        await NotificationService().cancelNotification(reminderId);
-        return;
+      final taskDateTime = DateTime(currentDate.year, currentDate.month, currentDate.day, int.parse(parts[0]), int.parse(parts[1]));
+      for (var index = 0; index < offsets.take(3).length; index++) {
+        final offset = offsets[index];
+        final reminderTime = taskDateTime.subtract(Duration(minutes: offset));
+        if (!reminderTime.isAfter(DateTime.now())) continue;
+        final label = _reminderOffsetLabel(offset).toLowerCase();
+        await notificationService.scheduleNotification(
+          id: notificationService.taskReminderOffsetId(task.id!, index),
+          title: offset == 0 ? 'Lembrete: ${task.title}' : 'Lembrete: ${task.title} em $label',
+          body: offset == 0 ? 'Sua tarefa está programada para agora!' : 'Sua tarefa está chegando: $label.',
+          scheduledDate: reminderTime,
+        );
       }
-      await NotificationService().scheduleNotification(id: reminderId, title: 'Lembrete: ${task.title}', body: 'Sua tarefa está programada para agora!', scheduledDate: reminderTime);
     } catch (error) {
-      debugPrint('Erro ao sincronizar lembrete de tarefa: $error');
-      await NotificationService().cancelNotification(reminderId);
+      debugPrint('Erro ao sincronizar lembretes de tarefa: $error');
+      await notificationService.cancelTaskReminderSet(task.id!);
     }
   }
 
@@ -158,7 +186,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
     );
     if (confirmed != true || !mounted) return;
     await ref.read(tasksProvider.notifier).removeTask(task!.id!);
-    await NotificationService().cancelNotification(NotificationService().taskReminderId(task.id!));
+    await NotificationService().cancelTaskReminderSet(task.id!);
     if (mounted) Navigator.pop(context);
   }
 
@@ -169,75 +197,164 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.task == null ? (isSubtask ? 'Nova Subtarefa' : 'Nova Tarefa') : 'Editar Tarefa'),
-        actions: [if (widget.task != null) IconButton(icon: const Icon(Icons.delete), onPressed: _confirmDelete)],
+        actions: [if (widget.task != null) IconButton(icon: const Icon(Icons.delete), onPressed: _isSaving ? null : _confirmDelete)],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            TextField(controller: _titleController, decoration: const InputDecoration(labelText: 'Título', border: OutlineInputBorder())),
-            const SizedBox(height: 16),
-            TextField(controller: _descController, maxLines: 3, decoration: const InputDecoration(labelText: 'Descrição', border: OutlineInputBorder())),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: ListTile(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: Colors.grey.shade400)),
-                    title: Text(_date, overflow: TextOverflow.ellipsis),
-                    subtitle: const Text('Data'),
-                    trailing: const Icon(Icons.calendar_today),
-                    onTap: () async {
-                      final selected = await showDatePicker(context: context, initialDate: DateTime.tryParse(_date) ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
-                      if (selected != null) setState(() => _date = DateFormat('yyyy-MM-dd').format(selected));
-                    },
+      body: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              TextFormField(
+                controller: _titleController,
+                decoration: const InputDecoration(labelText: 'Título', border: OutlineInputBorder()),
+                textInputAction: TextInputAction.next,
+                validator: (value) => value == null || value.trim().isEmpty ? 'Informe o título da tarefa.' : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _descController,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Descrição', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: ListTile(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: Colors.grey.shade400)),
+                      title: Text(_date, overflow: TextOverflow.ellipsis),
+                      subtitle: const Text('Data'),
+                      trailing: const Icon(Icons.calendar_today),
+                      onTap: () async {
+                        final selected = await showDatePicker(context: context, initialDate: DateTime.tryParse(_date) ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
+                        if (selected != null) setState(() => _date = DateFormat('yyyy-MM-dd').format(selected));
+                      },
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ListTile(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: Colors.grey.shade400)),
-                    title: Text(_time ?? '--:--'),
-                    subtitle: const Text('Horário'),
-                    trailing: _time == null ? const Icon(Icons.access_time) : IconButton(tooltip: 'Limpar horário', icon: const Icon(Icons.clear), onPressed: () => setState(() { _time = null; _hasReminder = false; })),
-                    onTap: () async {
-                      final selected = await showTimePicker(context: context, initialTime: TimeOfDay.now());
-                      if (selected != null) setState(() => _time = '${selected.hour.toString().padLeft(2, '0')}:${selected.minute.toString().padLeft(2, '0')}');
-                    },
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ListTile(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: Colors.grey.shade400)),
+                      title: Text(_time ?? '--:--'),
+                      subtitle: const Text('Horário'),
+                      trailing: _time == null
+                          ? const Icon(Icons.access_time)
+                          : IconButton(
+                              tooltip: 'Limpar horário',
+                              icon: const Icon(Icons.clear),
+                              onPressed: () => setState(() {
+                                _time = null;
+                                _hasReminder = false;
+                                _reminderOffsets.clear();
+                              }),
+                            ),
+                      onTap: () async {
+                        final selected = await showTimePicker(context: context, initialTime: TimeOfDay.now());
+                        if (selected != null) {
+                          setState(() {
+                            _time = '${selected.hour.toString().padLeft(2, '0')}:${selected.minute.toString().padLeft(2, '0')}';
+                            if (_hasReminder && _reminderOffsets.isEmpty) _reminderOffsets.add(0);
+                          });
+                        }
+                      },
+                    ),
                   ),
-                ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _ReminderSelector(
+                enabled: _time != null && _hasReminder,
+                canEnable: _time != null,
+                selectedOffsets: _reminderOffsets,
+                availableOffsets: _availableReminderOffsets,
+                onEnabledChanged: (value) => setState(() {
+                  _hasReminder = value;
+                  if (!value) {
+                    _reminderOffsets.clear();
+                  } else if (_reminderOffsets.isEmpty) {
+                    _reminderOffsets.add(0);
+                  }
+                }),
+                onOffsetToggled: _toggleReminderOffset,
+              ),
+              const SizedBox(height: 16),
+              Consumer(builder: (context, ref, child) {
+                final categories = ref.watch(categoriesProvider);
+                if (categories.isEmpty) return const SizedBox.shrink();
+                final safeCategoryId = categories.any((category) => category.id == _categoryId) ? _categoryId : categories.first.id;
+                return DropdownButtonFormField<int>(initialValue: safeCategoryId, decoration: const InputDecoration(labelText: 'Categoria', border: OutlineInputBorder()), items: categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis))).toList(), onChanged: (val) { if (val != null) setState(() => _categoryId = val); });
+              }),
+              if (!isSubtask) ...[
+                const SizedBox(height: 16),
+                _projectPicker(),
+                if (_projectId != null) ...[const SizedBox(height: 16), _sessionPicker()],
               ],
-            ),
-            const SizedBox(height: 16),
-            SwitchListTile(title: const Text('Ativar Lembrete Local'), subtitle: const Text('Requer data e horário definidos'), value: _time != null && _hasReminder, onChanged: _time != null ? (val) => setState(() => _hasReminder = val) : null),
-            const SizedBox(height: 16),
-            Consumer(builder: (context, ref, child) {
-              final categories = ref.watch(categoriesProvider);
-              if (categories.isEmpty) return const SizedBox.shrink();
-              final safeCategoryId = categories.any((category) => category.id == _categoryId) ? _categoryId : categories.first.id;
-              return DropdownButtonFormField<int>(initialValue: safeCategoryId, decoration: const InputDecoration(labelText: 'Categoria', border: OutlineInputBorder()), items: categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis))).toList(), onChanged: (val) { if (val != null) setState(() => _categoryId = val); });
-            }),
-            if (!isSubtask) ...[
               const SizedBox(height: 16),
-              _projectPicker(),
-              if (_projectId != null) ...[const SizedBox(height: 16), _sessionPicker()],
-            ],
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(initialValue: _priority, decoration: const InputDecoration(labelText: 'Prioridade', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'baixa', child: Text('Baixa')), DropdownMenuItem(value: 'media', child: Text('Média')), DropdownMenuItem(value: 'alta', child: Text('Alta'))], onChanged: (val) { if (val != null) setState(() => _priority = val); }),
-            if (!isSubtask) ...[
+              DropdownButtonFormField<String>(initialValue: _priority, decoration: const InputDecoration(labelText: 'Prioridade', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'baixa', child: Text('Baixa')), DropdownMenuItem(value: 'media', child: Text('Média')), DropdownMenuItem(value: 'alta', child: Text('Alta'))], onChanged: (val) { if (val != null) setState(() => _priority = val); }),
+              if (!isSubtask) ...[
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(initialValue: _recurrenceType, decoration: const InputDecoration(labelText: 'Recorrência', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'none', child: Text('Não repetir')), DropdownMenuItem(value: 'daily', child: Text('Diariamente')), DropdownMenuItem(value: 'weekly', child: Text('Semanalmente')), DropdownMenuItem(value: 'monthly', child: Text('Mensalmente'))], onChanged: (val) { if (val != null) setState(() => _recurrenceType = val); }),
+              ],
               const SizedBox(height: 16),
-              DropdownButtonFormField<String>(initialValue: _recurrenceType, decoration: const InputDecoration(labelText: 'Recorrência', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'none', child: Text('Não repetir')), DropdownMenuItem(value: 'daily', child: Text('Diariamente')), DropdownMenuItem(value: 'weekly', child: Text('Semanalmente')), DropdownMenuItem(value: 'monthly', child: Text('Mensalmente'))], onChanged: (val) { if (val != null) setState(() => _recurrenceType = val); }),
+              _TagsSelector(
+                controller: _tagController,
+                tags: _tags,
+                onAdd: _addTag,
+                onRemove: _removeTag,
+              ),
+              if (canShowSubtasks) ...[
+                const SizedBox(height: 16),
+                _subtasksCard(widget.task!),
+              ],
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: _isSaving ? null : _save,
+                  style: ElevatedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  child: _isSaving
+                      ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Salvar Tarefa', style: TextStyle(fontSize: 16)),
+                ),
+              ),
             ],
-            if (canShowSubtasks) ...[
-              const SizedBox(height: 16),
-              _subtasksCard(widget.task!),
-            ],
-            const SizedBox(height: 24),
-            SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: _save, style: ElevatedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text('Salvar Tarefa', style: TextStyle(fontSize: 16)))),
-          ],
+          ),
         ),
       ),
     );
+  }
+
+  void _toggleReminderOffset(int offset) {
+    setState(() {
+      if (_reminderOffsets.contains(offset)) {
+        _reminderOffsets.remove(offset);
+      } else if (_reminderOffsets.length < 3) {
+        _reminderOffsets.add(offset);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Escolha no máximo 3 lembretes.')));
+      }
+      _reminderOffsets.sort();
+      _hasReminder = _reminderOffsets.isNotEmpty;
+    });
+  }
+
+  void _addTag(String value) {
+    final clean = value.trim().replaceAll(',', '');
+    if (clean.isEmpty) return;
+    if (_tags.any((tag) => tag.toLowerCase() == clean.toLowerCase())) {
+      _tagController.clear();
+      return;
+    }
+    setState(() {
+      _tags.add(clean);
+      _tagController.clear();
+    });
+  }
+
+  void _removeTag(String value) {
+    setState(() => _tags.remove(value));
   }
 
   Widget _projectPicker() {
@@ -288,4 +405,128 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
       ),
     );
   }
+}
+
+class _ReminderSelector extends StatelessWidget {
+  final bool enabled;
+  final bool canEnable;
+  final List<int> selectedOffsets;
+  final List<int> availableOffsets;
+  final ValueChanged<bool> onEnabledChanged;
+  final ValueChanged<int> onOffsetToggled;
+
+  const _ReminderSelector({
+    required this.enabled,
+    required this.canEnable,
+    required this.selectedOffsets,
+    required this.availableOffsets,
+    required this.onEnabledChanged,
+    required this.onOffsetToggled,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade300)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Lembretes'),
+              subtitle: Text(canEnable ? 'Selecione até 3 lembretes antes do horário.' : 'Defina um horário para ativar lembretes.'),
+              value: canEnable && enabled,
+              onChanged: canEnable ? onEnabledChanged : null,
+            ),
+            if (enabled) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: availableOffsets.map((offset) {
+                  final selected = selectedOffsets.contains(offset);
+                  final disabled = !selected && selectedOffsets.length >= 3;
+                  return FilterChip(
+                    selected: selected,
+                    label: Text(_reminderOffsetLabel(offset)),
+                    onSelected: disabled ? null : (_) => onOffsetToggled(offset),
+                  );
+                }).toList(),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TagsSelector extends StatelessWidget {
+  final TextEditingController controller;
+  final List<String> tags;
+  final ValueChanged<String> onAdd;
+  final ValueChanged<String> onRemove;
+
+  const _TagsSelector({required this.controller, required this.tags, required this.onAdd, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade300)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Tags', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                labelText: 'Adicionar tag',
+                hintText: 'Ex: estudo, casa, urgente',
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(icon: const Icon(Icons.add), onPressed: () => onAdd(controller.text)),
+              ),
+              textInputAction: TextInputAction.done,
+              onSubmitted: onAdd,
+            ),
+            if (tags.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: tags.map((tag) => InputChip(label: Text(tag), onDeleted: () => onRemove(tag), visualDensity: VisualDensity.compact)).toList(),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+List<String> _parseTags(String? raw) {
+  if (raw == null || raw.trim().isEmpty) return [];
+  return raw.split(',').map((tag) => tag.trim()).where((tag) => tag.isNotEmpty).toSet().toList();
+}
+
+List<int> _parseReminderOffsets(String? raw) {
+  if (raw == null || raw.trim().isEmpty) return [];
+  final values = raw.split(',').map((item) => int.tryParse(item.trim())).whereType<int>().where((value) => value >= 0).toSet().toList();
+  values.sort();
+  return values.take(3).toList();
+}
+
+String _reminderOffsetLabel(int minutes) {
+  if (minutes == 0) return 'Na hora';
+  if (minutes < 60) return '$minutes min antes';
+  if (minutes == 60) return '1 h antes';
+  if (minutes == 1440) return '1 dia antes';
+  if (minutes % 60 == 0) return '${minutes ~/ 60} h antes';
+  return '$minutes min antes';
 }
