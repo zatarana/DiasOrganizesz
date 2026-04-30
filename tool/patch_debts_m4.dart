@@ -179,7 +179,7 @@ String _patchDebtDetailsScreen(String text) {
     }
   }
 
-  if (text.contains("String _money(num value) => 'R\\$ ") || text.contains("replaceAll(',', '.')")) {
+  if (text.contains(r"String _money(num value) => 'R\$ ") || text.contains("replaceAll(',', '.')")) {
     stderr.writeln('F-M4 DebtDetails ainda contém moeda/parsing antigo.');
     exit(1);
   }
