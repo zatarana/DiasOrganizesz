@@ -54,10 +54,22 @@ void _fixFinanceReportsTextDirection() {
   var text = file.readAsStringSync();
 
   if (!text.contains("import 'dart:ui' as ui;")) {
-    text = text.replaceFirst("import 'dart:math' as math;\n", "import 'dart:math' as math;\nimport 'dart:ui' as ui;\n");
+    if (text.contains("import 'dart:math' as math;\n")) {
+      text = text.replaceFirst(
+        "import 'dart:math' as math;\n",
+        "import 'dart:math' as math;\nimport 'dart:ui' as ui;\n",
+      );
+    } else {
+      text = "import 'dart:ui' as ui;\n$text";
+    }
   }
+  text = text.replaceAll('ui.ui.TextDirection.ltr', 'ui.TextDirection.ltr');
   text = text.replaceAll('TextDirection.ltr', 'ui.TextDirection.ltr');
 
+  if (!text.contains("import 'dart:ui' as ui;")) {
+    stderr.writeln('ERRO late analyzer: import dart:ui as ui não foi inserido.');
+    exit(1);
+  }
   if (!text.contains('ui.TextDirection.ltr')) {
     stderr.writeln('ERRO late analyzer: TextDirection.ltr não foi qualificado com ui.');
     exit(1);
@@ -88,11 +100,11 @@ void _fixInputSavePatcherInterpolation() {
   var text = file.readAsStringSync();
 
   text = text.replaceAll(
-    r'''stderr.writeln('ERRO salvamento inputs: faltou "$check".');''',
+    r'''stderr.writeln('ERRO salvamento inputs: faltou \"$check\".');''',
     "stderr.writeln('ERRO salvamento inputs: faltou requisito obrigatório.');",
   );
   text = text.replaceAll(
-    r'''stderr.writeln('ERRO salvamento inputs: faltou \"$check\".');''',
+    r'''stderr.writeln('ERRO salvamento inputs: faltou \\\"$check\\\".');''',
     "stderr.writeln('ERRO salvamento inputs: faltou requisito obrigatório.');",
   );
 
