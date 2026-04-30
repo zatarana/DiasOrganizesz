@@ -28,6 +28,7 @@ class FinanceEntryScreen extends ConsumerWidget {
     final monthTransactions = transactions.where((transaction) => _isSameMonth(_expectedDate(transaction), currentMonth)).toList();
     final dashboard = _FinanceDashboard.from(monthTransactions, debts);
     final upcoming = _upcomingTransactions(transactions);
+    final recentMonthTransactions = _recentTransactions(monthTransactions);
 
     return Scaffold(
       appBar: AppBar(
@@ -87,6 +88,21 @@ class FinanceEntryScreen extends ConsumerWidget {
             else
               ...upcoming.take(5).map((transaction) => _UpcomingTransactionTile(transaction: transaction)),
             const SizedBox(height: 14),
+            _SectionTitle(
+              title: 'Últimas movimentações do mês',
+              actionLabel: 'Ver lista',
+              onAction: () => _open(context, const FinanceScreen()),
+            ),
+            const SizedBox(height: 8),
+            if (recentMonthTransactions.isEmpty)
+              const _EmptyPanel(
+                icon: Icons.receipt_long_outlined,
+                title: 'Nenhum lançamento neste mês',
+                subtitle: 'Use o botão Novo lançamento para começar a registrar receitas e despesas.',
+              )
+            else
+              ...recentMonthTransactions.take(5).map((transaction) => _RecentTransactionTile(transaction: transaction)),
+            const SizedBox(height: 14),
             _SectionTitle(title: 'Módulos financeiros'),
             const SizedBox(height: 8),
             _ModuleShortcutList(
@@ -121,6 +137,7 @@ class _MonthHeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final monthLabel = DateFormat('MMMM yyyy', 'pt_BR').format(month);
     final balanceColor = dashboard.monthResult >= 0 ? Colors.green : Colors.red;
+    final forecastColor = dashboard.forecastResult >= 0 ? Colors.green : Colors.red;
 
     return Card(
       elevation: 0,
@@ -145,7 +162,7 @@ class _MonthHeroCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        dashboard.monthResult >= 0 ? 'Resultado positivo no mês' : 'Atenção: despesas acima das receitas',
+                        dashboard.monthResult >= 0 ? 'Resultado realizado no mês' : 'Atenção: despesas pagas acima das receitas recebidas',
                         style: TextStyle(color: Colors.grey.shade700),
                       ),
                     ],
@@ -158,7 +175,32 @@ class _MonthHeroCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.78),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.insights_outlined, color: forecastColor),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Resultado previsto', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                        Text(_money(dashboard.forecastResult), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: forecastColor)),
+                      ],
+                    ),
+                  ),
+                  Text('${dashboard.totalMovements} mov.', style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(child: _HeroMetric(label: 'Recebido', value: _money(dashboard.paidIncome), color: Colors.green)),
@@ -169,9 +211,17 @@ class _MonthHeroCard extends StatelessWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(child: _HeroMetric(label: 'A pagar', value: _money(dashboard.pendingExpense), color: Colors.deepOrange)),
+                Expanded(child: _HeroMetric(label: 'A receber', value: _money(dashboard.pendingIncome), color: Colors.teal)),
                 const SizedBox(width: 8),
+                Expanded(child: _HeroMetric(label: 'A pagar', value: _money(dashboard.pendingExpense), color: Colors.deepOrange)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
                 Expanded(child: _HeroMetric(label: 'Dívidas abertas', value: dashboard.openDebts.toString(), color: Colors.blueGrey)),
+                const SizedBox(width: 8),
+                Expanded(child: _HeroMetric(label: 'Total em dívidas', value: _money(dashboard.openDebtAmount), color: Colors.brown)),
               ],
             ),
           ],
@@ -318,6 +368,8 @@ class _AttentionCard extends StatelessWidget {
         _AttentionItem(Icons.warning_amber_outlined, '${dashboard.overdueCount} movimentação(ões) em atraso', _money(dashboard.overdueAmount), Colors.red),
       if (dashboard.pendingExpense > 0)
         _AttentionItem(Icons.schedule_outlined, 'Despesas pendentes no mês', _money(dashboard.pendingExpense), Colors.deepOrange),
+      if (dashboard.pendingIncome > 0)
+        _AttentionItem(Icons.request_quote_outlined, 'Receitas a receber', _money(dashboard.pendingIncome), Colors.teal),
       if (dashboard.openDebts > 0)
         _AttentionItem(Icons.payments_outlined, 'Dívidas abertas', '${dashboard.openDebts} registro(s)', Colors.blueGrey),
       if (upcoming.isNotEmpty)
@@ -390,6 +442,41 @@ class _UpcomingTransactionTile extends StatelessWidget {
         title: Text(transaction.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: Text(date == null ? 'Sem data prevista' : DateFormat('dd/MM/yyyy').format(date)),
         trailing: Text(_money(transaction.amount), style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+}
+
+class _RecentTransactionTile extends StatelessWidget {
+  final FinancialTransaction transaction;
+
+  const _RecentTransactionTile({required this.transaction});
+
+  @override
+  Widget build(BuildContext context) {
+    final date = _expectedDate(transaction);
+    final isIncome = transaction.type == 'income';
+    final isCanceled = transaction.status == 'canceled';
+    final color = isCanceled ? Colors.grey : (isIncome ? Colors.green : Colors.red);
+    final statusLabel = switch (transaction.status) {
+      'paid' => 'Pago',
+      'pending' => 'Pendente',
+      'overdue' => 'Atrasado',
+      'canceled' => 'Cancelado',
+      _ => transaction.status,
+    };
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.grey.shade300)),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: color.withValues(alpha: 0.12),
+          child: Icon(isIncome ? Icons.arrow_upward : Icons.arrow_downward, color: color),
+        ),
+        title: Text(transaction.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w600, decoration: isCanceled ? TextDecoration.lineThrough : null)),
+        subtitle: Text('${date == null ? 'Sem data' : DateFormat('dd/MM/yyyy').format(date)} • $statusLabel'),
+        trailing: Text(_money(transaction.amount), style: TextStyle(color: color, fontWeight: FontWeight.bold, decoration: isCanceled ? TextDecoration.lineThrough : null)),
       ),
     );
   }
@@ -481,21 +568,28 @@ class _EmptyPanel extends StatelessWidget {
 class _FinanceDashboard {
   final double paidIncome;
   final double paidExpense;
+  final double pendingIncome;
   final double pendingExpense;
   final double overdueAmount;
   final int overdueCount;
   final int openDebts;
+  final double openDebtAmount;
+  final int totalMovements;
 
   const _FinanceDashboard({
     required this.paidIncome,
     required this.paidExpense,
+    required this.pendingIncome,
     required this.pendingExpense,
     required this.overdueAmount,
     required this.overdueCount,
     required this.openDebts,
+    required this.openDebtAmount,
+    required this.totalMovements,
   });
 
   double get monthResult => paidIncome - paidExpense;
+  double get forecastResult => (paidIncome + pendingIncome) - (paidExpense + pendingExpense);
 
   factory _FinanceDashboard.from(List<FinancialTransaction> monthTransactions, List<Debt> debts) {
     double sumWhere(bool Function(FinancialTransaction transaction) test) {
@@ -503,13 +597,17 @@ class _FinanceDashboard {
     }
 
     final overdueTransactions = monthTransactions.where((transaction) => transaction.status == 'overdue').toList();
+    final openDebts = debts.where((debt) => debt.status != 'paid' && debt.status != 'canceled').toList();
     return _FinanceDashboard(
       paidIncome: sumWhere((transaction) => transaction.status == 'paid' && transaction.type == 'income'),
       paidExpense: sumWhere((transaction) => transaction.status == 'paid' && transaction.type == 'expense'),
+      pendingIncome: sumWhere((transaction) => transaction.status != 'canceled' && transaction.status != 'paid' && transaction.type == 'income'),
       pendingExpense: sumWhere((transaction) => transaction.status != 'canceled' && transaction.status != 'paid' && transaction.type == 'expense'),
       overdueAmount: overdueTransactions.fold<double>(0, (sum, transaction) => sum + transaction.amount),
       overdueCount: overdueTransactions.length,
-      openDebts: debts.where((debt) => debt.status != 'paid' && debt.status != 'canceled').length,
+      openDebts: openDebts.length,
+      openDebtAmount: openDebts.fold<double>(0, (sum, debt) => sum + debt.totalAmount),
+      totalMovements: monthTransactions.where((transaction) => transaction.status != 'canceled').length,
     );
   }
 }
@@ -531,6 +629,15 @@ List<FinancialTransaction> _upcomingTransactions(List<FinancialTransaction> tran
     return aDate.compareTo(bDate);
   });
   return upcoming;
+}
+
+List<FinancialTransaction> _recentTransactions(List<FinancialTransaction> transactions) {
+  final items = [...transactions]..sort((a, b) {
+      final aDate = _expectedDate(a) ?? DateTime(1900);
+      final bDate = _expectedDate(b) ?? DateTime(1900);
+      return bDate.compareTo(aDate);
+    });
+  return items;
 }
 
 DateTime? _expectedDate(FinancialTransaction transaction) {
