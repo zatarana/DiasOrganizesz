@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 class MoneyFormatter {
@@ -10,6 +11,8 @@ class MoneyFormatter {
   const MoneyFormatter._();
 
   static String format(num value) => _currency.format(value);
+
+  static String formatForInput(num value) => format(value);
 
   static double? parse(String raw) {
     var value = raw.trim();
@@ -30,5 +33,25 @@ class MoneyFormatter {
     }
 
     return double.tryParse(value);
+  }
+}
+
+class MoneyInputFormatter extends TextInputFormatter {
+  const MoneyInputFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) {
+      return const TextEditingValue(text: '', selection: TextSelection.collapsed(offset: 0));
+    }
+
+    final cents = int.parse(digits);
+    final value = cents / 100;
+    final formatted = MoneyFormatter.formatForInput(value);
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
   }
 }
