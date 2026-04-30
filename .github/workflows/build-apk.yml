@@ -52,6 +52,7 @@ jobs:
           dart run tool/patch_today_tasks_m1.dart
           dart run tool/patch_analyze_cleanup.dart
           dart run tool/patch_notifications_reliability.dart
+          dart run tool/patch_input_save_reliability.dart
 
       - name: Validar navegação financeira unificada
         run: |
@@ -103,6 +104,20 @@ jobs:
           dart run tool/verify_finance_dashboard_planning_m7.dart
           dart run tool/verify_finance_hub_m8.dart
           dart run tool/verify_finance_redesign_all.dart
+
+      - name: Validar salvamento de inputs
+        run: |
+          echo "Validando que inputs com salvar não ficam presos em loading..."
+          grep -q "db.createTransaction(transaction).timeout(const Duration(seconds: 10))" lib/domain/providers.dart
+          grep -q "_syncTransactionReminderSafely(newTransaction);" lib/domain/providers.dart
+          grep -q "_checkDebtStatusSafely(newTransaction.debtId);" lib/domain/providers.dart
+          grep -q "unawaited(NotificationService()" lib/domain/providers.dart
+          grep -q "O salvamento demorou demais" lib/features/finance/widgets/quick_transaction_bottom_sheet.dart
+          grep -q "Não foi possível salvar:" lib/features/finance/widgets/quick_transaction_bottom_sheet.dart
+          grep -q "finally" lib/features/finance/widgets/quick_transaction_bottom_sheet.dart
+          grep -q "Não foi possível salvar a movimentação" lib/features/finance/create_transaction_screen.dart
+          grep -q "timeout(const Duration(seconds: 10))" lib/features/finance/create_transaction_screen.dart
+          grep -q "Future.microtask(() => navigator.push" lib/features/finance/widgets/quick_transaction_bottom_sheet.dart
 
       - name: Validar notificações
         run: |
