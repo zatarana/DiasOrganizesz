@@ -14,6 +14,7 @@ void main() {
   _fixDeprecatedFlutterApis();
   _fixFinanceMobileOverflows();
   _applySmartTaskCapture();
+  _fixTasksEntrySyntax();
   stdout.writeln('Analyzer cleanup aplicado.');
 }
 
@@ -59,9 +60,25 @@ void _cleanDebtsScreen() {
   final file = File('lib/features/debts/debts_screen.dart');
   if (!file.existsSync()) return;
   var text = file.readAsStringSync();
-  text = _removeMethodByName(text, '_money');
+
+  // Remove apenas a linha de helper _money, sem engolir o método seguinte.
+  text = text.replaceAll(RegExp(r"\n\s*String _money\(num value\) => MoneyFormatter\.format\(value\);\s*\n"), '\n');
+
+  if (!text.contains('void _openCreateDebt()')) {
+    final marker = '  String _currentFilterLabel() {';
+    if (!text.contains(marker)) {
+      stderr.writeln('ERRO: marcador _currentFilterLabel não encontrado em debts_screen.dart.');
+      exit(1);
+    }
+    text = text.replaceFirst(marker, "  void _openCreateDebt() {\n    Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateDebtScreen()));\n  }\n\n$marker");
+  }
+
   if (text.contains('String _money(')) {
     stderr.writeln('ERRO: não foi possível remover _money não utilizado de debts_screen.dart.');
+    exit(1);
+  }
+  if (!text.contains('void _openCreateDebt()')) {
+    stderr.writeln('ERRO: _openCreateDebt ausente em debts_screen.dart.');
     exit(1);
   }
   file.writeAsStringSync(text);
@@ -144,37 +161,14 @@ void _replaceDeprecatedOpacity(List<String> paths) {
 }
 
 void _fixConstInfoHints() {
-  _replaceInFile(
-    'lib/core/notifications/notification_service.dart',
-    '    final details = AndroidNotificationDetails(',
-    '    const details = AndroidNotificationDetails(',
-  );
-
-  // Não torna a seção de Observações const: ela contém TextField com controller dinâmico.
-
-  _replaceInFile(
-    'lib/features/finance/finance_entry_screen.dart',
-    '            FinanceHubScreen(),',
-    '            const FinanceHubScreen(),',
-  );
-  _replaceInFile(
-    'lib/features/finance/finance_hub_screen.dart',
-    '            FinanceEntryScreen(),',
-    '            const FinanceEntryScreen(),',
-  );
-  _replaceInFile(
-    'lib/features/finance/finance_reports_screen.dart',
-    '            FinanceScreen(),',
-    '            const FinanceScreen(),',
-  );
+  _replaceInFile('lib/core/notifications/notification_service.dart', '    final details = AndroidNotificationDetails(', '    const details = AndroidNotificationDetails(');
+  _replaceInFile('lib/features/finance/finance_entry_screen.dart', '            FinanceHubScreen(),', '            const FinanceHubScreen(),');
+  _replaceInFile('lib/features/finance/finance_hub_screen.dart', '            FinanceEntryScreen(),', '            const FinanceEntryScreen(),');
+  _replaceInFile('lib/features/finance/finance_reports_screen.dart', '            FinanceScreen(),', '            const FinanceScreen(),');
 }
 
 void _fixAnalyzerCompileErrors() {
-  _replaceInFile(
-    'lib/features/finance/finance_dashboard_planning.dart',
-    'MoneyFormatter.format(usage.plannedSpent)',
-    'MoneyFormatter.format(usage.plannedAmount)',
-  );
+  _replaceInFile('lib/features/finance/finance_dashboard_planning.dart', 'MoneyFormatter.format(usage.plannedSpent)', 'MoneyFormatter.format(usage.plannedAmount)');
 
   final reports = File('lib/features/finance/finance_reports_screen.dart');
   if (reports.existsSync()) {
@@ -189,14 +183,8 @@ void _fixAnalyzerCompileErrors() {
   final quick = File('lib/features/finance/widgets/quick_transaction_bottom_sheet.dart');
   if (quick.existsSync()) {
     var text = quick.readAsStringSync();
-    text = text.replaceAll(
-      'inputFormatters: const [MoneyInputFormatter(), LengthLimitingTextInputFormatter(18)],',
-      'inputFormatters: [MoneyInputFormatter(), LengthLimitingTextInputFormatter(18)],',
-    );
-    text = text.replaceAll(
-      'value: _categoryId,',
-      'initialValue: _categoryId,',
-    );
+    text = text.replaceAll('inputFormatters: const [MoneyInputFormatter(), LengthLimitingTextInputFormatter(18)],', 'inputFormatters: [MoneyInputFormatter(), LengthLimitingTextInputFormatter(18)],');
+    text = text.replaceAll('value: _categoryId,', 'initialValue: _categoryId,');
     quick.writeAsStringSync(text);
   }
 }
@@ -205,14 +193,8 @@ void _fixDeprecatedFlutterApis() {
   final kanban = File('lib/features/tasks/task_kanban_screen.dart');
   if (kanban.existsSync()) {
     var text = kanban.readAsStringSync();
-    text = text.replaceAll(
-      'onWillAccept: (task) => task != null && _taskForColumn(task) != column.type,',
-      'onWillAcceptWithDetails: (details) => _taskForColumn(details.data) != column.type,',
-    );
-    text = text.replaceAll(
-      'onAccept: (task) => onTaskMoved(task, column.type),',
-      'onAcceptWithDetails: (details) => onTaskMoved(details.data, column.type),',
-    );
+    text = text.replaceAll('onWillAccept: (task) => task != null && _taskForColumn(task) != column.type,', 'onWillAcceptWithDetails: (details) => _taskForColumn(details.data) != column.type,');
+    text = text.replaceAll('onAccept: (task) => onTaskMoved(task, column.type),', 'onAcceptWithDetails: (details) => onTaskMoved(details.data, column.type),');
     kanban.writeAsStringSync(text);
   }
 }
@@ -226,14 +208,12 @@ void _fixFinanceEntryHeaderOverflow() {
   final file = File('lib/features/finance/finance_entry_screen.dart');
   if (!file.existsSync()) return;
   var text = file.readAsStringSync();
-
   text = text.replaceAll('expandedHeight: 245,', 'expandedHeight: 316,');
   text = text.replaceAll('padding: const EdgeInsets.fromLTRB(20, 66, 20, 18),', 'padding: const EdgeInsets.fromLTRB(20, 76, 20, 16),');
   text = text.replaceAll('style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: realColor)', 'style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: realColor)');
   text = text.replaceAll('const SizedBox(height: 6),\n          Text(_money(value)', 'const SizedBox(height: 4),\n          Text(_money(value)');
   text = text.replaceAll('const SizedBox(height: 8),\n          ClipRRect(', 'const SizedBox(height: 6),\n          ClipRRect(');
   text = text.replaceAll('padding: const EdgeInsets.all(12),\n      decoration: BoxDecoration', 'padding: const EdgeInsets.all(10),\n      decoration: BoxDecoration');
-
   file.writeAsStringSync(text);
 }
 
@@ -241,7 +221,6 @@ void _fixCreateTransactionDropdownOverflow() {
   final file = File('lib/features/finance/create_transaction_screen.dart');
   if (!file.existsSync()) return;
   var text = file.readAsStringSync();
-
   text = _addIsExpandedToDropdowns(text);
   text = text.replaceAll("child: Text('Forma de Pagamento (Nenhuma)')", "child: Text('Nenhuma', overflow: TextOverflow.ellipsis)");
   text = text.replaceAll("child: Text('Sem Categoria')", "child: Text('Sem Categoria', overflow: TextOverflow.ellipsis)");
@@ -251,7 +230,6 @@ void _fixCreateTransactionDropdownOverflow() {
   text = text.replaceAll('child: Text(category.name)', 'child: Text(category.name, overflow: TextOverflow.ellipsis)');
   text = text.replaceAll('child: Text(subcategory.name)', 'child: Text(subcategory.name, overflow: TextOverflow.ellipsis)');
   text = text.replaceAll('child: Text(method)', 'child: Text(method, overflow: TextOverflow.ellipsis)');
-
   file.writeAsStringSync(text);
 }
 
@@ -259,38 +237,34 @@ void _applySmartTaskCapture() {
   final entry = File('lib/features/tasks/tasks_entry_screen.dart');
   final button = File('lib/features/tasks/quick_add_task_button.dart');
   final sheet = File('lib/features/tasks/quick_add_task_sheet.dart');
-
   if (!entry.existsSync() || !button.existsSync() || !sheet.existsSync()) return;
-
   var entryText = entry.readAsStringSync();
-  entryText = entryText.replaceAll(
-    "floatingActionButton: const QuickAddTaskButton(label: 'Nova tarefa'),",
-    "floatingActionButton: const SmartTaskActionButton(label: 'Capturar tarefa'),",
-  );
+  entryText = entryText.replaceAll("floatingActionButton: const QuickAddTaskButton(label: 'Nova tarefa'),", "floatingActionButton: const SmartTaskActionButton(label: 'Capturar tarefa'),");
   entry.writeAsStringSync(entryText);
-
   final combined = '${entry.readAsStringSync()}\n${button.readAsStringSync()}\n${sheet.readAsStringSync()}';
-  for (final check in [
-    'SmartTaskActionButton',
-    "label: 'Capturar tarefa'",
-    'Captura inteligente',
-    '_SmartShortcutBar',
-    'Mais opções',
-    'CreateTaskScreen(',
-    'recurrenceType: _recurrenceType',
-    'tags: _tags.isEmpty ? null : _tags.join',
-    'reminderEnabled: parsed.time != null',
-  ]) {
+  for (final check in ['SmartTaskActionButton', "label: 'Capturar tarefa'", 'Captura inteligente', '_SmartShortcutBar', 'Mais opções', 'CreateTaskScreen(', 'recurrenceType: _recurrenceType', 'tags: _tags.isEmpty ? null : _tags.join', 'reminderEnabled: parsed.time != null']) {
     if (!combined.contains(check)) {
       stderr.writeln('ERRO Captura Inteligente: faltou "$check".');
       exit(1);
     }
   }
-
   if (entry.readAsStringSync().contains("QuickAddTaskButton(label: 'Nova tarefa')")) {
     stderr.writeln('ERRO Captura Inteligente: ainda existe FAB antigo Nova tarefa.');
     exit(1);
   }
+}
+
+void _fixTasksEntrySyntax() {
+  final file = File('lib/features/tasks/tasks_entry_screen.dart');
+  if (!file.existsSync()) return;
+  var text = file.readAsStringSync();
+  text = text.replaceAll('}\\n\nclass _CompactSmartLists', '}\n\nclass _CompactSmartLists');
+  text = text.replaceAll('}\\nclass _CompactSmartLists', '}\nclass _CompactSmartLists');
+  if (text.contains('}\\n\nclass _CompactSmartLists') || text.contains('}\\nclass _CompactSmartLists')) {
+    stderr.writeln('ERRO: literal \\n ainda aparece antes de _CompactSmartLists.');
+    exit(1);
+  }
+  file.writeAsStringSync(text);
 }
 
 String _addIsExpandedToDropdowns(String text) {
@@ -312,7 +286,6 @@ String _addIsExpandedToDropdowns(String text) {
       buffer.write(text.substring(cursor));
       break;
     }
-
     buffer.write(text.substring(cursor, start));
     var block = text.substring(start, end);
     if (!block.contains('isExpanded: true,')) {
