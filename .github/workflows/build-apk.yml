@@ -62,6 +62,9 @@ jobs:
       - name: Aplicar Etapa 6 lista financeira detalhada
         run: dart run tool/patch_finance_list_m6.dart
 
+      - name: Aplicar Etapa 7 planejamento no dashboard
+        run: dart run tool/patch_finance_dashboard_planning_m7.dart
+
       - name: Aplicar refinamento UX da tela Hoje
         run: dart run tool/patch_today_tasks_ux.dart
 
@@ -129,6 +132,9 @@ jobs:
 
       - name: Validar Etapa 6 lista financeira detalhada
         run: dart run tool/verify_finance_list_m6.dart
+
+      - name: Validar Etapa 7 planejamento financeiro no dashboard
+        run: dart run tool/verify_finance_dashboard_planning_m7.dart
 
       - name: Validar F-M4 dívidas
         run: |
