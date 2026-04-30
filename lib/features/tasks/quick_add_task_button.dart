@@ -10,7 +10,7 @@ class QuickAddTaskButton extends StatelessWidget {
   const QuickAddTaskButton({
     super.key,
     this.contextData = const QuickAddTaskContext(),
-    this.label = 'Quick Add',
+    this.label = 'Capturar tarefa',
     this.extended = true,
   });
 
@@ -18,17 +18,27 @@ class QuickAddTaskButton extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!extended) {
       return FloatingActionButton(
+        tooltip: 'Capturar tarefa',
         onPressed: () => QuickAddTaskSheet.show(context, contextData: contextData),
-        child: const Icon(Icons.flash_on),
+        child: const Icon(Icons.add),
       );
     }
 
     return FloatingActionButton.extended(
       onPressed: () => QuickAddTaskSheet.show(context, contextData: contextData),
-      icon: const Icon(Icons.flash_on),
+      icon: const Icon(Icons.add),
       label: Text(label),
     );
   }
+}
+
+class SmartTaskActionButton extends QuickAddTaskButton {
+  const SmartTaskActionButton({
+    super.key,
+    super.contextData,
+    super.label = 'Capturar tarefa',
+    super.extended = true,
+  });
 }
 
 class QuickAddTaskIconButton extends StatelessWidget {
@@ -38,14 +48,14 @@ class QuickAddTaskIconButton extends StatelessWidget {
   const QuickAddTaskIconButton({
     super.key,
     this.contextData = const QuickAddTaskContext(),
-    this.tooltip = 'Captura rápida',
+    this.tooltip = 'Capturar tarefa',
   });
 
   @override
   Widget build(BuildContext context) {
     return IconButton(
       tooltip: tooltip,
-      icon: const Icon(Icons.flash_on),
+      icon: const Icon(Icons.add),
       onPressed: () => QuickAddTaskSheet.show(context, contextData: contextData),
     );
   }
