@@ -163,7 +163,7 @@ class _BudgetUsageRow extends StatelessWidget {
         const SizedBox(height: 6),
         ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: ratio, minHeight: 8, color: color, backgroundColor: color.withValues(alpha: 0.14))),
         const SizedBox(height: 4),
-        Text('${MoneyFormatter.format(usage.plannedSpent)} de ${MoneyFormatter.format(usage.budget.limitAmount)}', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
+        Text('${MoneyFormatter.format(usage.plannedAmount)} de ${MoneyFormatter.format(usage.budget.limitAmount)}', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
       ]),
     );
   }
