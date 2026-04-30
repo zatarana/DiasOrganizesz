@@ -12,6 +12,7 @@ void main() {
   _fixConstInfoHints();
   _fixAnalyzerCompileErrors();
   _fixDeprecatedFlutterApis();
+  _fixFinanceMobileOverflows();
   stdout.writeln('Analyzer cleanup aplicado.');
 }
 
@@ -213,6 +214,93 @@ void _fixDeprecatedFlutterApis() {
     );
     kanban.writeAsStringSync(text);
   }
+}
+
+void _fixFinanceMobileOverflows() {
+  _fixFinanceEntryHeaderOverflow();
+  _fixCreateTransactionDropdownOverflow();
+}
+
+void _fixFinanceEntryHeaderOverflow() {
+  final file = File('lib/features/finance/finance_entry_screen.dart');
+  if (!file.existsSync()) return;
+  var text = file.readAsStringSync();
+
+  text = text.replaceAll('expandedHeight: 245,', 'expandedHeight: 316,');
+  text = text.replaceAll('padding: const EdgeInsets.fromLTRB(20, 66, 20, 18),', 'padding: const EdgeInsets.fromLTRB(20, 76, 20, 16),');
+  text = text.replaceAll('style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: realColor)', 'style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: realColor)');
+  text = text.replaceAll('const SizedBox(height: 6),\n          Text(_money(value)', 'const SizedBox(height: 4),\n          Text(_money(value)');
+  text = text.replaceAll('const SizedBox(height: 8),\n          ClipRRect(', 'const SizedBox(height: 6),\n          ClipRRect(');
+  text = text.replaceAll('padding: const EdgeInsets.all(12),\n      decoration: BoxDecoration', 'padding: const EdgeInsets.all(10),\n      decoration: BoxDecoration');
+
+  file.writeAsStringSync(text);
+}
+
+void _fixCreateTransactionDropdownOverflow() {
+  final file = File('lib/features/finance/create_transaction_screen.dart');
+  if (!file.existsSync()) return;
+  var text = file.readAsStringSync();
+
+  text = _addIsExpandedToDropdowns(text);
+  text = text.replaceAll("child: Text('Forma de Pagamento (Nenhuma)')", "child: Text('Nenhuma', overflow: TextOverflow.ellipsis)");
+  text = text.replaceAll("child: Text('Sem Categoria')", "child: Text('Sem Categoria', overflow: TextOverflow.ellipsis)");
+  text = text.replaceAll("child: Text('Sem Subcategoria')", "child: Text('Sem Subcategoria', overflow: TextOverflow.ellipsis)");
+  text = text.replaceAll("child: Text('Sem conta')", "child: Text('Sem conta', overflow: TextOverflow.ellipsis)");
+  text = text.replaceAll('child: Text(account.name)', 'child: Text(account.name, overflow: TextOverflow.ellipsis)');
+  text = text.replaceAll('child: Text(category.name)', 'child: Text(category.name, overflow: TextOverflow.ellipsis)');
+  text = text.replaceAll('child: Text(subcategory.name)', 'child: Text(subcategory.name, overflow: TextOverflow.ellipsis)');
+  text = text.replaceAll('child: Text(method)', 'child: Text(method, overflow: TextOverflow.ellipsis)');
+
+  file.writeAsStringSync(text);
+}
+
+String _addIsExpandedToDropdowns(String text) {
+  final buffer = StringBuffer();
+  var cursor = 0;
+  while (true) {
+    final start = text.indexOf('DropdownButtonFormField', cursor);
+    if (start == -1) {
+      buffer.write(text.substring(cursor));
+      break;
+    }
+    final openParen = text.indexOf('(', start);
+    if (openParen == -1) {
+      buffer.write(text.substring(cursor));
+      break;
+    }
+    final end = _findCallEnd(text, openParen);
+    if (end == -1) {
+      buffer.write(text.substring(cursor));
+      break;
+    }
+
+    buffer.write(text.substring(cursor, start));
+    var block = text.substring(start, end);
+    if (!block.contains('isExpanded: true,')) {
+      final insertAt = block.indexOf('(') + 1;
+      block = block.replaceRange(insertAt, insertAt, '\n                isExpanded: true,');
+    }
+    buffer.write(block);
+    cursor = end;
+  }
+  return buffer.toString();
+}
+
+int _findCallEnd(String text, int openParenIndex) {
+  var depth = 0;
+  for (var i = openParenIndex; i < text.length; i++) {
+    final char = text[i];
+    if (char == '(') depth++;
+    if (char == ')') {
+      depth--;
+      if (depth == 0) {
+        var end = i + 1;
+        if (end < text.length && text[end] == ',') end++;
+        return end;
+      }
+    }
+  }
+  return -1;
 }
 
 void _replaceInFile(String path, String from, String to) {
