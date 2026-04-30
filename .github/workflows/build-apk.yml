@@ -44,6 +44,22 @@ jobs:
       - name: Limpar avisos conhecidos do analyzer
         run: dart run tool/patch_analyze_cleanup.dart
 
+      - name: Validar nova entrada de Finanças
+        run: |
+          echo "Validando dashboard da entrada de Finanças..."
+          grep -q "class FinanceEntryScreen extends ConsumerWidget" lib/features/finance/finance_entry_screen.dart
+          grep -q "_MonthHeroCard" lib/features/finance/finance_entry_screen.dart
+          grep -q "_QuickActionsGrid" lib/features/finance/finance_entry_screen.dart
+          grep -q "_AttentionCard" lib/features/finance/finance_entry_screen.dart
+          grep -q "_UpcomingTransactionTile" lib/features/finance/finance_entry_screen.dart
+          grep -q "Novo lançamento" lib/features/finance/finance_entry_screen.dart
+          grep -q "Resumo de" lib/features/finance/finance_entry_screen.dart
+
+          if grep -q "Escolha o que quer fazer agora" lib/features/finance/finance_entry_screen.dart; then
+            echo "ERRO: entrada antiga de Finanças ainda está presente." >&2
+            exit 1
+          fi
+
       - name: Validar melhorias UX da aba Finanças
         run: |
           echo "Validando patch de UX da aba Finanças..."
