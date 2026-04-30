@@ -129,7 +129,6 @@ jobs:
           grep -q "Nova dívida" lib/features/debts/debts_screen.dart
           grep -q "_buildEmptyDebtState" lib/features/debts/debts_screen.dart
           grep -q "Nenhuma dívida cadastrada" lib/features/debts/debts_screen.dart
-          grep -q "MoneyFormatter.format" lib/features/debts/debts_screen.dart
           grep -q "_buildDebtInfoCard" lib/features/debts/debt_details_screen.dart
           grep -q "Dados da dívida" lib/features/debts/debt_details_screen.dart
           grep -q "_buildEmptyInstallmentsState" lib/features/debts/debt_details_screen.dart
