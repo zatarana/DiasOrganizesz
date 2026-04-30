@@ -66,24 +66,22 @@ String _replaceControllerInitialValues(String text) {
 }
 
 String _replaceMoneyParsing(String text) {
-  text = text.replaceAllMapped(
-    RegExp(r"double\.tryParse\((\w+Controller)\.text\.replaceAll\(',', '\\.'\)\)(?: \?\? 0)?"),
-    (match) {
-      final controller = match.group(1)!;
-      final source = match.group(0)!;
-      if (source.endsWith('?? 0')) return "MoneyFormatter.parse($controller.text) ?? 0";
-      return "MoneyFormatter.parse($controller.text)";
-    },
-  );
-  text = text.replaceAllMapped(
-    RegExp(r"double\.tryParse\((controller)\.text\.replaceAll\(',', '\\.'\)\)(?: \?\? 0)?"),
-    (match) {
-      final controller = match.group(1)!;
-      final source = match.group(0)!;
-      if (source.endsWith('?? 0')) return "MoneyFormatter.parse($controller.text) ?? 0";
-      return "MoneyFormatter.parse($controller.text)";
-    },
-  );
+  final parsePattern = RegExp(r"double\.tryParse\(([A-Za-z_]\w*)\.text\.replaceAll\(',', '\.'\)\)(?:\s*\?\?\s*0(?:\.0)?)?");
+  text = text.replaceAllMapped(parsePattern, (match) {
+    final controller = match.group(1)!;
+    final source = match.group(0)!;
+    final hasFallback = source.contains('??');
+    return hasFallback ? "MoneyFormatter.parse($controller.text) ?? 0" : "MoneyFormatter.parse($controller.text)";
+  });
+
+  final genericParsePattern = RegExp(r"double\.tryParse\(([^;\n]+?)\.replaceAll\(',', '\.'\)\)(?:\s*\?\?\s*0(?:\.0)?)?");
+  text = text.replaceAllMapped(genericParsePattern, (match) {
+    final sourceExpression = match.group(1)!;
+    final source = match.group(0)!;
+    final hasFallback = source.contains('??');
+    return hasFallback ? "MoneyFormatter.parse($sourceExpression) ?? 0" : "MoneyFormatter.parse($sourceExpression)";
+  });
+
   return text;
 }
 
