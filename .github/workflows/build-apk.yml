@@ -53,6 +53,32 @@ jobs:
       - name: Limpar avisos conhecidos do analyzer
         run: dart run tool/patch_analyze_cleanup.dart
 
+      - name: Validar T-M2 formulário de tarefas
+        run: |
+          echo "Validando T-M2 no formulário de tarefas..."
+          grep -q "final _formKey = GlobalKey<FormState>()" lib/features/tasks/create_task_screen.dart
+          grep -q "Form(" lib/features/tasks/create_task_screen.dart
+          grep -q "TextFormField" lib/features/tasks/create_task_screen.dart
+          grep -q "validator:" lib/features/tasks/create_task_screen.dart
+          grep -q "_isSaving" lib/features/tasks/create_task_screen.dart
+          grep -q "CircularProgressIndicator" lib/features/tasks/create_task_screen.dart
+          grep -q "_TagsSelector" lib/features/tasks/create_task_screen.dart
+          grep -q "InputChip" lib/features/tasks/create_task_screen.dart
+          grep -q "_ReminderSelector" lib/features/tasks/create_task_screen.dart
+          grep -q "_reminderOffsets" lib/features/tasks/create_task_screen.dart
+          grep -q "take(3)" lib/features/tasks/create_task_screen.dart
+          grep -q "cancelTaskReminderSet" lib/features/tasks/create_task_screen.dart
+          grep -q "taskReminderOffsetId" lib/core/notifications/notification_service.dart
+          grep -q "tags TEXT" lib/data/database/db_helper.dart
+          grep -q "reminderOffsets TEXT" lib/data/database/db_helper.dart
+          grep -q "final String? tags" lib/data/models/task_model.dart
+          grep -q "final String? reminderOffsets" lib/data/models/task_model.dart
+
+          if grep -q "SnackBar(content: Text('Título é obrigatório" lib/features/tasks/create_task_screen.dart; then
+            echo "ERRO: validação antiga por SnackBar ainda existe no formulário de tarefas." >&2
+            exit 1
+          fi
+
       - name: Validar tela Hoje
         run: |
           echo "Validando refinamento da tela Hoje..."
