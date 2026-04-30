@@ -3,15 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'app/theme.dart';
+import 'data/database/db_helper.dart';
 import 'features/dashboard/splash_screen.dart';
 import 'core/notifications/notification_service.dart';
 import 'domain/providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await NotificationService().init();
+  final notificationService = NotificationService();
+  await notificationService.init();
   await initializeDateFormatting('pt_BR', null);
-  
+  await notificationService.rescheduleAllActiveNotifications(DatabaseHelper.instance);
+
   runApp(
     const ProviderScope(
       child: DiasOrganizeApp(),
