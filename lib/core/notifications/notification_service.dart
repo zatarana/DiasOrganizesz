@@ -70,9 +70,17 @@ class NotificationService {
   }
 
   int taskReminderId(int taskId) => taskId;
+  int taskReminderOffsetId(int taskId, int index) => 400000 + (taskId * 10) + index;
   int transactionReminderId(int transactionId) => 100000 + transactionId;
   int projectReminderId(int projectId) => 200000 + projectId;
   int projectStepReminderId(int stepId) => 300000 + stepId;
+
+  Future<void> cancelTaskReminderSet(int taskId) async {
+    await cancelNotification(taskReminderId(taskId));
+    for (var index = 0; index < 3; index++) {
+      await cancelNotification(taskReminderOffsetId(taskId, index));
+    }
+  }
 
   Future<void> cancelNotification(int id) async {
     await flutterLocalNotificationsPlugin.cancel(id);
