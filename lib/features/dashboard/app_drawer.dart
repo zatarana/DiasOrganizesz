@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../finance/finance_screen.dart';
+import '../finance/finance_entry_screen.dart';
 import '../projects/projects_screen.dart';
 import '../calendar/calendar_screen.dart';
 import '../statistics/stats_screen.dart';
@@ -32,10 +32,10 @@ class AppDrawer extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.attach_money),
             title: const Text('Finanças'),
-            subtitle: const Text('Receitas, despesas, contas, metas e dívidas'),
+            subtitle: const Text('Dashboard financeiro, transações, contas, metas e dívidas'),
             onTap: () {
               Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceScreen()));
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const FinanceEntryScreen()));
             },
           ),
           ListTile(
