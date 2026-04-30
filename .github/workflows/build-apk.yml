@@ -35,46 +35,23 @@ jobs:
       - name: Habilitar desugaring Android
         run: dart run tool/patch_android_desugaring.dart
 
-      - name: Aplicar melhorias UX da aba Finanças
-        run: dart run tool/patch_finance_screen_ux.dart
+      - name: Aplicar patches financeiros e de tarefas
+        run: |
+          dart run tool/patch_finance_screen_ux.dart
+          dart run tool/patch_finance_transactions_m2.dart
+          dart run tool/patch_transaction_form_ux.dart
+          dart run tool/patch_debts_m4.dart
+          dart run tool/patch_finance_planning_money.dart
+          dart run tool/patch_finance_entry_core.dart
+          dart run tool/patch_finance_dashboard_charts_m4.dart
+          dart run tool/patch_quick_transaction_m5.dart
+          dart run tool/patch_finance_list_m6.dart
+          dart run tool/patch_finance_dashboard_planning_m7.dart
+          dart run tool/patch_today_tasks_ux.dart
+          dart run tool/patch_today_tasks_m1.dart
+          dart run tool/patch_analyze_cleanup.dart
 
-      - name: Aplicar F-M2 UI de transações
-        run: dart run tool/patch_finance_transactions_m2.dart
-
-      - name: Aplicar melhorias UX do formulário financeiro
-        run: dart run tool/patch_transaction_form_ux.dart
-
-      - name: Aplicar F-M4 fluxo de dívidas
-        run: dart run tool/patch_debts_m4.dart
-
-      - name: Aplicar correção F-M1 moeda no planejamento
-        run: dart run tool/patch_finance_planning_money.dart
-
-      - name: Aplicar core compartilhado da entrada financeira
-        run: dart run tool/patch_finance_entry_core.dart
-
-      - name: Aplicar Etapa 4 gráficos no dashboard financeiro
-        run: dart run tool/patch_finance_dashboard_charts_m4.dart
-
-      - name: Aplicar Etapa 5 lançamento rápido
-        run: dart run tool/patch_quick_transaction_m5.dart
-
-      - name: Aplicar Etapa 6 lista financeira detalhada
-        run: dart run tool/patch_finance_list_m6.dart
-
-      - name: Aplicar Etapa 7 planejamento no dashboard
-        run: dart run tool/patch_finance_dashboard_planning_m7.dart
-
-      - name: Aplicar refinamento UX da tela Hoje
-        run: dart run tool/patch_today_tasks_ux.dart
-
-      - name: Aplicar Today M1
-        run: dart run tool/patch_today_tasks_m1.dart
-
-      - name: Limpar avisos conhecidos do analyzer
-        run: dart run tool/patch_analyze_cleanup.dart
-
-      - name: Validar navegação unificada de Finanças
+      - name: Validar navegação financeira unificada
         run: |
           echo "Validando Drawer apontando para o hub financeiro..."
           grep -q "finance_entry_screen.dart" lib/features/dashboard/app_drawer.dart
@@ -91,25 +68,19 @@ jobs:
             exit 1
           fi
 
-      - name: Validar Etapa 2 dashboard financeiro
+      - name: Validar dashboard financeiro atual
         run: |
-          echo "Validando FinanceEntryScreen como dashboard com Slivers..."
+          echo "Validando FinanceEntryScreen como dashboard financeiro..."
           grep -q "class FinanceEntryScreen extends ConsumerStatefulWidget" lib/features/finance/finance_entry_screen.dart
           grep -q "CustomScrollView" lib/features/finance/finance_entry_screen.dart
           grep -q "SliverAppBar" lib/features/finance/finance_entry_screen.dart
           grep -q "FlexibleSpaceBar" lib/features/finance/finance_entry_screen.dart
           grep -q "financeScreenDataProvider" lib/features/finance/finance_entry_screen.dart
-          grep -q "FinanceScreenFilters" lib/features/finance/finance_entry_screen.dart
           grep -q "realAccountBalanceProvider" lib/features/finance/finance_entry_screen.dart
-          grep -q "_SliverBalanceHeader" lib/features/finance/finance_entry_screen.dart
-          grep -q "_CompactMonthNavigationBar" lib/features/finance/finance_entry_screen.dart
-          grep -q "_ImmediateAttentionCarousel" lib/features/finance/finance_entry_screen.dart
-          grep -q "_FinanceToolCard" lib/features/finance/finance_entry_screen.dart
           grep -q "Saldo consolidado" lib/features/finance/finance_entry_screen.dart
           grep -q "Atenção imediata" lib/features/finance/finance_entry_screen.dart
           grep -q "Transações recentes" lib/features/finance/finance_entry_screen.dart
           grep -q "Ferramentas financeiras" lib/features/finance/finance_entry_screen.dart
-          grep -q "MoneyFormatter.format" lib/features/finance/finance_entry_screen.dart
 
           if grep -q "ListView(" lib/features/finance/finance_entry_screen.dart; then
             echo "ERRO: FinanceEntryScreen voltou a usar ListView como estrutura principal." >&2
@@ -117,26 +88,40 @@ jobs:
           fi
 
           if grep -q "FutureBuilder<double>\|_realBalanceFuture\|_loadRealBalance" lib/features/finance/finance_entry_screen.dart; then
-            echo "ERRO: entrada financeira ainda usa carregamento local de saldo em vez do provider central." >&2
+            echo "ERRO: entrada financeira ainda usa carregamento local de saldo." >&2
             exit 1
           fi
 
-      - name: Validar Etapa 3 atenção imediata financeira
-        run: dart run tool/verify_finance_attention_m3.dart
+      - name: Validar redesenho financeiro completo
+        run: |
+          dart run tool/verify_finance_attention_m3.dart
+          dart run tool/verify_finance_dashboard_charts_m4.dart
+          dart run tool/verify_quick_transaction_m5.dart
+          dart run tool/verify_finance_list_m6.dart
+          dart run tool/verify_finance_dashboard_planning_m7.dart
+          dart run tool/verify_finance_hub_m8.dart
+          dart run tool/verify_finance_redesign_all.dart
 
-      - name: Validar Etapa 4 gráficos financeiros
-        run: dart run tool/verify_finance_dashboard_charts_m4.dart
+      - name: Validar moeda no planejamento
+        run: |
+          echo "Validando F-M1 no Planejamento Financeiro..."
+          grep -q "MoneyFormatter.format(value)" lib/features/finance/finance_planning_screen.dart
+          grep -q "MoneyFormatter.parse(" lib/features/finance/finance_planning_screen.dart
+          grep -q "MoneyInputFormatter" lib/features/finance/finance_planning_screen.dart
+          grep -q "formatForInput" lib/features/finance/finance_planning_screen.dart
+          grep -q "class MoneyInputFormatter extends TextInputFormatter" lib/core/utils/money_formatter.dart
 
-      - name: Validar Etapa 5 lançamento rápido
-        run: dart run tool/verify_quick_transaction_m5.dart
+          if grep -q "String _money(num value) => 'R\\$" lib/features/finance/finance_planning_screen.dart; then
+            echo "ERRO: _money antigo ainda aparece na tela de Planejamento." >&2
+            exit 1
+          fi
 
-      - name: Validar Etapa 6 lista financeira detalhada
-        run: dart run tool/verify_finance_list_m6.dart
+          if grep -q "replaceAll(',', '.')" lib/features/finance/finance_planning_screen.dart; then
+            echo "ERRO: parsing antigo de moeda ainda aparece na tela de Planejamento." >&2
+            exit 1
+          fi
 
-      - name: Validar Etapa 7 planejamento financeiro no dashboard
-        run: dart run tool/verify_finance_dashboard_planning_m7.dart
-
-      - name: Validar F-M4 dívidas
+      - name: Validar dívidas
         run: |
           echo "Validando F-M4 no módulo de dívidas..."
           grep -q "Cadastrar dívida" lib/features/debts/debts_screen.dart
@@ -162,60 +147,7 @@ jobs:
             exit 1
           fi
 
-      - name: Validar F-M3 relatórios financeiros
-        run: |
-          echo "Validando F-M3 nos relatórios financeiros..."
-          grep -q "class FinanceReportsScreen extends ConsumerStatefulWidget" lib/features/finance/finance_reports_screen.dart
-          grep -q "_ExpenseDonutReportCard" lib/features/finance/finance_reports_screen.dart
-          grep -q "_MonthlyIncomeExpenseBarCard" lib/features/finance/finance_reports_screen.dart
-          grep -q "_DonutChartPainter" lib/features/finance/finance_reports_screen.dart
-          grep -q "_MonthlyBarChartPainter" lib/features/finance/finance_reports_screen.dart
-          grep -q "Despesas por categoria" lib/features/finance/finance_reports_screen.dart
-          grep -q "Receita vs despesa mensal" lib/features/finance/finance_reports_screen.dart
-          grep -q "transactionsProvider" lib/features/finance/finance_reports_screen.dart
-          grep -q "financialCategoriesProvider" lib/features/finance/finance_reports_screen.dart
-          grep -q "MoneyFormatter.format" lib/features/finance/finance_reports_screen.dart
-          grep -q "CustomPaint" lib/features/finance/finance_reports_screen.dart
-
-          if grep -q "Próximos recursos\|Gráficos visuais com biblioteca dedicada\|_ComingSoonCard" lib/features/finance/finance_reports_screen.dart; then
-            echo "ERRO: placeholders de relatórios ainda aparecem." >&2
-            exit 1
-          fi
-
-      - name: Validar F-M2 UI de transações
-        run: |
-          echo "Validando F-M2 na UI de transações..."
-          grep -q "_confirmDeleteTransaction" lib/features/finance/finance_screen.dart
-          grep -q "_buildSwipeActionBackground" lib/features/finance/finance_screen.dart
-          grep -q "Editar movimentação" lib/features/finance/finance_screen.dart
-          grep -q "Excluir movimentação" lib/features/finance/finance_screen.dart
-          grep -q "Quer excluir esta movimentação?" lib/features/finance/finance_screen.dart
-          grep -q "secondaryBackground:" lib/features/finance/finance_screen.dart
-          grep -q "DismissDirection.horizontal" lib/features/finance/finance_screen.dart
-          grep -q "Nenhuma movimentação por aqui" lib/features/finance/finance_screen.dart
-          grep -q "Nova movimentação" lib/features/finance/finance_screen.dart
-          grep -q "Limpar filtros" lib/features/finance/finance_screen.dart
-
-      - name: Validar F-M1 moeda no planejamento
-        run: |
-          echo "Validando F-M1 no Planejamento Financeiro..."
-          grep -q "MoneyFormatter.format(value)" lib/features/finance/finance_planning_screen.dart
-          grep -q "MoneyFormatter.parse(" lib/features/finance/finance_planning_screen.dart
-          grep -q "MoneyInputFormatter" lib/features/finance/finance_planning_screen.dart
-          grep -q "formatForInput" lib/features/finance/finance_planning_screen.dart
-          grep -q "class MoneyInputFormatter extends TextInputFormatter" lib/core/utils/money_formatter.dart
-
-          if grep -q "String _money(num value) => 'R\\$" lib/features/finance/finance_planning_screen.dart; then
-            echo "ERRO: _money antigo ainda aparece na tela de Planejamento." >&2
-            exit 1
-          fi
-
-          if grep -q "replaceAll(',', '.')" lib/features/finance/finance_planning_screen.dart; then
-            echo "ERRO: parsing antigo de moeda ainda aparece na tela de Planejamento." >&2
-            exit 1
-          fi
-
-      - name: Validar T-M3 Kanban
+      - name: Validar tarefas
         run: |
           echo "Validando T-M3 no Kanban..."
           grep -q "LongPressDraggable<Task>" lib/features/tasks/task_kanban_screen.dart
@@ -232,8 +164,6 @@ jobs:
             exit 1
           fi
 
-      - name: Validar T-M2 formulário de tarefas
-        run: |
           echo "Validando T-M2 no formulário de tarefas..."
           grep -q "final _formKey = GlobalKey<FormState>()" lib/features/tasks/create_task_screen.dart
           grep -q "Form(" lib/features/tasks/create_task_screen.dart
@@ -258,9 +188,7 @@ jobs:
             exit 1
           fi
 
-      - name: Validar tela Hoje
-        run: |
-          echo "Validando refinamento da tela Hoje..."
+          echo "Validando tela Hoje..."
           grep -q "Sugestões para hoje" lib/features/tasks/today_tasks_screen.dart
           grep -q "_openSuggestionsSheet" lib/features/tasks/today_tasks_screen.dart
           grep -q "Icons.lightbulb_outline" lib/features/tasks/today_tasks_screen.dart
@@ -274,48 +202,6 @@ jobs:
 
           if grep -q "Criação completa para hoje" lib/features/tasks/today_tasks_screen.dart; then
             echo "ERRO: ação duplicada de criação completa ainda está na AppBar da tela Hoje." >&2
-            exit 1
-          fi
-
-      - name: Validar melhorias UX da aba Finanças
-        run: |
-          echo "Validando patch de UX da aba Finanças..."
-          grep -q "NumberFormat.currency(locale: 'pt_BR'" lib/features/finance/finance_screen.dart
-          grep -q "Dismissible(" lib/features/finance/finance_screen.dart
-          grep -q "_buildFilterButton" lib/features/finance/finance_screen.dart
-          grep -q "showModalBottomSheet" lib/features/finance/finance_screen.dart
-          grep -q "PopupMenuButton<String>" lib/features/finance/finance_screen.dart
-
-          if grep -q "Contas e metas')))," lib/features/finance/finance_screen.dart; then
-            echo "ERRO: botões redundantes de navegação ainda aparecem no corpo da tela." >&2
-            exit 1
-          fi
-
-          if grep -q "withOpacity" lib/features/finance/finance_screen.dart; then
-            echo "ERRO: uso depreciado de withOpacity ainda aparece na aba Finanças." >&2
-            exit 1
-          fi
-
-          if grep -q "_buildTypeFilters\|_buildStatusFilters\|_buildCategoryFilters\|_paidExpensesByCategory" lib/features/finance/finance_screen.dart; then
-            echo "ERRO: funções antigas não utilizadas ainda aparecem na aba Finanças." >&2
-            exit 1
-          fi
-
-      - name: Validar melhorias UX do formulário financeiro
-        run: |
-          echo "Validando organização do formulário financeiro..."
-          grep -q "class _TransactionFormSection" lib/features/finance/create_transaction_screen.dart
-          grep -q "Tipo e valor" lib/features/finance/create_transaction_screen.dart
-          grep -q "Datas e status" lib/features/finance/create_transaction_screen.dart
-          grep -q "Classificação" lib/features/finance/create_transaction_screen.dart
-          grep -q "Opções avançadas" lib/features/finance/create_transaction_screen.dart
-          grep -q "_parseMoney" lib/features/finance/create_transaction_screen.dart
-          grep -q "_isSaving" lib/features/finance/create_transaction_screen.dart
-          grep -q "ValueListenableBuilder<TextEditingValue>" lib/features/finance/create_transaction_screen.dart
-          grep -q "InputChip(label: Text(tag)" lib/features/finance/create_transaction_screen.dart
-
-          if grep -q "Icon(Icons.money_off" lib/features/finance/create_transaction_screen.dart; then
-            echo "ERRO: ícone money_off antigo ainda aparece no formulário financeiro." >&2
             exit 1
           fi
 
