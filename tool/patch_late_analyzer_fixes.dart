@@ -131,8 +131,16 @@ void _fixQuickTransaction() {
   );
 
   if (!text.contains('final safeAccountId = _selectableQuickAccounts().any((account) => account.id == _accountId) ? _accountId : null;')) {
+    final saveGuard = RegExp(
+      r"    if \(amount == null \|\| amount <= 0\) return;\s*\n\s*setState\(\(\) => _isSaving = true\);",
+      multiLine: true,
+    );
+    if (!saveGuard.hasMatch(text)) {
+      stderr.writeln('ERRO: não foi possível localizar ponto seguro para validar conta no lançamento rápido.');
+      exit(1);
+    }
     text = text.replaceFirst(
-      '    if (amount == null || amount <= 0) return;\n    setState(() => _isSaving = true);',
+      saveGuard,
       '''    if (amount == null || amount <= 0) return;
     final safeAccountId = _selectableQuickAccounts().any((account) => account.id == _accountId) ? _accountId : null;
     if (_loadingAccounts) {
@@ -201,6 +209,7 @@ void _fixQuickTransaction() {
     "import '../../../data/models/financial_account_model.dart';",
     'Future<void> _loadAccounts() async',
     'List<FinancialAccount> _accounts = [];',
+    'final safeAccountId = _selectableQuickAccounts().any((account) => account.id == _accountId) ? _accountId : null;',
     'accountId: safeAccountId,',
     "labelText: 'Conta'",
     'Selecione ou cadastre uma conta para atualizar o saldo.',
