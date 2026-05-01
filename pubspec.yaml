@@ -32,10 +32,5 @@ dev_dependencies:
   flutter_lints: ^3.0.1
   sqflite_common_ffi: ^2.3.3
 
-dependency_overrides:
-  # Evita falha intermitente do sqlite3 3.x native assets no GitHub Actions
-  # durante flutter build apk: hash inválido de libsqlite3.x64.android.so.
-  sqlite3: 2.7.6
-
 flutter:
   uses-material-design: true
