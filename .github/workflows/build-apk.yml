@@ -154,6 +154,7 @@ jobs:
           grep -q "await NotificationService().syncTaskReminder(newTask);" lib/domain/providers.dart
           grep -q "await NotificationService().syncTaskReminder(task);" lib/domain/providers.dart
           grep -q "await NotificationService().cancelTaskReminderSet(id);" lib/domain/providers.dart
+          dart run tool/verify_notifications_checklist.dart
 
           if grep -q "cancelNotification(NotificationService().taskReminderId" lib/domain/providers.dart; then
             echo "ERRO: cancelamento de tarefas ainda usa apenas taskReminderId." >&2
