@@ -324,6 +324,15 @@ jobs:
       - name: Executar testes
         run: flutter test
 
+      - name: Preparar dependências para APK Android
+        run: |
+          flutter clean
+          rm -f pubspec.lock
+          rm -rf "$HOME/.pub-cache/hosted/pub.dev/sqlite3-3."* || true
+          rm -rf "$HOME/.pub-cache/hosted/pub.dev/sqlite3_flutter_libs-"* || true
+          rm -rf "$HOME/.dart_tool/native_assets_builder" || true
+          flutter pub get
+
       - name: Construir APK Debug com versionCode automático
         run: flutter build apk --debug --build-name "$BUILD_NAME" --build-number "$BUILD_NUMBER"
 
