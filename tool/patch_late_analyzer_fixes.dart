@@ -16,13 +16,15 @@ void _fixHome() {
   final file = File('lib/features/dashboard/home_screen.dart');
   if (!file.existsSync()) return;
   var text = file.readAsStringSync();
-  text = text.replaceAll("import 'package:intl/intl.dart';\n", '');
+
+  text = text.replaceAll(RegExp(r"import\s+'package:intl/intl\.dart';\s*\n"), '');
   text = text.replaceAll(
     'floatingActionButton: const UniversalQuickActionButton(),',
     'floatingActionButton: _currentIndex == 0 ? const UniversalQuickActionButton() : null,',
   );
+
   final lines = text.split('\n');
-  text = lines.where((line) => !line.trim().startsWith('onLongPress: () => _showUniversalActions(context),')).join('\n');
+  text = lines.where((line) => !line.contains('onLongPress:')).join('\n');
 
   if (text.contains('final _homeExtraDataProvider = FutureProvider<_HomeExtraData>((ref) async {') &&
       !text.contains('ref.watch(transactionsProvider);\n  final db = await ref.watch(dbProvider).database;')) {
@@ -39,8 +41,12 @@ void _fixHome() {
     );
   }
 
-  if (text.contains('onLongPress: () => _showUniversalActions(context),')) {
+  if (text.contains('onLongPress:')) {
     stderr.writeln('ERRO: onLongPress inválido no FloatingActionButton.');
+    exit(1);
+  }
+  if (text.contains("import 'package:intl/intl.dart';")) {
+    stderr.writeln('ERRO: import intl não usado permaneceu no home_screen.dart.');
     exit(1);
   }
   file.writeAsStringSync(text);
@@ -54,8 +60,9 @@ void _fixReports() {
     text = "import 'dart:ui' as ui;\n$text";
   }
   text = text.replaceAll('TextDirection.ltr', 'ui.TextDirection.ltr');
-  while (text.contains('ui.ui.TextDirection.ltr')) {
-    text = text.replaceAll('ui.ui.TextDirection.ltr', 'ui.TextDirection.ltr');
+  text = text.replaceAll('TextDirection.rtl', 'ui.TextDirection.rtl');
+  while (text.contains('ui.ui.TextDirection.')) {
+    text = text.replaceAll('ui.ui.TextDirection.', 'ui.TextDirection.');
   }
   file.writeAsStringSync(text);
 }
@@ -66,6 +73,7 @@ void _fixQuickTransaction() {
   var text = file.readAsStringSync();
 
   text = text.replaceAll('inputFormatters: const [', 'inputFormatters: [');
+  text = text.replaceAll('inputFormatters: const <TextInputFormatter>[', 'inputFormatters: <TextInputFormatter>[');
   text = text.replaceAll('children: const [', 'children: [');
 
   text = _ensureImport(text, "import '../../../core/utils/money_formatter.dart';", "import '../../../data/database/finance_planning_store.dart';");
@@ -124,9 +132,8 @@ void _fixQuickTransaction() {
 
   if (!text.contains('final safeAccountId = _selectableQuickAccounts().any((account) => account.id == _accountId) ? _accountId : null;')) {
     text = text.replaceFirst(
-      '    if (amount == null || amount <= 0) return;\n\n    setState(() => _isSaving = true);',
+      '    if (amount == null || amount <= 0) return;\n    setState(() => _isSaving = true);',
       '''    if (amount == null || amount <= 0) return;
-
     final safeAccountId = _selectableQuickAccounts().any((account) => account.id == _accountId) ? _accountId : null;
     if (_loadingAccounts) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Aguarde o carregamento das contas.')));
@@ -136,12 +143,15 @@ void _fixQuickTransaction() {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selecione ou cadastre uma conta para atualizar o saldo.')));
       return;
     }
-
     setState(() => _isSaving = true);''',
     );
   }
 
   if (!text.contains('accountId: safeAccountId,')) {
+    text = text.replaceFirst(
+      "        categoryId: _categoryId,\n      status: 'paid',",
+      "        categoryId: _categoryId,\n      accountId: safeAccountId,\n      status: 'paid',",
+    );
     text = text.replaceFirst(
       "        categoryId: _categoryId,\n        status: 'paid',",
       "        categoryId: _categoryId,\n        accountId: safeAccountId,\n        status: 'paid',",
@@ -201,6 +211,11 @@ void _fixQuickTransaction() {
     }
   }
 
+  if (text.contains('inputFormatters: const [')) {
+    stderr.writeln('ERRO: inputFormatters const permaneceu no lançamento rápido.');
+    exit(1);
+  }
+
   file.writeAsStringSync(text);
 }
 
@@ -210,8 +225,14 @@ void _fixTasksEntry() {
   var text = file.readAsStringSync();
   final slashN = String.fromCharCode(92) + 'n';
   text = text.replaceAll('}' + slashN + slashN + 'class _CompactSmartLists', '}\n\nclass _CompactSmartLists');
+  text = text.replaceAll('}' + slashN + '\n\nclass _CompactSmartLists', '}\n\nclass _CompactSmartLists');
+  text = text.replaceAll('}' + slashN + '\nclass _CompactSmartLists', '}\n\nclass _CompactSmartLists');
   text = text.replaceAll('}' + slashN + 'class _CompactSmartLists', '}\n\nclass _CompactSmartLists');
   text = text.replaceAll(slashN + 'class _CompactSmartLists', '\nclass _CompactSmartLists');
+  if (text.contains('}\\n\nclass _CompactSmartLists') || text.contains('}\\nclass _CompactSmartLists')) {
+    stderr.writeln('ERRO: sequência literal \\n permaneceu antes de _CompactSmartLists.');
+    exit(1);
+  }
   file.writeAsStringSync(text);
 }
 
