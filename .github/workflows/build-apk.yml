@@ -34,9 +34,6 @@ jobs:
       - name: Normalizar estrutura Android do Flutter
         run: flutter create --platforms=android .
 
-      - name: Habilitar desugaring Android
-        run: dart run tool/patch_android_desugaring.dart
-
       - name: Aplicar patches financeiros, tarefas e notificações
         run: |
           dart run tool/patch_finance_screen_ux.dart
